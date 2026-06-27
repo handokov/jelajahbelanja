@@ -116,13 +116,20 @@ function PriceBlock({
   );
 }
 
-export function ProductCard({ product, variant = "default", rank }: ProductCardProps) {
+interface ProductCardInternalProps extends ProductCardProps {
+  onClick?: () => void;
+}
+
+export function ProductCard({ product, variant = "default", rank, onClick }: ProductCardInternalProps) {
   // Gunakan affiliateUrl kalau ada, fallback ke url asli
   const targetUrl = product.affiliateUrl || product.url;
 
   if (variant === "featured") {
     return (
-      <article className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
+      <article
+        onClick={onClick}
+        className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer"
+      >
         <div className="relative w-full md:w-1/2 aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
           <img
             src={product.image}
@@ -173,7 +180,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
               · Viral score: {product.viralScore.toFixed(1)}
             </span>
           </div>
-          <Button asChild size="sm" className="mt-auto w-fit">
+          <Button asChild size="sm" className="mt-auto w-fit" onClick={(e) => e.stopPropagation()}>
             <a
               href={targetUrl}
               target="_blank"
@@ -238,7 +245,10 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
 
   // Default variant
   return (
-    <article className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
+    <article
+      onClick={onClick}
+      className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer"
+    >
       <div className="relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
         <img
           src={product.image}
@@ -276,7 +286,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             {formatSoldCount(product.soldCount)}
           </span>
         </div>
-        <Button asChild size="sm" variant="outline" className="mt-auto w-full">
+        <Button asChild size="sm" variant="outline" className="mt-auto w-full" onClick={(e) => e.stopPropagation()}>
           <a
             href={targetUrl}
             target="_blank"
