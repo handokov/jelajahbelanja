@@ -97,7 +97,7 @@ export function buildAffiliateUrl(
 }
 
 /**
- * Daftar marketplace yang didukung BelanjaViral.
+ * Daftar marketplace yang didukung JelajahBelanja.
  */
 export const SUPPORTED_MARKETPLACES: Array<{
   id: Marketplace;

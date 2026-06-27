@@ -44,7 +44,7 @@
 }
 
 :root {
-  /* BelanjaViral design system */
+  /* JelajahBelanja design system */
   --radius: 0.75rem;
   --primary: oklch(0.55 0.25 295); /* violet */
   --primary-foreground: oklch(0.98 0.01 295);
