@@ -85,7 +85,7 @@ const MARKETPLACE_INFO: Array<{
     label: "Tokopedia Affiliate",
     param: "aff_code",
     signupUrl: "https://affiliate.tokopedia.com",
-    hint: "Daftar di affiliate.tokopedia.com. Salin affiliate code Anda (mis. belanjaviral).",
+    hint: "Daftar di affiliate.tokopedia.com. Salin affiliate code Anda (mis. jelajahbelanja).",
   },
   {
     id: "lazada",
@@ -346,7 +346,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="w-4 h-4" />
-            Pengaturan BelanjaViral
+            Pengaturan JelajahBelanja
           </DialogTitle>
           <DialogDescription>
             Kelola kategori produk dan tag affiliate untuk monetisasi.
@@ -567,7 +567,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <div className="rounded-xl border border-fuchsia-200 dark:border-fuchsia-900/50 bg-fuchsia-50 dark:bg-fuchsia-900/20 p-3 mb-3">
               <p className="text-xs text-fuchsia-900 dark:text-fuchsia-100">
                 💡 <strong>Cara kerja:</strong> Setelah tag affiliate terisi,
-                semua link "Beli Sekarang" di BelanjaViral otomatis disisipi
+                semua link "Beli Sekarang" di JelajahBelanja otomatis disisipi
                 parameter tracking Anda. Setiap transaksi yang berasal dari link
                 ini akan memberikan komisi ke Anda.
               </p>

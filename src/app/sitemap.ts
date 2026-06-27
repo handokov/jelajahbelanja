@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://belanjaviral.id";
+const SITE_URL = "https://jelajahbelanja.com";
 
 /**
  * Generate sitemap.xml dinamis untuk SEO.

@@ -156,7 +156,7 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-7 h-7 md:w-8 md:h-8" aria-hidden />
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-                BelanjaViral
+                JelajahBelanja
               </h1>
               <Badge className="ml-2 bg-white/20 text-white border-white/30 hover:bg-white/20 text-[10px]">
                 Beta
@@ -400,7 +400,7 @@ export default function Home() {
             Produk Viral Shopee, Tokopedia & Lazada Terlengkap
           </h2>
           <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            BelanjaViral adalah platform agregator produk viral Indonesia yang
+            JelajahBelanja adalah platform agregator produk viral Indonesia yang
             mengumpulkan ribuan best seller dari marketplace lokal seperti Shopee,
             Tokopedia, dan Lazada. Kami memantau produk yang sedang trending di
             TikTok dan media sosial, lalu menampilkannya dengan filter viralitas
@@ -421,7 +421,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-sm mb-3">
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-4 h-4" aria-hidden />
-              <span className="font-semibold">BelanjaViral</span>
+              <span className="font-semibold">JelajahBelanja</span>
               <span className="text-white/70">© 2024</span>
             </div>
             <p className="text-xs text-white/70 text-center md:text-right max-w-md">
@@ -431,7 +431,7 @@ export default function Home() {
           {/* Affiliate disclosure — wajib sesuai aturan FTC & marketplace */}
           <p className="text-[11px] text-white/60 leading-relaxed border-t border-white/20 pt-3">
             <strong className="text-white/80">Disclosure Affiliate:</strong> Beberapa
-            link di BelanjaViral adalah link afiliasi. Jika kamu membeli produk
+            link di JelajahBelanja adalah link afiliasi. Jika kamu membeli produk
             melalui link tersebut, kami mungkin menerima komisi kecil dari marketplace
             tanpa biaya tambahan untuk kamu. Ini membantu kami terus menyediakan layanan
             gratis. Terima kasih atas dukunganmu!

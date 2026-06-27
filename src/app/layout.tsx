@@ -11,16 +11,16 @@ const interSans = Inter({
   display: "swap",
 });
 
-const SITE_URL = "https://belanjaviral.id";
-const SITE_NAME = "BelanjaViral";
+const SITE_URL = "https://jelajahbelanja.com";
+const SITE_NAME = "JelajahBelanja";
 const SITE_DESCRIPTION =
-  "BelanjaViral adalah platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada. Temukan produk viral 24 jam, best seller mingguan, dan diskon terbesar hari ini.";
+  "JelajahBelanja adalah platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada. Temukan produk viral 24 jam, best seller mingguan, dan diskon terbesar hari ini.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "BelanjaViral — Produk Viral & Best Seller Shopee, Tokopedia, Lazada Hari Ini",
-    template: "%s | BelanjaViral",
+    default: "JelajahBelanja — Produk Viral & Best Seller Shopee, Tokopedia, Lazada Hari Ini",
+    template: "%s | JelajahBelanja",
   },
   description: SITE_DESCRIPTION,
   keywords: [
@@ -39,11 +39,11 @@ export const metadata: Metadata = {
     "belanja online",
     "kerja sampingan",
     "affiliate indonesia",
-    "BelanjaViral",
+    "JelajahBelanja",
   ],
-  authors: [{ name: "BelanjaViral", url: SITE_URL }],
-  creator: "BelanjaViral",
-  publisher: "BelanjaViral",
+  authors: [{ name: "JelajahBelanja", url: SITE_URL }],
+  creator: "JelajahBelanja",
+  publisher: "JelajahBelanja",
   applicationName: SITE_NAME,
   category: "Shopping",
   alternates: {
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "id_ID",
     url: SITE_URL,
-    title: "BelanjaViral — Produk Viral & Best Seller Indonesia Hari Ini",
+    title: "JelajahBelanja — Produk Viral & Best Seller Indonesia Hari Ini",
     description: SITE_DESCRIPTION,
     siteName: SITE_NAME,
     images: [
@@ -73,13 +73,13 @@ export const metadata: Metadata = {
         url: "/og-image.jpg",
         width: 1200,
         height: 630,
-        alt: "BelanjaViral — Produk Viral Indonesia",
+        alt: "JelajahBelanja — Produk Viral Indonesia",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "BelanjaViral — Produk Viral Indonesia Hari Ini",
+    title: "JelajahBelanja — Produk Viral Indonesia Hari Ini",
     description: SITE_DESCRIPTION,
     images: ["/og-image.jpg"],
   },
@@ -103,13 +103,13 @@ export const viewport: Viewport = {
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  name: "BelanjaViral",
+  name: "JelajahBelanja",
   url: SITE_URL,
   description: SITE_DESCRIPTION,
   sameAs: [
-    "https://www.instagram.com/belanjaviral",
-    "https://www.tiktok.com/@belanjaviral",
-    "https://twitter.com/belanjaviral",
+    "https://www.instagram.com/jelajahbelanja",
+    "https://www.tiktok.com/@jelajahbelanja",
+    "https://twitter.com/jelajahbelanja",
   ],
 };
 
@@ -117,7 +117,7 @@ const organizationJsonLd = {
 const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  name: "BelanjaViral",
+  name: "JelajahBelanja",
   url: SITE_URL,
   inLanguage: "id-ID",
   potentialAction: {
