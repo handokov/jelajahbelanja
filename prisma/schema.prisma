@@ -17,8 +17,20 @@ model Category {
   keywords     String   // comma-separated keywords for query
   amazonNode   String?  // Amazon bestsellers node ID
   aliexpressCat String? // AliExpress category slug
+  shopeeCat    String?  // Shopee keyword/category slug
+  tokopediaCat String?  // Tokopedia category slug
+  lazadaCat    String?  // Lazada category slug
   order        Int      @default(0)
   enabled      Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model AffiliateTag {
+  id          String   @id @default(cuid())
+  marketplace String   @unique  // shopee, tokopedia, lazada, aliexpress
+  tag         String   // affiliate tag / ID
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

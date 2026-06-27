@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, Star, ExternalLink } from "lucide-react";
+import { Sparkles, Star, ExternalLink, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { Product } from "@/lib/types";
+import type { Product, Marketplace } from "@/lib/types";
 import {
   formatRupiah,
   formatSoldCount,
@@ -18,27 +18,41 @@ type Variant = "featured" | "default" | "compact";
 interface ProductCardProps {
   product: Product;
   variant?: Variant;
-  rank?: number; // posisi ranking kalau ada (untuk compact)
+  rank?: number;
 }
 
-function MarketplaceBadge({ marketplace }: { marketplace: Product["marketplace"] }) {
-  if (marketplace === "amazon") {
-    return (
-      <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 hover:bg-orange-100 text-[10px] font-semibold px-1.5 py-0 h-5">
-        Amazon
-      </Badge>
-    );
-  }
-  if (marketplace === "aliexpress") {
-    return (
-      <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 hover:bg-red-100 text-[10px] font-semibold px-1.5 py-0 h-5">
-        AliExpress
-      </Badge>
-    );
-  }
+const MARKETPLACE_META: Record<Marketplace, { label: string; className: string }> = {
+  shopee: {
+    label: "Shopee",
+    className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 hover:bg-orange-100",
+  },
+  tokopedia: {
+    label: "Tokopedia",
+    className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-100",
+  },
+  lazada: {
+    label: "Lazada",
+    className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-100",
+  },
+  aliexpress: {
+    label: "AliExpress",
+    className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 hover:bg-red-100",
+  },
+  amazon: {
+    label: "Amazon",
+    className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 hover:bg-yellow-100",
+  },
+  mock: {
+    label: "Mock",
+    className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 hover:bg-zinc-100",
+  },
+};
+
+function MarketplaceBadge({ marketplace }: { marketplace: Marketplace }) {
+  const meta = MARKETPLACE_META[marketplace] ?? MARKETPLACE_META.mock;
   return (
-    <Badge className="bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 hover:bg-zinc-100 text-[10px] font-semibold px-1.5 py-0 h-5">
-      Mock
+    <Badge className={cn(meta.className, "text-[10px] font-semibold px-1.5 py-0 h-5")}>
+      {meta.label}
     </Badge>
   );
 }
@@ -103,13 +117,16 @@ function PriceBlock({
 }
 
 export function ProductCard({ product, variant = "default", rank }: ProductCardProps) {
+  // Gunakan affiliateUrl kalau ada, fallback ke url asli
+  const targetUrl = product.affiliateUrl || product.url;
+
   if (variant === "featured") {
     return (
       <article className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
         <div className="relative w-full md:w-1/2 aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
           <img
             src={product.image}
-            alt={product.title}
+            alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller`}
             loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
@@ -128,6 +145,15 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             <span>{product.category}</span>
             <span aria-hidden>·</span>
             <span>{formatTimeAgo(product.timestamp)}</span>
+            {product.location && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="inline-flex items-center gap-0.5">
+                  <MapPin className="w-3 h-3" />
+                  {product.location}
+                </span>
+              </>
+            )}
           </div>
           <h3 className="text-lg md:text-xl font-semibold text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug">
             {product.title}
@@ -148,8 +174,13 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             </span>
           </div>
           <Button asChild size="sm" className="mt-auto w-fit">
-            <a href={product.url} target="_blank" rel="noopener noreferrer">
-              Lihat Produk
+            <a
+              href={targetUrl}
+              target="_blank"
+              rel="nofollow sponsored noopener noreferrer"
+              aria-label={`Beli ${product.title} di ${product.marketplace}`}
+            >
+              Beli Sekarang
               <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
             </a>
           </Button>
@@ -161,15 +192,16 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
   if (variant === "compact") {
     return (
       <a
-        href={product.url}
+        href={targetUrl}
         target="_blank"
-        rel="noopener noreferrer"
+        rel="nofollow sponsored noopener noreferrer"
+        aria-label={`Beli ${product.title} di ${product.marketplace}`}
         className="group flex gap-3 p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition"
       >
         <div className="relative w-16 h-16 flex-shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
           <img
             src={product.image}
-            alt={product.title}
+            alt={`${product.title} - ${product.marketplace}`}
             loading="lazy"
             className="w-full h-full object-cover"
           />
@@ -210,7 +242,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
       <div className="relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
         <img
           src={product.image}
-          alt={product.title}
+          alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller di Indonesia`}
           loading="lazy"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
@@ -225,16 +257,19 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
         )}
       </div>
       <div className="flex-1 flex flex-col gap-2 p-3">
-        <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-          {formatTimeAgo(product.timestamp)}
-        </p>
+        <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-500 dark:text-zinc-400">
+          <span>{formatTimeAgo(product.timestamp)}</span>
+          {product.location && (
+            <span className="inline-flex items-center gap-0.5">
+              <MapPin className="w-2.5 h-2.5" />
+              {product.location}
+            </span>
+          )}
+        </div>
         <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug min-h-[2.5rem]">
           {product.title}
         </h3>
-        <PriceBlock
-          price={product.price}
-          originalPrice={product.originalPrice}
-        />
+        <PriceBlock price={product.price} originalPrice={product.originalPrice} />
         <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
         <div className="text-xs text-zinc-600 dark:text-zinc-400">
           <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
@@ -242,8 +277,13 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
           </span>
         </div>
         <Button asChild size="sm" variant="outline" className="mt-auto w-full">
-          <a href={product.url} target="_blank" rel="noopener noreferrer">
-            Lihat Produk
+          <a
+            href={targetUrl}
+            target="_blank"
+            rel="nofollow sponsored noopener noreferrer"
+            aria-label={`Beli ${product.title} di ${product.marketplace}`}
+          >
+            Beli Sekarang
             <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
           </a>
         </Button>

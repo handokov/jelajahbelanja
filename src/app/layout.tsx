@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,24 +11,122 @@ const interSans = Inter({
   display: "swap",
 });
 
+const SITE_URL = "https://belanjaviral.id";
+const SITE_NAME = "BelanjaViral";
+const SITE_DESCRIPTION =
+  "BelanjaViral adalah platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada. Temukan produk viral 24 jam, best seller mingguan, dan diskon terbesar hari ini.";
+
 export const metadata: Metadata = {
-  title: "BelanjaViral — Dashboard Produk Viral & Trending",
-  description:
-    "Temukan produk viral dan best seller dari Amazon, AliExpress, dan marketplace lain. Filter berdasarkan viralitas, terbaru, atau top mingguan.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "BelanjaViral — Produk Viral & Best Seller Shopee, Tokopedia, Lazada Hari Ini",
+    template: "%s | BelanjaViral",
+  },
+  description: SITE_DESCRIPTION,
   keywords: [
-    "BelanjaViral",
     "produk viral",
-    "best seller",
-    "trending produk",
-    "Amazon best sellers",
-    "AliExpress hot products",
+    "produk viral shopee",
+    "produk viral tiktok",
+    "best seller shopee",
+    "best seller tokopedia",
+    "produk viral 2024",
+    "trending produk indonesia",
+    "diskon shopee",
+    "diskon tokopedia",
+    "diskon lazada",
+    "produk viral 24 jam",
+    "best seller mingguan",
+    "belanja online",
+    "kerja sampingan",
+    "affiliate indonesia",
+    "BelanjaViral",
   ],
-  authors: [{ name: "BelanjaViral" }],
+  authors: [{ name: "BelanjaViral", url: SITE_URL }],
+  creator: "BelanjaViral",
+  publisher: "BelanjaViral",
+  applicationName: SITE_NAME,
+  category: "Shopping",
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    nocache: false,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   openGraph: {
-    title: "BelanjaViral",
-    description: "Dashboard produk viral & trending dari berbagai marketplace.",
-    siteName: "BelanjaViral",
     type: "website",
+    locale: "id_ID",
+    url: SITE_URL,
+    title: "BelanjaViral — Produk Viral & Best Seller Indonesia Hari Ini",
+    description: SITE_DESCRIPTION,
+    siteName: SITE_NAME,
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "BelanjaViral — Produk Viral Indonesia",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "BelanjaViral — Produk Viral Indonesia Hari Ini",
+    description: SITE_DESCRIPTION,
+    images: ["/og-image.jpg"],
+  },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/site.webmanifest",
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#7c3aed" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+};
+
+// JSON-LD Organization untuk SEO
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "BelanjaViral",
+  url: SITE_URL,
+  description: SITE_DESCRIPTION,
+  sameAs: [
+    "https://www.instagram.com/belanjaviral",
+    "https://www.tiktok.com/@belanjaviral",
+    "https://twitter.com/belanjaviral",
+  ],
+};
+
+// JSON-LD WebSite untuk sitelinks search box
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "BelanjaViral",
+  url: SITE_URL,
+  inLanguage: "id-ID",
+  potentialAction: {
+    "@type": "SearchAction",
+    target: {
+      "@type": "EntryPoint",
+      urlTemplate: `${SITE_URL}/?search={search_term_string}`,
+    },
+    "query-input": "required name=search_term_string",
   },
 };
 
@@ -39,6 +137,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" suppressHydrationWarning>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
+      </head>
       <body
         className={`${interSans.variable} font-sans antialiased bg-background text-foreground`}
       >
