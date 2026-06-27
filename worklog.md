@@ -21,3 +21,25 @@ Stage Summary:
 - Affiliate links still auto-injected on all 80 products
 - Type check: 0 errors in src/
 - Brand fully rebranded to JelajahBelanja / jelajahbelanja.com
+
+---
+Task ID: dialog-scroll-fix
+Agent: main
+Task: Fix ProductDetailDialog — can't scroll, buy button hidden, close button hidden
+
+Work Log:
+- Root cause: DialogContent had overflow-hidden with no scrollable inner container
+- Rewrote dialog layout: flex column with scrollable body + sticky bottom buy button
+- Close button: sticky positioned at top of scroll area, always visible with bg-black/40 backdrop-blur
+- Image: reduced height (h-48/h-56/h-64 responsive) to fit mobile screens
+- Buy button: placed in flex-shrink-0 bottom section with border-top, always visible
+- Added showCloseButton={false} to disable shadcn's default close button (conflicting with custom one)
+- Added overscroll-contain for mobile scroll feel
+- Removed duplicate positioning CSS that conflicted with shadcn DialogContent defaults
+
+Stage Summary:
+- Dialog now scrollable on all screen sizes
+- Close button (X) always visible at top-right
+- "Beli di [Marketplace]" button always visible at bottom
+- AI advisor section scrolls naturally with content
+- Type check clean, all APIs verified
