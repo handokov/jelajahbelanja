@@ -1,0 +1,137 @@
+import { db } from "@/lib/db";
+import type { Marketplace } from "@/lib/types";
+
+/**
+ * Mapping parameter affiliate per marketplace Indonesia:
+ * - Shopee: ?aff_atk=<tag>  (lihat https://affiliate.shopee.co.id)
+ * - Tokopedia: ?aff_code=<tag>  (lihat https://affiliate.tokopedia.com)
+ * - Lazada: ?aff_id=<id>&aff_sub=<sub>  (lihat https://www.lazada.co.id/wow)
+ * - AliExpress: ?aff_fcid=<tag>  (lihat portals.aliexpress.com)
+ * - Bukalapak: ?aff_id=<tag>
+ * - Blibli: ?affiliateCode=<tag>
+ */
+const AFFILIATE_PARAM: Record<Marketplace, string> = {
+  shopee: "aff_atk",
+  tokopedia: "aff_code",
+  lazada: "aff_id",
+  aliexpress: "aff_fcid",
+  amazon: "tag",
+  mock: "",
+};
+
+/**
+ * Cache in-memory untuk affiliate tags supaya tidak query DB setiap request.
+ */
+let cachedTags: Record<string, string> | null = null;
+let cacheExpiry = 0;
+const CACHE_TTL_MS = 60 * 1000; // 1 menit
+
+/**
+ * Ambil semua affiliate tag dari DB (dengan cache 1 menit).
+ * Return: { shopee: "tagAnda", tokopedia: "...", ... }
+ */
+export async function getAffiliateTags(): Promise<Record<string, string>> {
+  if (cachedTags && Date.now() < cacheExpiry) {
+    return cachedTags;
+  }
+  try {
+    const rows = await db.affiliateTag.findMany({
+      where: { enabled: true },
+    });
+    const map: Record<string, string> = {};
+    for (const row of rows) {
+      if (row.tag && row.tag.trim()) {
+        map[row.marketplace] = row.tag.trim();
+      }
+    }
+    cachedTags = map;
+    cacheExpiry = Date.now() + CACHE_TTL_MS;
+    return map;
+  } catch (err) {
+    console.error("[affiliate] Failed to load tags:", err);
+    return cachedTags ?? {};
+  }
+}
+
+/**
+ * Invalidate cache (dipanggil setelah update affiliate tag).
+ */
+export function invalidateAffiliateCache(): void {
+  cachedTags = null;
+  cacheExpiry = 0;
+}
+
+/**
+ * Build URL affiliate dengan menambahkan parameter sesuai marketplace.
+ *
+ * Contoh:
+ *   buildAffiliateUrl("https://shopee.co.id/product/123", "shopee", "abc123")
+ *   -> "https://shopee.co.id/product/123?aff_atk=abc123"
+ *
+ *   buildAffiliateUrl("https://tokopedia.com/...?src=shop", "tokopedia", "xyz")
+ *   -> "https://tokopedia.com/...?src=shop&aff_code=xyz"
+ */
+export function buildAffiliateUrl(
+  url: string,
+  marketplace: Marketplace,
+  tags: Record<string, string>
+): string {
+  if (!url) return url;
+  const tag = tags[marketplace];
+  if (!tag) return url;
+
+  const param = AFFILIATE_PARAM[marketplace];
+  if (!param) return url;
+
+  try {
+    const u = new URL(url);
+    // Jangan append kalau sudah ada (idempotent)
+    if (u.searchParams.has(param)) return url;
+    u.searchParams.set(param, tag);
+    return u.toString();
+  } catch {
+    // URL tidak valid, fallback ke string concat
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}${param}=${encodeURIComponent(tag)}`;
+  }
+}
+
+/**
+ * Daftar marketplace yang didukung BelanjaViral.
+ */
+export const SUPPORTED_MARKETPLACES: Array<{
+  id: Marketplace;
+  label: string;
+  website: string;
+  signupUrl: string;
+  color: string;
+}> = [
+  {
+    id: "shopee",
+    label: "Shopee",
+    website: "https://shopee.co.id",
+    signupUrl: "https://affiliate.shopee.co.id",
+    color: "orange",
+  },
+  {
+    id: "tokopedia",
+    label: "Tokopedia",
+    website: "https://www.tokopedia.com",
+    signupUrl: "https://affiliate.tokopedia.com",
+    color: "green",
+  },
+  {
+    id: "lazada",
+    label: "Lazada",
+    website: "https://www.lazada.co.id",
+    signupUrl: "https://www.lazada.co.id/wow/camp/pdhl/id/lazadaaffiliate/index",
+    color: "blue",
+  },
+  {
+    id: "aliexpress",
+    label: "AliExpress",
+    website: "https://www.aliexpress.com",
+    signupUrl: "https://portals.aliexpress.com",
+    color: "red",
+  },
+];

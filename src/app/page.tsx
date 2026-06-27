@@ -12,7 +12,8 @@ import {
   TrendingUp,
   ShoppingBag,
   Sparkles,
-  Loader2,
+  ShieldCheck,
+  Tag,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -21,19 +22,12 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 
 import { ProductCard } from "@/components/product-card";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { DemoBanner } from "@/components/demo-banner";
 
-import type { CategoryDTO, Product, ProductFilter, ProductsResponse } from "@/lib/types";
+import type { CategoryDTO, Product, ProductFilter, ProductsResponse, AffiliateTagDTO } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
@@ -47,13 +41,11 @@ export default function Home() {
   const [search, setSearch] = React.useState("");
   const [debouncedSearch, setDebouncedSearch] = React.useState("");
 
-  // Debounce search
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Fetch categories
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
@@ -62,15 +54,26 @@ export default function Home() {
       const json = await res.json();
       return json.categories as CategoryDTO[];
     },
-    staleTime: 60 * 60 * 1000, // 1 jam
+    staleTime: 60 * 60 * 1000,
   });
 
-  const categories = React.useMemo(
-    () => categoriesData ?? [],
-    [categoriesData]
+  const { data: affiliateData } = useQuery({
+    queryKey: ["affiliate-tags"],
+    queryFn: async () => {
+      const res = await fetch("/api/affiliate");
+      if (!res.ok) throw new Error("Gagal memuat tag affiliate");
+      const json = await res.json();
+      return json.tags as AffiliateTagDTO[];
+    },
+    staleTime: 60 * 1000,
+  });
+
+  const categories = React.useMemo(() => categoriesData ?? [], [categoriesData]);
+  const activeAffiliateCount = React.useMemo(
+    () => (affiliateData ?? []).filter((t) => t.enabled && t.tag).length,
+    [affiliateData]
   );
 
-  // Fetch products
   const productsQuery = useQuery({
     queryKey: ["products", activeCategory, filter, debouncedSearch],
     queryFn: async () => {
@@ -85,27 +88,66 @@ export default function Home() {
       const json = (await res.json()) as ProductsResponse;
       return json;
     },
-    staleTime: 5 * 60 * 1000, // 5 menit
+    staleTime: 5 * 60 * 1000,
   });
 
   const products: Product[] = productsQuery.data?.products ?? [];
   const source = productsQuery.data?.source ?? "mock";
+  const totalSold = React.useMemo(
+    () => products.reduce((sum, p) => sum + p.soldCount, 0),
+    [products]
+  );
 
-  // Top 5 trending untuk sidebar desktop
   const trendingTop5 = React.useMemo(() => {
-    return [...products]
-      .sort((a, b) => b.viralScore - a.viralScore)
-      .slice(0, 5);
+    return [...products].sort((a, b) => b.viralScore - a.viralScore).slice(0, 5);
   }, [products]);
 
   const featuredProduct = React.useMemo(() => {
     if (filter === "viral") return products[0];
-    // Untuk filter lain, ambil produk dengan viral score tertinggi
     return [...products].sort((a, b) => b.viralScore - a.viralScore)[0];
   }, [products, filter]);
 
+  // JSON-LD structured data untuk SEO (ItemList)
+  const itemListJsonLd = React.useMemo(() => {
+    return {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: "Produk Viral & Best Seller Indonesia",
+      description: `Kurasi ${products.length} produk viral dan best seller dari Shopee, Tokopedia, dan Lazada. Update terbaru, harga termurah, dan diskon terbesar hari ini.`,
+      numberOfItems: products.length,
+      itemListElement: products.slice(0, 10).map((p, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        item: {
+          "@type": "Product",
+          name: p.title,
+          image: p.image,
+          url: p.affiliateUrl || p.url,
+          category: p.category,
+          offers: {
+            "@type": "Offer",
+            priceCurrency: "IDR",
+            price: p.price,
+            availability: "https://schema.org/InStock",
+          },
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: p.rating,
+            reviewCount: p.reviewCount,
+          },
+        },
+      })),
+    };
+  }, [products]);
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
+      {/* JSON-LD structured data untuk SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
+      />
+
       {/* ===== Header ===== */}
       <header className="bg-header-gradient text-white">
         <div className="container mx-auto px-4 py-6 md:py-8 max-w-7xl">
@@ -137,20 +179,40 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Tagline */}
-          <p className="text-sm md:text-base text-white/80 mb-5 max-w-2xl">
-            Lacak produk viral dan best seller dari Amazon, AliExpress, dan
-            marketplace lain. Update real-time, filter berdasarkan viralitas.
-          </p>
+          {/* Hero tagline + stats */}
+          <div className="mb-5">
+            <h2 className="text-xl md:text-2xl font-bold mb-1.5 leading-tight">
+              Produk Viral & Best Seller Indonesia Hari Ini
+            </h2>
+            <p className="text-sm md:text-base text-white/80 mb-3 max-w-2xl">
+              Lacak produk viral dari Shopee, Tokopedia, dan Lazada. Update real-time,
+              filter berdasarkan viralitas, dan temukan diskon terbaik.
+            </p>
+            <div className="flex flex-wrap gap-2 md:gap-3 text-xs md:text-sm">
+              <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-3 py-1">
+                <Flame className="w-3.5 h-3.5" />
+                <span>{products.length} produk viral</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-3 py-1">
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>{totalSold > 1000 ? `${Math.round(totalSold / 1000)}k+` : totalSold} terjual</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-3 py-1">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>{categories.length} kategori</span>
+              </div>
+            </div>
+          </div>
 
           {/* Search bar */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/70 pointer-events-none" />
             <Input
               type="search"
-              placeholder="Cari produk viral, mis. 'earbuds', 'serum vitamin c'..."
+              placeholder="Cari produk viral: earbuds, serum vitamin c, kaos oversize..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="Cari produk viral"
               className={cn(
                 "h-11 md:h-12 pl-10 pr-4 text-sm md:text-base",
                 "bg-white/15 backdrop-blur-md border border-white/20",
@@ -178,6 +240,12 @@ export default function Home() {
                 Mode Demo
               </Badge>
             )}
+            {activeAffiliateCount > 0 && (
+              <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-100 text-[10px] ml-1">
+                <Tag className="w-2.5 h-2.5 mr-0.5" />
+                {activeAffiliateCount} affiliate aktif
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <Button
@@ -197,7 +265,7 @@ export default function Home() {
       {/* ===== Main content ===== */}
       <main className="flex-1 container mx-auto px-4 max-w-7xl py-6">
         {/* Category chips */}
-        <section aria-label="Kategori" className="mb-6">
+        <section aria-label="Kategori produk viral" className="mb-6">
           {categoriesLoading ? (
             <div className="flex gap-2 overflow-hidden">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -205,7 +273,7 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <div className="flex md:grid md:grid-cols-8 gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+            <nav className="flex md:grid md:grid-cols-8 gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
               <CategoryChip
                 active={activeCategory === "all"}
                 onClick={() => setActiveCategory("all")}
@@ -221,17 +289,15 @@ export default function Home() {
                   label={c.name}
                 />
               ))}
-            </div>
+            </nav>
           )}
         </section>
 
         {/* Demo banner */}
-        {source === "mock" && (
-          <DemoBanner className="mb-4" />
-        )}
+        {source === "mock" && <DemoBanner className="mb-4" />}
 
         {/* Filter tabs */}
-        <section aria-label="Filter produk" className="mb-6">
+        <section aria-label="Filter produk viral" className="mb-6">
           <Tabs
             value={filter}
             onValueChange={(v) => setFilter(v as ProductFilter)}
@@ -254,7 +320,7 @@ export default function Home() {
         </section>
 
         {/* Products grid */}
-        <section aria-label="Daftar produk" className="mb-12">
+        <section aria-label="Daftar produk viral Indonesia" className="mb-12">
           {productsQuery.isLoading ? (
             <ProductsGridSkeleton />
           ) : productsQuery.isError ? (
@@ -327,41 +393,53 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        {/* SEO content section — bantu Google index */}
+        <section className="mb-8 prose prose-sm dark:prose-invert max-w-none">
+          <h2 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-2">
+            Produk Viral Shopee, Tokopedia & Lazada Terlengkap
+          </h2>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            BelanjaViral adalah platform agregator produk viral Indonesia yang
+            mengumpulkan ribuan best seller dari marketplace lokal seperti Shopee,
+            Tokopedia, dan Lazada. Kami memantau produk yang sedang trending di
+            TikTok dan media sosial, lalu menampilkannya dengan filter viralitas
+            sehingga kamu bisa cepat menemukan{" "}
+            <strong>produk viral 24 jam terakhir</strong>,{" "}
+            <strong>best seller mingguan</strong>, atau produk{" "}
+            <strong>terbaru</strong> dari berbagai kategori. Setiap produk dilengkapi
+            info rating, jumlah terjual, lokasi seller, dan harga termurah dengan
+            diskon terbesar. Update setiap hari, jadi kamu tidak ketinggalan tren
+            belanja online terbaru.
+          </p>
+        </section>
       </main>
 
       {/* ===== Footer ===== */}
       <footer className="bg-header-gradient text-white mt-auto">
         <div className="container mx-auto px-4 max-w-7xl py-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-sm">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-sm mb-3">
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-4 h-4" aria-hidden />
               <span className="font-semibold">BelanjaViral</span>
               <span className="text-white/70">© 2024</span>
             </div>
             <p className="text-xs text-white/70 text-center md:text-right max-w-md">
-              Data produk dikurasi dari Amazon Best Sellers, AliExpress Hot
-              Products, dan mock data realistic untuk demo.
+              Data produk dikurasi dari Shopee, Tokopedia, Lazada, dan AliExpress.
             </p>
           </div>
+          {/* Affiliate disclosure — wajib sesuai aturan FTC & marketplace */}
+          <p className="text-[11px] text-white/60 leading-relaxed border-t border-white/20 pt-3">
+            <strong className="text-white/80">Disclosure Affiliate:</strong> Beberapa
+            link di BelanjaViral adalah link afiliasi. Jika kamu membeli produk
+            melalui link tersebut, kami mungkin menerima komisi kecil dari marketplace
+            tanpa biaya tambahan untuk kamu. Ini membantu kami terus menyediakan layanan
+            gratis. Terima kasih atas dukunganmu!
+          </p>
         </div>
       </footer>
 
-      {/* Settings dialog (desktop) */}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-
-      {/* Mobile sheet trigger for settings (also accessible from sub-nav) */}
-      <Sheet>
-        <SheetTrigger asChild>
-          <button className="sr-only" aria-hidden>
-            open
-          </button>
-        </SheetTrigger>
-        <SheetContent side="bottom" className="sr-only">
-          <SheetHeader>
-            <SheetTitle>Pengaturan</SheetTitle>
-          </SheetHeader>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
@@ -412,9 +490,6 @@ function ProductsGridSkeleton() {
           </div>
         </div>
       ))}
-      <div className="hidden lg:flex lg:col-span-1 items-center justify-center text-zinc-400 text-sm">
-        <Loader2 className="w-4 h-4 animate-spin" />
-      </div>
     </div>
   );
 }

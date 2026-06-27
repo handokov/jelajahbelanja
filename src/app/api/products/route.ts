@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { ensureCategoriesSeeded } from "@/lib/seed";
+import { ensureCategoriesSeeded, ensureAffiliateTagsSeeded } from "@/lib/seed";
 import { fetchAmazonBestSellers } from "@/lib/sources/amazon-rss";
 import { fetchAliExpressHotProducts, isAliExpressAvailable } from "@/lib/sources/aliexpress";
-import { generateMockProducts, hasRapidApiKey } from "@/lib/sources/mock";
+import { generateMockProducts } from "@/lib/sources/mock";
+import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
 import { topViralQuarter } from "@/lib/viral-score";
 import type { Product, ProductsResponse, ProductFilter } from "@/lib/types";
 
@@ -16,10 +17,14 @@ export const dynamic = "force-dynamic";
  * - filter: latest (sort by timestamp desc), viral (top 25% by score),
  *           weekly (best seller 7 hari terakhir).
  * - search: kata kunci pencarian (filter judul produk).
+ *
+ * Setiap produk yang dikembalikan sudah disisipkan `affiliateUrl` berdasarkan
+ * tag affiliate yang tersimpan di DB (per marketplace).
  */
 export async function GET(req: NextRequest) {
   try {
     await ensureCategoriesSeeded();
+    await ensureAffiliateTagsSeeded();
 
     const { searchParams } = new URL(req.url);
     const categoryId = searchParams.get("category") || "";
@@ -29,7 +34,6 @@ export async function GET(req: NextRequest) {
       : "latest";
     const search = (searchParams.get("search") || "").trim().toLowerCase();
 
-    // Ambil kategori target
     const categories = await db.category.findMany({
       where: { enabled: true },
       orderBy: { order: "asc" },
@@ -48,7 +52,6 @@ export async function GET(req: NextRequest) {
         ? categories.filter((c) => c.id === categoryId)
         : categories;
 
-    // Fetch produk dari semua sumber paralel per kategori
     const aliExpressEnabled = isAliExpressAvailable();
 
     const fetchPromises = targetCategories.map(async (cat) => {
@@ -84,13 +87,18 @@ export async function GET(req: NextRequest) {
     const anyLive = results.some((r) => r.source === "live");
     const overallSource: "live" | "mock" = anyLive ? "live" : "mock";
 
-    // Filter berdasarkan search
-    let filtered = allProducts;
+    // Inject affiliate URL ke setiap produk
+    const tags = await getAffiliateTags();
+    const withAffiliate: Product[] = allProducts.map((p) => ({
+      ...p,
+      affiliateUrl: buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
+    }));
+
+    let filtered = withAffiliate;
     if (search) {
       filtered = filtered.filter((p) => p.title.toLowerCase().includes(search));
     }
 
-    // Apply filter sort/top
     let finalProducts: Product[] = filtered;
     const now = Date.now();
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
@@ -102,7 +110,6 @@ export async function GET(req: NextRequest) {
     } else if (filter === "viral") {
       finalProducts = topViralQuarter(filtered);
     } else if (filter === "weekly") {
-      // Best seller 7 hari terakhir. Kalau kosong, fallback ke semua produk
       const recent = filtered.filter(
         (p) => now - new Date(p.timestamp).getTime() <= sevenDaysMs
       );
@@ -119,13 +126,16 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error("[api/products] Error:", err);
     const fallback = generateMockProducts("elektronik", "Elektronik", 12);
+    // Tetap inject affiliate URL untuk fallback
+    const tags = await getAffiliateTags();
+    const withAffiliate = fallback.map((p) => ({
+      ...p,
+      affiliateUrl: buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
+    }));
     return NextResponse.json<ProductsResponse>({
-      products: fallback,
-      total: fallback.length,
+      products: withAffiliate,
+      total: withAffiliate.length,
       source: "mock",
     });
   }
 }
-
-// Untuk memastikan import tidak dibuang oleh tree-shaking
-void hasRapidApiKey;

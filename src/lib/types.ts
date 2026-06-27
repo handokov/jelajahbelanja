@@ -1,9 +1,20 @@
-export type Marketplace = "amazon" | "aliexpress" | "mock";
+/**
+ * Marketplace yang didukung. Default = mock (Mode Demo).
+ * Untuk produksi: shopee, tokopedia, lazada adalah marketplace lokal Indonesia.
+ */
+export type Marketplace =
+  | "shopee"
+  | "tokopedia"
+  | "lazada"
+  | "aliexpress"
+  | "amazon"
+  | "mock";
 
 export interface Product {
   id: string;
   title: string;
-  url: string;
+  url: string; // URL asli produk di marketplace
+  affiliateUrl?: string; // URL dengan affiliate tag (dipakai di tombol "Lihat Produk")
   image: string;
   price: number; // dalam Rupiah
   originalPrice?: number; // harga sebelum diskon
@@ -15,8 +26,11 @@ export interface Product {
   timestamp: string; // ISO date
   marketplace: Marketplace;
   category: string;
+  categorySlug?: string;
   viralScore: number;
   isViral: boolean;
+  /** Lokasi seller (untuk marketplace lokal) */
+  location?: string;
 }
 
 export type ProductFilter = "latest" | "viral" | "weekly";
@@ -34,6 +48,9 @@ export interface CategoryDTO {
   keywords: string;
   amazonNode: string | null;
   aliexpressCat: string | null;
+  shopeeCat: string | null;
+  tokopediaCat: string | null;
+  lazadaCat: string | null;
   order: number;
   enabled: boolean;
 }
@@ -44,6 +61,9 @@ export interface CreateCategoryInput {
   keywords: string;
   amazonNode?: string | null;
   aliexpressCat?: string | null;
+  shopeeCat?: string | null;
+  tokopediaCat?: string | null;
+  lazadaCat?: string | null;
   enabled?: boolean;
 }
 
@@ -54,6 +74,22 @@ export interface UpdateCategoryInput {
   keywords?: string;
   amazonNode?: string | null;
   aliexpressCat?: string | null;
+  shopeeCat?: string | null;
+  tokopediaCat?: string | null;
+  lazadaCat?: string | null;
   order?: number;
+  enabled?: boolean;
+}
+
+export interface AffiliateTagDTO {
+  id: string;
+  marketplace: Marketplace;
+  tag: string;
+  enabled: boolean;
+}
+
+export interface UpdateAffiliateTagInput {
+  marketplace: Marketplace;
+  tag: string;
   enabled?: boolean;
 }

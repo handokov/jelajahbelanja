@@ -14,6 +14,9 @@ function toDTO(c: {
   keywords: string;
   amazonNode: string | null;
   aliexpressCat: string | null;
+  shopeeCat: string | null;
+  tokopediaCat: string | null;
+  lazadaCat: string | null;
   order: number;
   enabled: boolean;
 }): CategoryDTO {
@@ -24,14 +27,14 @@ function toDTO(c: {
     keywords: c.keywords,
     amazonNode: c.amazonNode,
     aliexpressCat: c.aliexpressCat,
+    shopeeCat: c.shopeeCat,
+    tokopediaCat: c.tokopediaCat,
+    lazadaCat: c.lazadaCat,
     order: c.order,
     enabled: c.enabled,
   };
 }
 
-/**
- * GET /api/categories -> list semua kategori urut by order
- */
 export async function GET() {
   try {
     await ensureCategoriesSeeded();
@@ -48,9 +51,6 @@ export async function GET() {
   }
 }
 
-/**
- * POST /api/categories -> buat kategori baru
- */
 export async function POST(req: NextRequest) {
   try {
     await ensureCategoriesSeeded();
@@ -73,6 +73,9 @@ export async function POST(req: NextRequest) {
         keywords: body.keywords.trim(),
         amazonNode: body.amazonNode?.trim() || null,
         aliexpressCat: body.aliexpressCat?.trim() || null,
+        shopeeCat: body.shopeeCat?.trim() || null,
+        tokopediaCat: body.tokopediaCat?.trim() || null,
+        lazadaCat: body.lazadaCat?.trim() || null,
         order: newOrder,
         enabled: body.enabled ?? true,
       },
@@ -90,20 +93,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/**
- * PATCH /api/categories -> update satu kategori (atau batch reorder)
- * Body: { categories: UpdateCategoryInput[] }  -> batch update
- *    atau { id, ...fields }  -> single update
- */
 export async function PATCH(req: NextRequest) {
   try {
     await ensureCategoriesSeeded();
     const body = await req.json();
 
-    // Batch reorder
     if (Array.isArray(body?.categories)) {
       const updates: UpdateCategoryInput[] = body.categories;
-      // Update satu per satu (SQLite tidak mendukung bulk update dengan Prisma)
       const ops = updates.map((u) =>
         db.category.update({
           where: { id: u.id },
@@ -113,6 +109,9 @@ export async function PATCH(req: NextRequest) {
             ...(u.keywords !== undefined ? { keywords: u.keywords } : {}),
             ...(u.amazonNode !== undefined ? { amazonNode: u.amazonNode } : {}),
             ...(u.aliexpressCat !== undefined ? { aliexpressCat: u.aliexpressCat } : {}),
+            ...(u.shopeeCat !== undefined ? { shopeeCat: u.shopeeCat } : {}),
+            ...(u.tokopediaCat !== undefined ? { tokopediaCat: u.tokopediaCat } : {}),
+            ...(u.lazadaCat !== undefined ? { lazadaCat: u.lazadaCat } : {}),
             ...(u.order !== undefined ? { order: u.order } : {}),
             ...(u.enabled !== undefined ? { enabled: u.enabled } : {}),
           },
@@ -125,7 +124,6 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    // Single update
     const input = body as UpdateCategoryInput;
     if (!input?.id) {
       return NextResponse.json({ error: "ID wajib diisi" }, { status: 400 });
@@ -139,6 +137,9 @@ export async function PATCH(req: NextRequest) {
         ...(input.keywords !== undefined ? { keywords: input.keywords } : {}),
         ...(input.amazonNode !== undefined ? { amazonNode: input.amazonNode } : {}),
         ...(input.aliexpressCat !== undefined ? { aliexpressCat: input.aliexpressCat } : {}),
+        ...(input.shopeeCat !== undefined ? { shopeeCat: input.shopeeCat } : {}),
+        ...(input.tokopediaCat !== undefined ? { tokopediaCat: input.tokopediaCat } : {}),
+        ...(input.lazadaCat !== undefined ? { lazadaCat: input.lazadaCat } : {}),
         ...(input.order !== undefined ? { order: input.order } : {}),
         ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
       },
@@ -156,9 +157,6 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-/**
- * DELETE /api/categories?id=<id> -> hapus kategori
- */
 export async function DELETE(req: NextRequest) {
   try {
     await ensureCategoriesSeeded();
@@ -178,12 +176,8 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
-/**
- * POST /api/categories?reset=true -> reset ke default
- */
 export async function PUT() {
   try {
-    // Hapus semua kategori dan buat ulang dari DEFAULT_CATEGORIES
     await db.category.deleteMany({});
     await db.category.createMany({
       data: DEFAULT_CATEGORIES.map((c, i) => ({
@@ -192,6 +186,9 @@ export async function PUT() {
         keywords: c.keywords,
         amazonNode: c.amazonNode,
         aliexpressCat: c.aliexpressCat,
+        shopeeCat: c.shopeeCat,
+        tokopediaCat: c.tokopediaCat,
+        lazadaCat: c.lazadaCat,
         order: i,
         enabled: true,
       })),
