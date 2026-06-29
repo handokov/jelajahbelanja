@@ -129,12 +129,12 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
     return (
       <Link href={detailUrl} className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
       >
-        <div className="relative w-full md:w-2/5 aspect-[3/2] md:aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+        <div className="relative w-full md:w-2/5 aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
           <img
             src={product.image}
             alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller`}
             loading="lazy"
-            className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
           />
           <div className="absolute top-2 left-2 flex flex-col gap-1">
             {product.isViral && <ViralBadge />}
@@ -206,7 +206,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             src={product.image}
             alt={`${product.title} - ${product.marketplace}`}
             loading="lazy"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
           />
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
@@ -245,12 +245,12 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
       href={detailUrl}
       className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
     >
-      <div className="relative w-full aspect-[3/2] overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+      <div className="relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
         <img
           src={product.image}
           alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller di Indonesia`}
           loading="lazy"
-          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute top-2 left-2 flex flex-col gap-1">
           {product.isViral && <ViralBadge />}

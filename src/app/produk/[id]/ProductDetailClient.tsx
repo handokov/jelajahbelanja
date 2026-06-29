@@ -248,7 +248,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               <img
                 src={product.image}
                 alt={product.title}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
               <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/40 to-transparent" />
               <div className="absolute bottom-3 left-3 flex gap-1.5">
