@@ -4,16 +4,13 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Search,
-  Settings2,
   Moon,
   Sun,
   Flame,
   Clock,
   TrendingUp,
   ShoppingBag,
-  Sparkles,
   ShieldCheck,
-  Tag,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -24,10 +21,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ProductCard } from "@/components/product-card";
-import { SettingsDialog } from "@/components/settings-dialog";
 import { DemoBanner } from "@/components/demo-banner";
 
-import type { CategoryDTO, Product, ProductFilter, ProductsResponse, AffiliateTagDTO } from "@/lib/types";
+import type { CategoryDTO, Product, ProductFilter, ProductsResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
@@ -35,7 +31,6 @@ export default function Home() {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [activeCategory, setActiveCategory] = React.useState<string>("all");
   const [filter, setFilter] = React.useState<ProductFilter>("latest");
   const [search, setSearch] = React.useState("");
@@ -57,22 +52,7 @@ export default function Home() {
     staleTime: 60 * 60 * 1000,
   });
 
-  const { data: affiliateData } = useQuery({
-    queryKey: ["affiliate-tags"],
-    queryFn: async () => {
-      const res = await fetch("/api/affiliate");
-      if (!res.ok) throw new Error("Gagal memuat tag affiliate");
-      const json = await res.json();
-      return json.tags as AffiliateTagDTO[];
-    },
-    staleTime: 60 * 1000,
-  });
-
   const categories = React.useMemo(() => categoriesData ?? [], [categoriesData]);
-  const activeAffiliateCount = React.useMemo(
-    () => (affiliateData ?? []).filter((t) => t.enabled && t.tag).length,
-    [affiliateData]
-  );
 
   const productsQuery = useQuery({
     queryKey: ["products", activeCategory, filter, debouncedSearch],
@@ -148,57 +128,59 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
       />
 
-      {/* ===== Header ===== */}
-      <header className="bg-header-gradient text-white">
-        <div className="container mx-auto px-4 py-6 md:py-8 max-w-7xl">
-          {/* Logo + tagline */}
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-2">
-              <ShoppingBag className="w-7 h-7 md:w-8 md:h-8" aria-hidden />
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-                JelajahBelanja
-              </h1>
-              <Badge className="ml-2 bg-white/20 text-white border-white/30 hover:bg-white/20 text-[10px]">
-                Beta
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="text-white hover:bg-white/15 hover:text-white"
-                aria-label="Ganti tema"
-              >
-                {mounted && theme === "dark" ? (
-                  <Sun className="w-5 h-5" />
-                ) : (
-                  <Moon className="w-5 h-5" />
-                )}
-              </Button>
-            </div>
+      {/* ===== Fixed Logo Bar ===== */}
+      <div className="sticky top-0 z-50 bg-header-gradient">
+        <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-14">
+          <div className="flex items-center gap-2">
+            <ShoppingBag className="w-6 h-6 text-white" aria-hidden />
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
+              JelajahBelanja
+            </h1>
+            <Badge className="ml-1 bg-white/20 text-white border-white/30 hover:bg-white/20 text-[9px]">
+              Beta
+            </Badge>
           </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="text-white hover:bg-white/15 hover:text-white h-9 w-9"
+              aria-label="Ganti tema"
+            >
+              {mounted && theme === "dark" ? (
+                <Sun className="w-4 h-4" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
 
+      {/* ===== Hero section (scrollable) ===== */}
+      <div className="bg-header-gradient text-white">
+        <div className="container mx-auto px-4 py-4 md:py-6 max-w-7xl">
           {/* Hero tagline + stats */}
-          <div className="mb-5">
-            <h2 className="text-xl md:text-2xl font-bold mb-1.5 leading-tight">
+          <div className="mb-4">
+            <h2 className="text-lg md:text-2xl font-bold mb-1 leading-tight">
               Produk Viral & Best Seller Indonesia Hari Ini
             </h2>
-            <p className="text-sm md:text-base text-white/80 mb-3 max-w-2xl">
+            <p className="text-xs md:text-sm text-white/80 mb-3 max-w-2xl">
               Lacak produk viral dari Shopee, Tokopedia, dan Lazada. Update real-time,
               filter berdasarkan viralitas, dan temukan diskon terbaik.
             </p>
-            <div className="flex flex-wrap gap-2 md:gap-3 text-xs md:text-sm">
-              <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-3 py-1">
-                <Flame className="w-3.5 h-3.5" />
+            <div className="flex flex-wrap gap-1.5 md:gap-2 text-[11px] md:text-xs">
+              <div className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-2.5 py-0.5">
+                <Flame className="w-3 h-3" />
                 <span>{products.length} produk viral</span>
               </div>
-              <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-3 py-1">
-                <ShoppingBag className="w-3.5 h-3.5" />
+              <div className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-2.5 py-0.5">
+                <ShoppingBag className="w-3 h-3" />
                 <span>{totalSold > 1000 ? `${Math.round(totalSold / 1000)}k+` : totalSold} terjual</span>
               </div>
-              <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-3 py-1">
-                <ShieldCheck className="w-3.5 h-3.5" />
+              <div className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-2.5 py-0.5">
+                <ShieldCheck className="w-3 h-3" />
                 <span>{categories.length} kategori</span>
               </div>
             </div>
@@ -214,7 +196,7 @@ export default function Home() {
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Cari produk viral"
               className={cn(
-                "h-11 md:h-12 pl-10 pr-4 text-sm md:text-base",
+                "h-10 md:h-11 pl-10 pr-4 text-sm",
                 "bg-white/15 backdrop-blur-md border border-white/20",
                 "text-white placeholder-white/70",
                 "focus:bg-white/25 focus:border-white/40",
@@ -223,41 +205,27 @@ export default function Home() {
             />
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* ===== Sub-nav (sticky, glass) ===== */}
-      <div className="sticky top-0 z-30 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg border-b border-zinc-200 dark:border-zinc-800">
-        <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between gap-2 py-2.5">
-          <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-            <Sparkles className="w-3.5 h-3.5 text-fuchsia-500" />
-            <span className="hidden sm:inline">
-              {productsQuery.data
-                ? `${productsQuery.data.total} produk ditemukan`
-                : "Memuat..."}
-            </span>
-            {source === "mock" && (
-              <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 hover:bg-yellow-100 text-[10px] ml-1">
-                Mode Demo
-              </Badge>
-            )}
-            {activeAffiliateCount > 0 && (
-              <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-100 text-[10px] ml-1">
-                <Tag className="w-2.5 h-2.5 mr-0.5" />
-                {activeAffiliateCount} affiliate aktif
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSettingsOpen(true)}
-              className="h-8"
-            >
-              <Settings2 className="w-3.5 h-3.5 mr-1.5" />
-              <span className="hidden sm:inline">Pengaturan</span>
-              <span className="sm:hidden">Atur</span>
-            </Button>
+      {/* ===== Sticky Search bar (appears on scroll, below logo) ===== */}
+      <div className="sticky top-14 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-lg border-b border-zinc-200 dark:border-zinc-800">
+        <div className="container mx-auto px-4 max-w-7xl py-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+            <Input
+              type="search"
+              placeholder="Cari produk viral..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Cari produk viral"
+              className={cn(
+                "h-9 pl-10 pr-4 text-sm",
+                "bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700",
+                "text-foreground placeholder-zinc-400",
+                "focus:ring-1 focus:ring-primary/50",
+                "rounded-lg"
+              )}
+            />
           </div>
         </div>
       </div>
@@ -439,7 +407,6 @@ export default function Home() {
         </div>
       </footer>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }
