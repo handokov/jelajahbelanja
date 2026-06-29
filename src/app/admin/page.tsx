@@ -69,15 +69,16 @@ const EMPTY_PRODUCT: ProductFormInput = {
   price: "",
   originalPrice: "",
   discountPercent: "",
-  rating: "4.9",
-  reviewCount: "1000",
+  rating: "4.8",
+  reviewCount: "1500",
   soldCount: "5000",
-  location: "Jakarta",
+  location: "Jakarta Barat",
   category: "",
   url: "",
   affiliateUrl: "",
   marketplace: "shopee",
   enabled: true,
+  isViral: false,
 };
 
 interface ProductFormInput {
@@ -95,6 +96,7 @@ interface ProductFormInput {
   affiliateUrl: string;
   marketplace: string;
   enabled: boolean;
+  isViral: boolean;
 }
 
 const MARKETPLACE_OPTIONS = [
@@ -439,15 +441,16 @@ export default function AdminPage() {
       price,
       originalPrice,
       discountPercent,
-      rating: Number(productForm.rating) || 4.9,
-      reviewCount: Number(productForm.reviewCount) || 1000,
+      rating: Number(productForm.rating) || 4.8,
+      reviewCount: Number(productForm.reviewCount) || 1500,
       soldCount: Number(productForm.soldCount) || 5000,
-      location: productForm.location || "Jakarta",
+      location: productForm.location || "Jakarta Barat",
       category: productForm.category,
       url: productUrl,
       affiliateUrl: productForm.affiliateUrl || null,
       marketplace: productForm.marketplace || "shopee",
       enabled: productForm.enabled,
+      isViral: productForm.isViral,
     };
     if (editingProductId) {
       updateProductMutation.mutate({ id: editingProductId, ...payload });
@@ -473,6 +476,7 @@ export default function AdminPage() {
       affiliateUrl: p.affiliateUrl || "",
       marketplace: p.marketplace || "shopee",
       enabled: p.enabled ?? true,
+      isViral: p.isViral ?? false,
     });
   }
 
