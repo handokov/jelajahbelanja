@@ -32,6 +32,10 @@ function dbRowToProduct(row: {
   affiliateUrl: string | null;
   marketplace: string;
   enabled: boolean;
+  isViral: boolean;
+  isPinned: boolean;
+  isHidden: boolean;
+  notes: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): Product {
@@ -62,7 +66,7 @@ function dbRowToProduct(row: {
     marketplace: (row.marketplace || "shopee") as Marketplace,
     category: row.category,
     viralScore,
-    isViral: viralScore >= VIRAL_SCORE_THRESHOLD,
+    isViral: row.isViral || viralScore >= VIRAL_SCORE_THRESHOLD,
     location: row.location ?? undefined,
   };
 }
@@ -97,14 +101,16 @@ export async function GET(req: NextRequest) {
 
     const targetCategoryNames = targetCategories.map((c) => c.name);
 
+    // Ambil produk yang enabled=true DAN isHidden=false
     const manualRows = await db.shopeeProduct.findMany({
       where: {
         enabled: true,
+        isHidden: false,
         ...(targetCategoryNames.length > 0
           ? { category: { in: targetCategoryNames } }
           : {}),
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     });
 
     const manualProducts: Product[] = manualRows.map(dbRowToProduct);

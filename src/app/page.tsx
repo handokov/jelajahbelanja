@@ -24,7 +24,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ProductCard } from "@/components/product-card";
-import { ProductDetailDialog } from "@/components/product-detail-dialog";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { DemoBanner } from "@/components/demo-banner";
 
@@ -37,8 +36,6 @@ export default function Home() {
   React.useEffect(() => setMounted(true), []);
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);
-  const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null);
-  const [detailOpen, setDetailOpen] = React.useState(false);
   const [activeCategory, setActiveCategory] = React.useState<string>("all");
   const [filter, setFilter] = React.useState<ProductFilter>("latest");
   const [search, setSearch] = React.useState("");
@@ -355,10 +352,6 @@ export default function Home() {
                     key={`featured-${featuredProduct.id}`}
                     product={featuredProduct}
                     variant="featured"
-                    onClick={() => {
-                      setSelectedProduct(featuredProduct);
-                      setDetailOpen(true);
-                    }}
                   />
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -369,10 +362,6 @@ export default function Home() {
                         key={`default-${p.id}`}
                         product={p}
                         variant="default"
-                        onClick={() => {
-                          setSelectedProduct(p);
-                          setDetailOpen(true);
-                        }}
                       />
                     ))}
                 </div>
@@ -395,10 +384,6 @@ export default function Home() {
                           product={p}
                           variant="compact"
                           rank={i + 1}
-                          onClick={() => {
-                            setSelectedProduct(p);
-                            setDetailOpen(true);
-                          }}
                         />
                       ))}
                     </div>
@@ -454,11 +439,6 @@ export default function Home() {
         </div>
       </footer>
 
-      <ProductDetailDialog
-        product={selectedProduct}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-      />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );

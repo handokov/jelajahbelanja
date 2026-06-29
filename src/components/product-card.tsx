@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Sparkles, Star, ExternalLink, MapPin } from "lucide-react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -116,19 +117,17 @@ function PriceBlock({
   );
 }
 
-interface ProductCardInternalProps extends ProductCardProps {
-  onClick?: () => void;
-}
-
-export function ProductCard({ product, variant = "default", rank, onClick }: ProductCardInternalProps) {
-  // Gunakan affiliateUrl kalau ada, fallback ke url asli
-  const targetUrl = product.affiliateUrl || product.url;
+export function ProductCard({ product, variant = "default", rank }: ProductCardProps) {
+  // Link ke halaman detail produk
+  const detailUrl = `/produk/${product.id}`;
+  // Link beli langsung (shortlink / affiliate)
+  const buyUrl = product.id.startsWith("shopee-")
+    ? `/beli/${product.id}`
+    : (product.affiliateUrl || product.url);
 
   if (variant === "featured") {
     return (
-      <article
-        onClick={onClick}
-        className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer"
+      <Link href={detailUrl} className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
       >
         <div className="relative w-full md:w-1/2 aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
           <img
@@ -180,9 +179,9 @@ export function ProductCard({ product, variant = "default", rank, onClick }: Pro
               · Viral score: {product.viralScore.toFixed(1)}
             </span>
           </div>
-          <Button asChild size="sm" className="mt-auto w-fit" onClick={(e) => e.stopPropagation()}>
+          <Button asChild size="sm" className="mt-auto w-fit" onClick={(e) => e.preventDefault()}>
             <a
-              href={targetUrl}
+              href={buyUrl}
               target="_blank"
               rel="nofollow sponsored noopener noreferrer"
               aria-label={`Beli ${product.title} di ${product.marketplace}`}
@@ -192,17 +191,14 @@ export function ProductCard({ product, variant = "default", rank, onClick }: Pro
             </a>
           </Button>
         </div>
-      </article>
+      </Link>
     );
   }
 
   if (variant === "compact") {
     return (
-      <a
-        href={targetUrl}
-        target="_blank"
-        rel="nofollow sponsored noopener noreferrer"
-        aria-label={`Beli ${product.title} di ${product.marketplace}`}
+      <Link
+        href={detailUrl}
         className="group flex gap-3 p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition"
       >
         <div className="relative w-16 h-16 flex-shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
@@ -239,15 +235,15 @@ export function ProductCard({ product, variant = "default", rank, onClick }: Pro
             <span>{formatSoldCount(product.soldCount)}</span>
           </div>
         </div>
-      </a>
+      </Link>
     );
   }
 
   // Default variant
   return (
-    <article
-      onClick={onClick}
-      className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer"
+    <Link
+      href={detailUrl}
+      className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
     >
       <div className="relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
         <img
@@ -286,9 +282,9 @@ export function ProductCard({ product, variant = "default", rank, onClick }: Pro
             {formatSoldCount(product.soldCount)}
           </span>
         </div>
-        <Button asChild size="sm" variant="outline" className="mt-auto w-full" onClick={(e) => e.stopPropagation()}>
+        <Button asChild size="sm" variant="outline" className="mt-auto w-full" onClick={(e) => e.preventDefault()}>
           <a
-            href={targetUrl}
+            href={buyUrl}
             target="_blank"
             rel="nofollow sponsored noopener noreferrer"
             aria-label={`Beli ${product.title} di ${product.marketplace}`}
@@ -298,6 +294,6 @@ export function ProductCard({ product, variant = "default", rank, onClick }: Pro
           </a>
         </Button>
       </div>
-    </article>
+    </Link>
   );
 }
