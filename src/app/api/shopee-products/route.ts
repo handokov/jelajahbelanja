@@ -27,6 +27,10 @@ function toProduct(row: {
   affiliateUrl: string | null;
   marketplace: string;
   enabled: boolean;
+  isViral: boolean;
+  isPinned: boolean;
+  isHidden: boolean;
+  notes: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): Product {
@@ -57,7 +61,7 @@ function toProduct(row: {
     marketplace: (row.marketplace || "shopee") as Marketplace,
     category: row.category,
     viralScore,
-    isViral: viralScore >= VIRAL_SCORE_THRESHOLD,
+    isViral: row.isViral || viralScore >= VIRAL_SCORE_THRESHOLD,
     location: row.location ?? undefined,
   };
 }
@@ -69,12 +73,12 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category") || "";
     const search = (searchParams.get("search") || "").trim().toLowerCase();
 
-    const where: any = { enabled: true };
+    const where: any = {};
     if (category) where.category = category;
 
     const rows = await db.shopeeProduct.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     });
 
     let products = rows.map(toProduct);
@@ -116,7 +120,7 @@ export async function POST(req: NextRequest) {
         price: Number(body.price),
         originalPrice: body.originalPrice ? Number(body.originalPrice) : null,
         discountPercent: body.discountPercent ? Number(body.discountPercent) : null,
-        rating: Number(body.rating) || 0,
+        rating: Number(body.rating) || 4.5,
         reviewCount: Number(body.reviewCount) || 0,
         soldCount: Number(body.soldCount) || 0,
         location: body.location?.trim() || null,
@@ -124,6 +128,10 @@ export async function POST(req: NextRequest) {
         url: body.url.trim(),
         affiliateUrl: body.affiliateUrl?.trim() || null,
         marketplace: body.marketplace?.trim() || "shopee",
+        isViral: body.isViral ?? false,
+        isPinned: body.isPinned ?? false,
+        isHidden: body.isHidden ?? false,
+        notes: body.notes?.trim() || null,
         enabled: body.enabled ?? true,
       },
     });
@@ -160,6 +168,10 @@ export async function PATCH(req: NextRequest) {
         ...(body.affiliateUrl !== undefined ? { affiliateUrl: body.affiliateUrl?.trim() || null } : {}),
         ...(body.marketplace !== undefined ? { marketplace: body.marketplace.trim() } : {}),
         ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
+        ...(body.isViral !== undefined ? { isViral: body.isViral } : {}),
+        ...(body.isPinned !== undefined ? { isPinned: body.isPinned } : {}),
+        ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
+        ...(body.notes !== undefined ? { notes: body.notes?.trim() || null } : {}),
       },
     });
 

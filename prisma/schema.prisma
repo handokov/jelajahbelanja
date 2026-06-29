@@ -38,18 +38,22 @@ model AffiliateTag {
 model ShopeeProduct {
   id              String   @id @default(cuid())
   title           String
-  image           String
-  price           Int      // dalam Rupiah
+  url             String   // URL asli produk Shopee
+  image           String   // URL foto produk
+  price           Int      // harga dalam Rupiah
   originalPrice   Int?     // harga sebelum diskon
   discountPercent Int?     // persen diskon
-  rating          Float    @default(0)
+  rating          Float    @default(4.5)
   reviewCount     Int      @default(0)
   soldCount       Int      @default(0)
   location        String?  // lokasi seller
-  category        String   // nama kategori (mis. "Elektronik")
-  url             String   // URL asli produk di marketplace
-  affiliateUrl    String?  // link affiliate / shortlink
-  marketplace     String   @default("shopee") // shopee, tokopedia, lazada, dll
+  category        String   @default("Fashion")
+  isViral         Boolean  @default(false)
+  isPinned        Boolean  @default(false)  // pin di atas
+  isHidden        Boolean  @default(false)  // sembunyikan dari homepage
+  affiliateUrl    String?  // link affiliate Shopee (shope.ee/xxx)
+  notes           String?  // catatan admin
+  marketplace     String   @default("shopee")
   enabled         Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
