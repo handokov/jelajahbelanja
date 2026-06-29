@@ -35,6 +35,21 @@ export default function Home() {
   const [filter, setFilter] = React.useState<ProductFilter>("latest");
   const [search, setSearch] = React.useState("");
   const [debouncedSearch, setDebouncedSearch] = React.useState("");
+  const [heroVisible, setHeroVisible] = React.useState(true);
+
+  // Ref for hero search bar to detect when it scrolls off screen
+  const heroSearchRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const el = heroSearchRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeroVisible(entry.isIntersecting),
+      { rootMargin: "0px", threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -187,7 +202,7 @@ export default function Home() {
           </div>
 
           {/* Search bar */}
-          <div className="relative">
+          <div ref={heroSearchRef} className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/70 pointer-events-none" />
             <Input
               type="search"
@@ -207,28 +222,30 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ===== Sticky Search bar (appears on scroll, below logo) ===== */}
-      <div className="sticky top-14 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-lg border-b border-zinc-200 dark:border-zinc-800">
-        <div className="container mx-auto px-4 max-w-7xl py-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
-            <Input
-              type="search"
-              placeholder="Cari produk viral..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Cari produk viral"
-              className={cn(
-                "h-9 pl-10 pr-4 text-sm",
-                "bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700",
-                "text-foreground placeholder-zinc-400",
-                "focus:ring-1 focus:ring-primary/50",
-                "rounded-lg"
-              )}
-            />
+      {/* ===== Sticky Search bar (only visible after hero scrolls away) ===== */}
+      {!heroVisible && (
+        <div className="sticky top-14 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-lg border-b border-zinc-200 dark:border-zinc-800">
+          <div className="container mx-auto px-4 max-w-7xl py-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+              <Input
+                type="search"
+                placeholder="Cari produk viral..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Cari produk viral"
+                className={cn(
+                  "h-9 pl-10 pr-4 text-sm",
+                  "bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700",
+                  "text-foreground placeholder-zinc-400",
+                  "focus:ring-1 focus:ring-primary/50",
+                  "rounded-lg"
+                )}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ===== Main content ===== */}
       <main className="flex-1 container mx-auto px-4 max-w-7xl py-6">
