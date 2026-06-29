@@ -422,11 +422,11 @@ export default function AdminPage() {
   // ─── Product handlers ───
 
   function handleSubmitProduct() {
-    if (!productForm.title.trim() || !productForm.image.trim() || !productForm.price || !productForm.category) {
-      toast({ title: "Validasi gagal", description: "Nama produk, gambar, harga, dan kategori wajib diisi.", variant: "destructive" });
+    if (!productForm.title.trim() || !productForm.price || !productForm.category) {
+      toast({ title: "Validasi gagal", description: "Judul produk, harga, dan kategori wajib diisi.", variant: "destructive" });
       return;
     }
-    // URL produk: kalau gak diisi, pakai affiliateUrl. Kalau affiliateUrl juga gak ada, generate dari title
+    // URL produk: pakai url field, kalau gak diisi pakai affiliateUrl, kalau affiliateUrl juga gak ada, generate dari title
     const productUrl = productForm.url.trim() || productForm.affiliateUrl.trim() || `https://shopee.co.id/search?keyword=${encodeURIComponent(productForm.title)}`;
     // Auto-calc discount kalau ada harga asli
     const price = Number(productForm.price);
@@ -437,7 +437,7 @@ export default function AdminPage() {
     }
     const payload = {
       title: productForm.title,
-      image: productForm.image,
+      image: productForm.image.trim() || `https://down-id.img.susercontent.com/file/placeholder`,
       price,
       originalPrice,
       discountPercent,
@@ -582,21 +582,32 @@ export default function AdminPage() {
               {/* Wajib fields - selalu tampil */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <Label htmlFor="prod-title" className="text-xs font-semibold">Nama Produk *</Label>
+                  <Label htmlFor="prod-title" className="text-xs font-semibold">Judul Produk *</Label>
                   <Input
                     id="prod-title"
-                    placeholder="Earbuds TWS Pro Noise Cancelling Viral TikTok"
+                    placeholder="Nama produk..."
                     value={productForm.title}
                     onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 md:col-span-2">
+                  <Label htmlFor="prod-url" className="text-xs font-semibold flex items-center gap-1">
+                    <ExternalLink className="w-3 h-3" /> URL Shopee *
+                  </Label>
+                  <Input
+                    id="prod-url"
+                    placeholder="https://shopee.co.id/..."
+                    value={productForm.url}
+                    onChange={(e) => setProductForm({ ...productForm, url: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5 md:col-span-2">
                   <Label htmlFor="prod-image" className="text-xs font-semibold flex items-center gap-1">
-                    <ImageIcon className="w-3 h-3" /> URL Gambar *
+                    <ImageIcon className="w-3 h-3" /> URL Foto Produk
                   </Label>
                   <Input
                     id="prod-image"
-                    placeholder="Klik kanan gambar di Shopee → Copy image address"
+                    placeholder="https://down-id.img.susercontent.com/file/..."
                     value={productForm.image}
                     onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
                   />
@@ -608,9 +619,19 @@ export default function AdminPage() {
                   <Input
                     id="prod-price"
                     type="number"
-                    placeholder="89000"
+                    placeholder="19500"
                     value={productForm.price}
                     onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="prod-original" className="text-xs font-semibold">Harga Asli / Coret (Rp)</Label>
+                  <Input
+                    id="prod-original"
+                    type="number"
+                    placeholder="99000"
+                    value={productForm.originalPrice}
+                    onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -629,16 +650,16 @@ export default function AdminPage() {
                 </div>
                 <div className="flex flex-col gap-1.5 md:col-span-2">
                   <Label htmlFor="prod-affiliate" className="text-xs font-semibold flex items-center gap-1">
-                    <Link2 className="w-3 h-3" /> Link Affiliate / Shortlink *
+                    <Link2 className="w-3 h-3" /> Link Affiliate Shopee (opsional)
                   </Label>
                   <Input
                     id="prod-affiliate"
-                    placeholder="Paste link affiliate dari dashboard Shopee Affiliate lo di sini"
+                    placeholder="https://shope.ee/abcde"
                     value={productForm.affiliateUrl}
                     onChange={(e) => setProductForm({ ...productForm, affiliateUrl: e.target.value })}
                   />
                   <p className="text-[10px] text-zinc-400">
-                    Generate di affiliate.shopee.co.id → pilih produk → copy link affiliate
+                    ini kalau udah punya link affiliate, Shortlink /beli/xxx otomatis redirect ke sini
                   </p>
                 </div>
               </div>
@@ -647,37 +668,6 @@ export default function AdminPage() {
               {showAdvanced && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="prod-url" className="text-xs flex items-center gap-1">
-                      <ExternalLink className="w-3 h-3" /> URL Produk Asli
-                    </Label>
-                    <Input
-                      id="prod-url"
-                      placeholder="https://shopee.co.id/product-..."
-                      value={productForm.url}
-                      onChange={(e) => setProductForm({ ...productForm, url: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="prod-original" className="text-xs">Harga Asli (Rp)</Label>
-                    <Input
-                      id="prod-original"
-                      type="number"
-                      placeholder="250000"
-                      value={productForm.originalPrice}
-                      onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="prod-disc" className="text-xs">Diskon (%)</Label>
-                    <Input
-                      id="prod-disc"
-                      type="number"
-                      placeholder="65"
-                      value={productForm.discountPercent}
-                      onChange={(e) => setProductForm({ ...productForm, discountPercent: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
                     <Label htmlFor="prod-rating" className="text-xs flex items-center gap-1">
                       <Star className="w-3 h-3" /> Rating
                     </Label>
@@ -685,7 +675,7 @@ export default function AdminPage() {
                       id="prod-rating"
                       type="number"
                       step="0.1"
-                      placeholder="4.9"
+                      placeholder="4.8"
                       value={productForm.rating}
                       onChange={(e) => setProductForm({ ...productForm, rating: e.target.value })}
                     />
@@ -695,7 +685,7 @@ export default function AdminPage() {
                     <Input
                       id="prod-reviews"
                       type="number"
-                      placeholder="1000"
+                      placeholder="1500"
                       value={productForm.reviewCount}
                       onChange={(e) => setProductForm({ ...productForm, reviewCount: e.target.value })}
                     />
@@ -734,17 +724,36 @@ export default function AdminPage() {
                       ))}
                     </select>
                   </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="prod-disc" className="text-xs">Diskon (%)</Label>
+                    <Input
+                      id="prod-disc"
+                      type="number"
+                      placeholder="Auto dari harga coret"
+                      value={productForm.discountPercent}
+                      onChange={(e) => setProductForm({ ...productForm, discountPercent: e.target.value })}
+                    />
+                  </div>
                 </div>
               )}
 
               <div className="flex items-center justify-between mt-4 gap-2">
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <Switch
-                    checked={productForm.enabled}
-                    onCheckedChange={(checked) => setProductForm({ ...productForm, enabled: checked })}
-                  />
-                  Aktif
-                </label>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <Switch
+                      checked={productForm.enabled}
+                      onCheckedChange={(checked) => setProductForm({ ...productForm, enabled: checked })}
+                    />
+                    Aktif
+                  </label>
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <Switch
+                      checked={productForm.isViral}
+                      onCheckedChange={(checked) => setProductForm({ ...productForm, isViral: checked })}
+                    />
+                    DO Viral 🔥
+                  </label>
+                </div>
                 <div className="flex gap-2">
                   {(editingProductId || productForm.title) && (
                     <Button
