@@ -13,6 +13,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -147,10 +148,12 @@ export default function Home() {
       <div className="sticky top-0 z-50 bg-header-gradient">
         <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-14">
           <div className="flex items-center gap-2">
-            <ShoppingBag className="w-6 h-6 text-white" aria-hidden />
-            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
-              JelajahBelanja
-            </h1>
+            <Link href="/" className="flex items-center gap-2">
+              <ShoppingBag className="w-6 h-6 text-white" aria-hidden />
+              <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
+                JelajahBelanja
+              </h1>
+            </Link>
             <Badge className="ml-1 bg-white/20 text-white border-white/30 hover:bg-white/20 text-[9px]">
               Beta
             </Badge>
