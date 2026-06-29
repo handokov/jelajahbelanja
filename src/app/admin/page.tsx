@@ -70,9 +70,9 @@ const EMPTY_PRODUCT: ProductFormInput = {
   originalPrice: "",
   discountPercent: "",
   rating: "4.9",
-  reviewCount: "0",
-  soldCount: "0",
-  location: "",
+  reviewCount: "1000",
+  soldCount: "5000",
+  location: "Jakarta",
   category: "",
   url: "",
   affiliateUrl: "",
@@ -197,6 +197,7 @@ export default function AdminPage() {
   const [productForm, setProductForm] = React.useState<ProductFormInput>(EMPTY_PRODUCT);
   const [editingProductId, setEditingProductId] = React.useState<string | null>(null);
   const [deleteProductTarget, setDeleteProductTarget] = React.useState<any>(null);
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
 
   // ─── Affiliate state ───
   const [affDrafts, setAffDrafts] = React.useState<Record<string, { tag: string; enabled: boolean }>>({});
@@ -419,24 +420,33 @@ export default function AdminPage() {
   // ─── Product handlers ───
 
   function handleSubmitProduct() {
-    if (!productForm.title.trim() || !productForm.image.trim() || !productForm.price || !productForm.category || !productForm.url.trim()) {
-      toast({ title: "Validasi gagal", description: "Nama produk, gambar, harga, kategori, dan URL wajib diisi.", variant: "destructive" });
+    if (!productForm.title.trim() || !productForm.image.trim() || !productForm.price || !productForm.category) {
+      toast({ title: "Validasi gagal", description: "Nama produk, gambar, harga, dan kategori wajib diisi.", variant: "destructive" });
       return;
+    }
+    // URL produk: kalau gak diisi, pakai affiliateUrl. Kalau affiliateUrl juga gak ada, generate dari title
+    const productUrl = productForm.url.trim() || productForm.affiliateUrl.trim() || `https://shopee.co.id/search?keyword=${encodeURIComponent(productForm.title)}`;
+    // Auto-calc discount kalau ada harga asli
+    const price = Number(productForm.price);
+    const originalPrice = productForm.originalPrice ? Number(productForm.originalPrice) : null;
+    let discountPercent = productForm.discountPercent ? Number(productForm.discountPercent) : null;
+    if (!discountPercent && originalPrice && originalPrice > price) {
+      discountPercent = Math.round(((originalPrice - price) / originalPrice) * 100);
     }
     const payload = {
       title: productForm.title,
       image: productForm.image,
-      price: Number(productForm.price),
-      originalPrice: productForm.originalPrice ? Number(productForm.originalPrice) : null,
-      discountPercent: productForm.discountPercent ? Number(productForm.discountPercent) : null,
-      rating: Number(productForm.rating) || 0,
-      reviewCount: Number(productForm.reviewCount) || 0,
-      soldCount: Number(productForm.soldCount) || 0,
-      location: productForm.location || null,
+      price,
+      originalPrice,
+      discountPercent,
+      rating: Number(productForm.rating) || 4.9,
+      reviewCount: Number(productForm.reviewCount) || 1000,
+      soldCount: Number(productForm.soldCount) || 5000,
+      location: productForm.location || "Jakarta",
       category: productForm.category,
-      url: productForm.url,
+      url: productUrl,
       affiliateUrl: productForm.affiliateUrl || null,
-      marketplace: productForm.marketplace,
+      marketplace: productForm.marketplace || "shopee",
       enabled: productForm.enabled,
     };
     if (editingProductId) {
@@ -524,21 +534,51 @@ export default function AdminPage() {
 
           {/* ===== TAB PRODUK ===== */}
           <TabsContent value="products" className="space-y-4">
-            {/* Form tambah/edit produk */}
+            {/* Cara pakai */}
+            <div className="rounded-2xl border border-fuchsia-200 dark:border-fuchsia-900/50 bg-fuchsia-50 dark:bg-fuchsia-900/20 p-4">
+              <p className="text-sm font-semibold text-fuchsia-900 dark:text-fuchsia-100 mb-2">
+                Cara Tambah Produk dari Shopee
+              </p>
+              <ol className="text-xs text-fuchsia-900 dark:text-fuchsia-100 space-y-1 list-decimal list-inside">
+                <li>Buka Shopee, cari produk viral yang mau lo promote</li>
+                <li>Copy info: <strong>Nama produk, URL gambar, Harga</strong></li>
+                <li>Generate <strong>link affiliate</strong> di dashboard Shopee Affiliate (affiliate.shopee.co.id)</li>
+                <li>Paste semua di form di bawah, klik Upload</li>
+              </ol>
+              <p className="text-[11px] text-fuchsia-700 dark:text-fuchsia-300 mt-2">
+                Field bertanda * wajib diisi. Sisanya udah auto-default (rating 4.9, terjual 5rb, dll). Bisa diedit nanti.
+              </p>
+            </div>
+
+            {/* Quick-add form */}
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-4">
-                {editingProductId ? (
-                  <Pencil className="w-4 h-4 text-fuchsia-600" />
-                ) : (
-                  <Plus className="w-4 h-4 text-fuchsia-600" />
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  {editingProductId ? (
+                    <Pencil className="w-4 h-4 text-fuchsia-600" />
+                  ) : (
+                    <Plus className="w-4 h-4 text-fuchsia-600" />
+                  )}
+                  <h2 className="font-semibold text-sm">
+                    {editingProductId ? "Edit Produk" : "Quick Add Produk"}
+                  </h2>
+                </div>
+                {!editingProductId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-zinc-500"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                  >
+                    {showAdvanced ? "Sembunyikan Detail" : "Lihat Semua Field"}
+                  </Button>
                 )}
-                <h2 className="font-semibold text-sm">
-                  {editingProductId ? "Edit Produk" : "Tambah Produk Baru"}
-                </h2>
               </div>
+
+              {/* Wajib fields - selalu tampil */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <Label htmlFor="prod-title" className="text-xs">Nama Produk *</Label>
+                  <Label htmlFor="prod-title" className="text-xs font-semibold">Nama Produk *</Label>
                   <Input
                     id="prod-title"
                     placeholder="Earbuds TWS Pro Noise Cancelling Viral TikTok"
@@ -547,29 +587,18 @@ export default function AdminPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-image" className="text-xs flex items-center gap-1">
+                  <Label htmlFor="prod-image" className="text-xs font-semibold flex items-center gap-1">
                     <ImageIcon className="w-3 h-3" /> URL Gambar *
                   </Label>
                   <Input
                     id="prod-image"
-                    placeholder="https://down-id.img.susercontent.com/..."
+                    placeholder="Klik kanan gambar di Shopee → Copy image address"
                     value={productForm.image}
                     onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-url" className="text-xs flex items-center gap-1">
-                    <ExternalLink className="w-3 h-3" /> URL Produk *
-                  </Label>
-                  <Input
-                    id="prod-url"
-                    placeholder="https://shopee.co.id/product-..."
-                    value={productForm.url}
-                    onChange={(e) => setProductForm({ ...productForm, url: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-price" className="text-xs flex items-center gap-1">
+                  <Label htmlFor="prod-price" className="text-xs font-semibold flex items-center gap-1">
                     <DollarSign className="w-3 h-3" /> Harga (Rp) *
                   </Label>
                   <Input
@@ -581,71 +610,7 @@ export default function AdminPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-original" className="text-xs">Harga Asli (Rp)</Label>
-                  <Input
-                    id="prod-original"
-                    type="number"
-                    placeholder="250000"
-                    value={productForm.originalPrice}
-                    onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-disc" className="text-xs">Diskon (%)</Label>
-                  <Input
-                    id="prod-disc"
-                    type="number"
-                    placeholder="65"
-                    value={productForm.discountPercent}
-                    onChange={(e) => setProductForm({ ...productForm, discountPercent: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-rating" className="text-xs flex items-center gap-1">
-                    <Star className="w-3 h-3" /> Rating
-                  </Label>
-                  <Input
-                    id="prod-rating"
-                    type="number"
-                    step="0.1"
-                    placeholder="4.9"
-                    value={productForm.rating}
-                    onChange={(e) => setProductForm({ ...productForm, rating: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-reviews" className="text-xs">Jumlah Review</Label>
-                  <Input
-                    id="prod-reviews"
-                    type="number"
-                    placeholder="28500"
-                    value={productForm.reviewCount}
-                    onChange={(e) => setProductForm({ ...productForm, reviewCount: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-sold" className="text-xs">Jumlah Terjual</Label>
-                  <Input
-                    id="prod-sold"
-                    type="number"
-                    placeholder="75000"
-                    value={productForm.soldCount}
-                    onChange={(e) => setProductForm({ ...productForm, soldCount: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-location" className="text-xs flex items-center gap-1">
-                    <MapPin className="w-3 h-3" /> Lokasi
-                  </Label>
-                  <Input
-                    id="prod-location"
-                    placeholder="Jakarta Barat"
-                    value={productForm.location}
-                    onChange={(e) => setProductForm({ ...productForm, location: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-category" className="text-xs">Kategori *</Label>
+                  <Label htmlFor="prod-category" className="text-xs font-semibold">Kategori *</Label>
                   <select
                     id="prod-category"
                     value={productForm.category}
@@ -658,31 +623,116 @@ export default function AdminPage() {
                     ))}
                   </select>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="prod-marketplace" className="text-xs">Marketplace</Label>
-                  <select
-                    id="prod-marketplace"
-                    value={productForm.marketplace}
-                    onChange={(e) => setProductForm({ ...productForm, marketplace: e.target.value })}
-                    className="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                    {MARKETPLACE_OPTIONS.map((m) => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
-                    ))}
-                  </select>
-                </div>
                 <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <Label htmlFor="prod-affiliate" className="text-xs flex items-center gap-1">
-                    <Link2 className="w-3 h-3" /> Link Affiliate / Shortlink (opsional)
+                  <Label htmlFor="prod-affiliate" className="text-xs font-semibold flex items-center gap-1">
+                    <Link2 className="w-3 h-3" /> Link Affiliate / Shortlink *
                   </Label>
                   <Input
                     id="prod-affiliate"
-                    placeholder="https://id.shp.ee/xxx atau link affiliate lainnya"
+                    placeholder="Paste link affiliate dari dashboard Shopee Affiliate lo di sini"
                     value={productForm.affiliateUrl}
                     onChange={(e) => setProductForm({ ...productForm, affiliateUrl: e.target.value })}
                   />
+                  <p className="text-[10px] text-zinc-400">
+                    Generate di affiliate.shopee.co.id → pilih produk → copy link affiliate
+                  </p>
                 </div>
               </div>
+
+              {/* Advanced fields - collapsible */}
+              {showAdvanced && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="prod-url" className="text-xs flex items-center gap-1">
+                      <ExternalLink className="w-3 h-3" /> URL Produk Asli
+                    </Label>
+                    <Input
+                      id="prod-url"
+                      placeholder="https://shopee.co.id/product-..."
+                      value={productForm.url}
+                      onChange={(e) => setProductForm({ ...productForm, url: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="prod-original" className="text-xs">Harga Asli (Rp)</Label>
+                    <Input
+                      id="prod-original"
+                      type="number"
+                      placeholder="250000"
+                      value={productForm.originalPrice}
+                      onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="prod-disc" className="text-xs">Diskon (%)</Label>
+                    <Input
+                      id="prod-disc"
+                      type="number"
+                      placeholder="65"
+                      value={productForm.discountPercent}
+                      onChange={(e) => setProductForm({ ...productForm, discountPercent: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="prod-rating" className="text-xs flex items-center gap-1">
+                      <Star className="w-3 h-3" /> Rating
+                    </Label>
+                    <Input
+                      id="prod-rating"
+                      type="number"
+                      step="0.1"
+                      placeholder="4.9"
+                      value={productForm.rating}
+                      onChange={(e) => setProductForm({ ...productForm, rating: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="prod-reviews" className="text-xs">Jumlah Review</Label>
+                    <Input
+                      id="prod-reviews"
+                      type="number"
+                      placeholder="1000"
+                      value={productForm.reviewCount}
+                      onChange={(e) => setProductForm({ ...productForm, reviewCount: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="prod-sold" className="text-xs">Jumlah Terjual</Label>
+                    <Input
+                      id="prod-sold"
+                      type="number"
+                      placeholder="5000"
+                      value={productForm.soldCount}
+                      onChange={(e) => setProductForm({ ...productForm, soldCount: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="prod-location" className="text-xs flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> Lokasi
+                    </Label>
+                    <Input
+                      id="prod-location"
+                      placeholder="Jakarta Barat"
+                      value={productForm.location}
+                      onChange={(e) => setProductForm({ ...productForm, location: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="prod-marketplace" className="text-xs">Marketplace</Label>
+                    <select
+                      id="prod-marketplace"
+                      value={productForm.marketplace}
+                      onChange={(e) => setProductForm({ ...productForm, marketplace: e.target.value })}
+                      className="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {MARKETPLACE_OPTIONS.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mt-4 gap-2">
                 <label className="flex items-center gap-2 text-xs cursor-pointer">
                   <Switch
