@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureCategoriesSeeded, ensureAffiliateTagsSeeded } from "@/lib/seed";
-import { fetchAmazonBestSellers } from "@/lib/sources/amazon-rss";
-import { fetchAliExpressHotProducts, isAliExpressAvailable } from "@/lib/sources/aliexpress";
-import { generateMockProducts } from "@/lib/sources/mock";
 import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
 import {
   computeSoldPerDay,
@@ -115,53 +112,9 @@ export async function GET(req: NextRequest) {
 
     const manualProducts: Product[] = manualRows.map(dbRowToProduct);
 
-    // === 2. Jika produk manual kurang dari 3 per kategori, tambah mock/live ===
-    const aliExpressEnabled = isAliExpressAvailable();
-
-    const fetchPromises = targetCategories.map(async (cat) => {
-      const slug = cat.name.toLowerCase();
-      const mockProducts = generateMockProducts(slug, cat.name, 10);
-
-      const amazonPromise = cat.amazonNode
-        ? fetchAmazonBestSellers(cat.amazonNode, cat.name)
-        : Promise.resolve([]);
-
-      const aliexpressPromise =
-        cat.aliexpressCat && aliExpressEnabled
-          ? fetchAliExpressHotProducts(cat.aliexpressCat, cat.name)
-          : Promise.resolve([]);
-
-      const [amazonProducts, aliexpressProducts] = await Promise.all([
-        amazonPromise,
-        aliexpressPromise,
-      ]);
-
-      const liveProducts = [...amazonProducts, ...aliexpressProducts];
-      const productsForCategory =
-        liveProducts.length > 0 ? liveProducts : mockProducts;
-
-      return {
-        products: productsForCategory,
-        source: liveProducts.length > 0 ? ("live" as const) : ("mock" as const),
-      };
-    });
-
-    const results = await Promise.all(fetchPromises);
-    const fallbackProducts: Product[] = results.flatMap((r) => r.products);
-    const anyLive = results.some((r) => r.source === "live");
-
-    // Gabung: manual produk dulu, lalu fallback (hindari duplikat ID)
-    const manualIds = new Set(manualProducts.map((p) => p.id));
-    const uniqueFallback = fallbackProducts.filter((p) => !manualIds.has(p.id));
-    const allProducts: Product[] = [...manualProducts, ...uniqueFallback];
-
-    // Source: kalau ada manual produk, anggap "live"
-    const overallSource: "live" | "mock" =
-      manualProducts.length > 0 || anyLive ? "live" : "mock";
-
     // Inject affiliate URL ke setiap produk
     const tags = await getAffiliateTags();
-    const withAffiliate: Product[] = allProducts.map((p) => ({
+    const withAffiliate: Product[] = manualProducts.map((p) => ({
       ...p,
       affiliateUrl: p.affiliateUrl || buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
     }));
@@ -193,20 +146,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json<ProductsResponse>({
       products: finalProducts,
       total: finalProducts.length,
-      source: overallSource,
+      source: "live",
     });
   } catch (err) {
     console.error("[api/products] Error:", err);
-    const fallback = generateMockProducts("elektronik", "Elektronik", 12);
-    const tags = await getAffiliateTags();
-    const withAffiliate = fallback.map((p) => ({
-      ...p,
-      affiliateUrl: buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
-    }));
     return NextResponse.json<ProductsResponse>({
-      products: withAffiliate,
-      total: withAffiliate.length,
-      source: "mock",
+      products: [],
+      total: 0,
+      source: "live",
     });
   }
 }

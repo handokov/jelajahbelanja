@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ProductCard } from "@/components/product-card";
-import { DemoBanner } from "@/components/demo-banner";
+// DemoBanner removed — only real products now
 
 import type { CategoryDTO, Product, ProductFilter, ProductsResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -87,7 +87,7 @@ export default function Home() {
   });
 
   const products: Product[] = productsQuery.data?.products ?? [];
-  const source = productsQuery.data?.source ?? "mock";
+  const source = productsQuery.data?.source ?? "live";
   const totalSold = React.useMemo(
     () => products.reduce((sum, p) => sum + p.soldCount, 0),
     [products]
@@ -277,9 +277,6 @@ export default function Home() {
             </nav>
           )}
         </section>
-
-        {/* Demo banner */}
-        {source === "mock" && <DemoBanner className="mb-4" />}
 
         {/* Filter tabs */}
         <section aria-label="Filter produk viral" className="mb-6">
