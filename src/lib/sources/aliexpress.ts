@@ -4,9 +4,13 @@ import {
   computeViralScore,
   VIRAL_SCORE_THRESHOLD,
 } from "@/lib/viral-score";
-import { hasRapidApiKey } from "@/lib/sources/mock";
 
 const ALIEXPRESS_RAPIDAPI_HOST = "aliexpress-data-scraper.p.rapidapi.com";
+
+function hasRapidApiKey(): boolean {
+  return Boolean(process.env.RAPIDAPI_KEY && process.env.RAPIDAPI_KEY.trim().length > 0);
+}
+
 const USD_TO_IDR = 15800;
 
 interface AliExpressProduct {
@@ -153,7 +157,7 @@ export async function fetchAliExpressHotProducts(
         p.product_image ||
         p.img_url ||
         (Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : "") ||
-        `https://picsum.photos/seed/aliexpress-${category}-${idx}/400/400`;
+        "";
 
       const soldCount = parseCount(p.sales ?? p.sold ?? p.orders ?? p.lastest_volume);
       const price = parsePrice(p.sale_price ?? p.product_price ?? p.min_price);

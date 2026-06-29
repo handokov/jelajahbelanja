@@ -164,7 +164,7 @@ export async function fetchAmazonBestSellers(
         id: `amazon-${node}-${idx}`,
         title,
         url: link,
-        image: image || `https://picsum.photos/seed/amazon-${node}-${idx}/400/400`,
+        image: image || "",
         price: price || 100000,
         originalPrice: computedOriginal,
         discountPercent,
