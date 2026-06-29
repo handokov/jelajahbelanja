@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import {
   Search,
   Settings2,
@@ -14,6 +15,7 @@ import {
   Sparkles,
   ShieldCheck,
   Tag,
+  LayoutDashboard,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -166,6 +168,14 @@ export default function Home() {
               </Badge>
             </div>
             <div className="flex items-center gap-2">
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Admin Panel"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                <span className="hidden sm:inline">Admin</span>
+              </Link>
               <Button
                 variant="ghost"
                 size="icon"
