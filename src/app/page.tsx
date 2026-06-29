@@ -351,25 +351,34 @@ export default function Home() {
 
               {/* Sidebar trending - desktop only */}
               <aside className="hidden lg:block lg:col-span-1">
-                <div className="sticky top-20 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-                  <div className="flex items-center gap-2 mb-3">
+                <div
+                  className={cn(
+                    "sticky rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden",
+                    heroVisible ? "top-20" : "top-[104px]"
+                  )}
+                >
+                  {/* Header — selalu visible, tidak ikut scroll */}
+                  <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
                     <Flame className="w-4 h-4 text-fuchsia-500" />
                     <h2 className="text-sm font-semibold">Trending Sekarang</h2>
                   </div>
-                  {trendingTop5.length === 0 ? (
-                    <p className="text-xs text-zinc-500">Belum ada data.</p>
-                  ) : (
-                    <div className="flex flex-col gap-1 max-h-[600px] overflow-y-auto custom-scrollbar">
-                      {trendingTop5.map((p, i) => (
-                        <ProductCard
-                          key={`compact-${p.id}`}
-                          product={p}
-                          variant="compact"
-                          rank={i + 1}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  {/* Produk — bisa scroll jika banyak */}
+                  <div className="p-4 pt-3">
+                    {trendingTop5.length === 0 ? (
+                      <p className="text-xs text-zinc-500">Belum ada data.</p>
+                    ) : (
+                      <div className="flex flex-col gap-1 max-h-[calc(100vh-180px)] overflow-y-auto custom-scrollbar">
+                        {trendingTop5.map((p, i) => (
+                          <ProductCard
+                            key={`compact-${p.id}`}
+                            product={p}
+                            variant="compact"
+                            rank={i + 1}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </aside>
             </div>
