@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateMockProducts } from "@/lib/sources/mock";
 import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
 import type { Product, Marketplace } from "@/lib/types";
 
@@ -9,9 +8,6 @@ export const dynamic = "force-dynamic";
 /**
  * Mapping kategori pelengkap — kalau user lihat sepatu,
  * rekomendasikan celana, kaos, hoodie, dll.
- *
- * Key: kategori yang sedang dilihat
- * Value: array kategori pelengkap yang cocok dipadukan
  */
 const COMPLEMENTARY_CATEGORIES: Record<string, string[]> = {
   fashion: ["fashion", "beauty"],
@@ -26,10 +22,8 @@ const COMPLEMENTARY_CATEGORIES: Record<string, string[]> = {
 
 /**
  * Mapping keyword produk → kategori pelengkap yang lebih spesifik.
- * Misal: sepatu → celana + kaos + hoodie
  */
 const PRODUCT_KEYWORD_COMPLEMENTS: Record<string, string[]> = {
-  // Fashion items → outfit building blocks
   sepatu: ["celana", "kaos", "hoodie", "sneaker", "jeans"],
   sneakers: ["celana", "kaos", "hoodie", "jogger"],
   kaos: ["celana", "sepatu", "sneaker", "hoodie"],
@@ -42,14 +36,12 @@ const PRODUCT_KEYWORD_COMPLEMENTS: Record<string, string[]> = {
   kacamata: ["sepatu", "kaos", "celana"],
   sandal: ["celana", "kaos", "short"],
   topi: ["kaos", "celana", "sepatu"],
-  // Beauty → complementary beauty
   serum: ["sunscreen", "moisturizer", "masker", "lip"],
   sunscreen: ["serum", "moisturizer", "lip"],
   lipstick: ["serum", "foundation", "masker"],
   foundation: ["serum", "sunscreen", "lip"],
   parfum: ["serum", "body", "lip"],
   masker: ["serum", "sunscreen", "lip"],
-  // Electronics → accessories
   earbuds: ["charger", "powerbank", "speaker"],
   speaker: ["earbuds", "charger", "ring"],
   powerbank: ["charger", "earbuds", "cable"],
@@ -58,35 +50,53 @@ const PRODUCT_KEYWORD_COMPLEMENTS: Record<string, string[]> = {
   mouse: ["keyboard", "mousepad", "headset"],
   headset: ["keyboard", "mouse", "mousepad"],
   charger: ["powerbank", "cable", "earbuds"],
-  // Home → complementary
   lampu: ["diffuser", "karpet", "gorden"],
   diffuser: ["lampu", "karpet", "rak"],
   vacuum: ["lampu", "rak", "dispenser"],
   airfryer: ["juicer", "perkakas", "rak"],
-  // Sports → gear
   dumbbell: ["yoga", "sepatu", "kaos"],
   yoga: ["dumbbell", "mat", "kaos"],
   skipping: ["dumbbell", "kaos", "sepatu"],
 };
 
 /**
+ * Helper: convert DB product to Product type
+ */
+function toProduct(p: any): Product {
+  return {
+    id: `shopee-${p.id}`,
+    title: p.title,
+    url: p.url,
+    image: p.image,
+    price: p.price,
+    originalPrice: p.originalPrice,
+    discountPercent: p.discountPercent,
+    rating: p.rating,
+    reviewCount: p.reviewCount,
+    soldCount: p.soldCount,
+    location: p.location || undefined,
+    category: p.category,
+    categorySlug: p.category?.toLowerCase(),
+    isViral: p.isViral || false,
+    marketplace: (p.marketplace || "shopee") as Marketplace,
+    affiliateUrl: p.affiliateUrl || undefined,
+    soldPerDay: Math.round(p.soldCount / 30),
+    timestamp: p.createdAt,
+    viralScore: (p.isViral ? 80 : 0) + Math.min(p.soldCount / 100, 20),
+  };
+}
+
+/**
  * POST /api/recommendations
  *
- * Return produk pelengkap berdasarkan produk yang sedang dilihat.
- * Filter berdasarkan:
- * 1. Kategori pelengkap (fashion → fashion, beauty, dll)
- * 2. Range harga (±50% dari harga produk asli)
- * 3. Keyword matching (sepatu → celana, kaos, hoodie)
- * 4. Prioritas viral/flash sale
- *
- * Body: { product: Product, limit?: number }
- * Response: { recommendations: Product[] }
+ * Return produk pelengkap dari DATABASE berdasarkan produk yang sedang dilihat.
+ * Tidak lagi pakai mock data — hanya produk asli yang di-upload admin.
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const product = body.product as Product;
-    const limit = body.limit || 4;
+    const limit = body.limit || 6;
 
     if (!product?.title || !product?.category) {
       return NextResponse.json(
@@ -117,23 +127,55 @@ export async function POST(req: NextRequest) {
     }
     const uniqueKeywords = [...new Set(matchedKeywords)];
 
-    // Generate mock products dari kategori pelengkap
-    const allCandidates: Product[] = [];
+    // Strip "shopee-" prefix dari product ID untuk DB query
+    const dbProductId = product.id.startsWith("shopee-")
+      ? product.id.replace("shopee-", "")
+      : product.id;
 
-    for (const cat of complementaryCats) {
-      const catName =
-        cat.charAt(0).toUpperCase() + cat.slice(1);
-      const mockProducts = generateMockProducts(cat, catName, 10);
-      allCandidates.push(...mockProducts);
+    // Query produk asli dari database — kategori pelengkap + isHidden bukan true
+    const dbProducts = await db.shopeeProduct.findMany({
+      where: {
+        category: { in: complementaryCats.map(c => c.charAt(0).toUpperCase() + c.slice(1)) },
+        isHidden: { not: true },
+        enabled: true,
+        id: { not: dbProductId },
+      },
+      orderBy: [
+        { isViral: "desc" },
+        { soldCount: "desc" },
+      ],
+      take: 50,
+    });
+
+    // Jika produk di kategori pelengkap kurang dari limit, tambah dari semua kategori
+    let allProducts = [...dbProducts];
+    if (allProducts.length < limit) {
+      const extraProducts = await db.shopeeProduct.findMany({
+        where: {
+          isHidden: { not: true },
+          enabled: true,
+          id: {
+            not: dbProductId,
+            notIn: allProducts.map(p => p.id),
+          },
+        },
+        orderBy: [
+          { isViral: "desc" },
+          { soldCount: "desc" },
+        ],
+        take: limit - allProducts.length,
+      });
+      allProducts.push(...extraProducts);
     }
+
+    // Convert ke Product type
+    const allCandidates = allProducts.map(toProduct);
 
     // Filter & score candidates
     const tags = await getAffiliateTags();
 
     const scored = allCandidates
-      // Exclude product yang sama
-      .filter((p) => p.id !== product.id)
-      // Filter harga range
+      // Filter harga range (longgar)
       .filter((p) => p.price >= priceMin && p.price <= priceMax)
       // Score berdasarkan relevansi
       .map((p) => {
@@ -169,6 +211,17 @@ export async function POST(req: NextRequest) {
         ...p,
         affiliateUrl: buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
       }));
+
+    // Jika setelah filter harga gak ada yang cocok, fallback ke semua produk tanpa filter harga
+    if (scored.length === 0 && allCandidates.length > 0) {
+      const fallback = allCandidates
+        .slice(0, limit)
+        .map((p) => ({
+          ...p,
+          affiliateUrl: buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
+        }));
+      return NextResponse.json({ recommendations: fallback });
+    }
 
     return NextResponse.json({ recommendations: scored });
   } catch (err) {
