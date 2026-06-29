@@ -151,34 +151,48 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "ID wajib diisi" }, { status: 400 });
     }
 
+    // Verify product exists first
+    const existing = await db.shopeeProduct.findUnique({ where: { id: body.id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Produk tidak ditemukan" }, { status: 404 });
+    }
+
+    const data: Record<string, unknown> = {};
+    if (body.title !== undefined) data.title = body.title.trim();
+    if (body.image !== undefined) data.image = body.image.trim();
+    if (body.price !== undefined) data.price = Number(body.price);
+    if (body.originalPrice !== undefined) data.originalPrice = Number(body.originalPrice) || null;
+    if (body.discountPercent !== undefined) data.discountPercent = Number(body.discountPercent) || null;
+    if (body.rating !== undefined) data.rating = Number(body.rating);
+    if (body.reviewCount !== undefined) data.reviewCount = Number(body.reviewCount);
+    if (body.soldCount !== undefined) data.soldCount = Number(body.soldCount);
+    if (body.location !== undefined) data.location = body.location?.trim() || null;
+    if (body.category !== undefined) data.category = body.category.trim();
+    if (body.url !== undefined) data.url = body.url.trim();
+    if (body.affiliateUrl !== undefined) data.affiliateUrl = body.affiliateUrl?.trim() || null;
+    if (body.marketplace !== undefined) data.marketplace = body.marketplace.trim();
+    if (body.enabled !== undefined) data.enabled = body.enabled;
+    if (body.isViral !== undefined) data.isViral = body.isViral;
+    if (body.isPinned !== undefined) data.isPinned = body.isPinned;
+    if (body.isHidden !== undefined) data.isHidden = body.isHidden;
+    if (body.notes !== undefined) data.notes = body.notes?.trim() || null;
+
     const updated = await db.shopeeProduct.update({
       where: { id: body.id },
-      data: {
-        ...(body.title !== undefined ? { title: body.title.trim() } : {}),
-        ...(body.image !== undefined ? { image: body.image.trim() } : {}),
-        ...(body.price !== undefined ? { price: Number(body.price) } : {}),
-        ...(body.originalPrice !== undefined ? { originalPrice: Number(body.originalPrice) || null } : {}),
-        ...(body.discountPercent !== undefined ? { discountPercent: Number(body.discountPercent) || null } : {}),
-        ...(body.rating !== undefined ? { rating: Number(body.rating) } : {}),
-        ...(body.reviewCount !== undefined ? { reviewCount: Number(body.reviewCount) } : {}),
-        ...(body.soldCount !== undefined ? { soldCount: Number(body.soldCount) } : {}),
-        ...(body.location !== undefined ? { location: body.location?.trim() || null } : {}),
-        ...(body.category !== undefined ? { category: body.category.trim() } : {}),
-        ...(body.url !== undefined ? { url: body.url.trim() } : {}),
-        ...(body.affiliateUrl !== undefined ? { affiliateUrl: body.affiliateUrl?.trim() || null } : {}),
-        ...(body.marketplace !== undefined ? { marketplace: body.marketplace.trim() } : {}),
-        ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
-        ...(body.isViral !== undefined ? { isViral: body.isViral } : {}),
-        ...(body.isPinned !== undefined ? { isPinned: body.isPinned } : {}),
-        ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
-        ...(body.notes !== undefined ? { notes: body.notes?.trim() || null } : {}),
-      },
+      data,
     });
 
     return NextResponse.json({ product: toProduct(updated) });
-  } catch (err) {
-    console.error("[api/shopee-products PATCH] Error:", err);
-    return NextResponse.json({ error: "Gagal memperbarui produk" }, { status: 500 });
+  } catch (err: any) {
+    console.error("[api/shopee-products PATCH] Error:", err?.message || err);
+    console.error("[api/shopee-products PATCH] Stack:", err?.stack);
+    // Return specific error for debugging
+    const errorMsg = err?.code === "P2025"
+      ? "Produk tidak ditemukan"
+      : err?.code === "P2002"
+        ? "Data duplikat, cek field unik"
+        : `Gagal memperbarui produk: ${err?.message || "Unknown error"}`;
+    return NextResponse.json({ error: errorMsg, code: err?.code }, { status: 500 });
   }
 }
 
