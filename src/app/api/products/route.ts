@@ -101,11 +101,11 @@ export async function GET(req: NextRequest) {
 
     const targetCategoryNames = targetCategories.map((c) => c.name);
 
-    // Ambil produk yang enabled=true DAN isHidden=false
+    // Ambil produk yang enabled=true DAN isHidden bukan true (null juga ditampilkan)
     const manualRows = await db.shopeeProduct.findMany({
       where: {
         enabled: true,
-        isHidden: false,
+        isHidden: { not: true },
         ...(targetCategoryNames.length > 0
           ? { category: { in: targetCategoryNames } }
           : {}),
