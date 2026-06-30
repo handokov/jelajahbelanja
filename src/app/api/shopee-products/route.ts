@@ -1,70 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import {
-  computeSoldPerDay,
-  computeViralScore,
-  VIRAL_SCORE_THRESHOLD,
-} from "@/lib/viral-score";
 import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
-import type { Product, Marketplace } from "@/lib/types";
+import { dbRowToProduct } from "@/lib/product-mapper";
+import type { Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-/** Convert DB row to Product DTO */
-function toProduct(row: {
-  id: string;
-  title: string;
-  image: string;
-  price: number;
-  originalPrice: number | null;
-  discountPercent: number | null;
-  rating: number;
-  reviewCount: number;
-  soldCount: number;
-  location: string | null;
-  category: string;
-  url: string;
-  affiliateUrl: string | null;
-  marketplace: string;
-  enabled: boolean;
-  isViral: boolean;
-  isPinned: boolean;
-  isHidden: boolean;
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}): Product {
-  const ts = row.createdAt.toISOString();
-  const soldPerDay = computeSoldPerDay(row.soldCount, ts);
-  const viralScore = computeViralScore({
-    soldPerDay,
-    rating: row.rating,
-    reviewCount: row.reviewCount,
-    timestamp: ts,
-    price: row.price,
-    originalPrice: row.originalPrice ?? undefined,
-    title: row.title,
-  });
-  return {
-    id: row.id,
-    title: row.title,
-    url: row.url,
-    image: row.image,
-    price: row.price,
-    originalPrice: row.originalPrice ?? undefined,
-    discountPercent: row.discountPercent ?? undefined,
-    rating: row.rating,
-    reviewCount: row.reviewCount,
-    soldCount: row.soldCount,
-    soldPerDay,
-    timestamp: ts,
-    marketplace: (row.marketplace || "shopee") as Marketplace,
-    category: row.category,
-    viralScore,
-    isViral: row.isViral || viralScore >= VIRAL_SCORE_THRESHOLD,
-    location: row.location ?? undefined,
-  };
-}
 
 /** GET /api/shopee-products — list semua produk manual */
 export async function GET(req: NextRequest) {
@@ -81,7 +21,7 @@ export async function GET(req: NextRequest) {
       orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     });
 
-    let products = rows.map(toProduct);
+    let products = rows.map(dbRowToProduct);
 
     if (search) {
       products = products.filter((p) => p.title.toLowerCase().includes(search));
@@ -136,7 +76,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ product: toProduct(created) });
+    return NextResponse.json({ product: dbRowToProduct(created) });
   } catch (err) {
     console.error("[api/shopee-products POST] Error:", err);
     return NextResponse.json({ error: "Gagal membuat produk" }, { status: 500 });
@@ -182,7 +122,7 @@ export async function PATCH(req: NextRequest) {
       data,
     });
 
-    return NextResponse.json({ product: toProduct(updated) });
+    return NextResponse.json({ product: dbRowToProduct(updated) });
   } catch (err: any) {
     console.error("[api/shopee-products PATCH] Error:", err?.message || err);
     console.error("[api/shopee-products PATCH] Stack:", err?.stack);

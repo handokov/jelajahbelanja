@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
-import type { Product, Marketplace } from "@/lib/types";
+import { dbRowToProduct } from "@/lib/product-mapper";
+import type { Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -60,30 +61,13 @@ const PRODUCT_KEYWORD_COMPLEMENTS: Record<string, string[]> = {
 };
 
 /**
- * Helper: convert DB product to Product type
+ * Helper: convert DB product to Product type.
+ * Pakai dbRowToProduct dari product-mapper agar viralScore konsisten.
+ * Tambahkan prefix "shopee-" ke id untuk kompatibilitas frontend.
  */
-function toProduct(p: any): Product {
-  return {
-    id: `shopee-${p.id}`,
-    title: p.title,
-    url: p.url,
-    image: p.image,
-    price: p.price,
-    originalPrice: p.originalPrice,
-    discountPercent: p.discountPercent,
-    rating: p.rating,
-    reviewCount: p.reviewCount,
-    soldCount: p.soldCount,
-    location: p.location || undefined,
-    category: p.category,
-    categorySlug: p.category?.toLowerCase(),
-    isViral: p.isViral || false,
-    marketplace: (p.marketplace || "shopee") as Marketplace,
-    affiliateUrl: p.affiliateUrl || undefined,
-    soldPerDay: Math.round(p.soldCount / 30),
-    timestamp: p.createdAt,
-    viralScore: (p.isViral ? 80 : 0) + Math.min(p.soldCount / 100, 20),
-  };
+function toProductWithPrefix(p: any): Product {
+  const product = dbRowToProduct(p);
+  return { ...product, id: `shopee-${product.id}` };
 }
 
 /**
@@ -169,7 +153,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Convert ke Product type
-    const allCandidates = allProducts.map(toProduct);
+    const allCandidates = allProducts.map(toProductWithPrefix);
 
     // Filter & score candidates
     const tags = await getAffiliateTags();

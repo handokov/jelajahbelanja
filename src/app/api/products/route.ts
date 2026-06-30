@@ -2,71 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureCategoriesSeeded, ensureAffiliateTagsSeeded } from "@/lib/seed";
 import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
-import {
-  computeSoldPerDay,
-  computeViralScore,
-  VIRAL_SCORE_THRESHOLD,
-  topViralQuarter,
-} from "@/lib/viral-score";
-import type { Product, ProductsResponse, ProductFilter, Marketplace } from "@/lib/types";
+import { topViralQuarter } from "@/lib/viral-score";
+import { dbRowToProduct } from "@/lib/product-mapper";
+import type { Product, ProductsResponse, ProductFilter } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-/** Convert DB ShopeeProduct row to Product DTO */
-function dbRowToProduct(row: {
-  id: string;
-  title: string;
-  image: string;
-  price: number;
-  originalPrice: number | null;
-  discountPercent: number | null;
-  rating: number;
-  reviewCount: number;
-  soldCount: number;
-  location: string | null;
-  category: string;
-  url: string;
-  affiliateUrl: string | null;
-  marketplace: string;
-  enabled: boolean;
-  isViral: boolean;
-  isPinned: boolean;
-  isHidden: boolean;
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}): Product {
-  const ts = row.createdAt.toISOString();
-  const soldPerDay = computeSoldPerDay(row.soldCount, ts);
-  const viralScore = computeViralScore({
-    soldPerDay,
-    rating: row.rating,
-    reviewCount: row.reviewCount,
-    timestamp: ts,
-    price: row.price,
-    originalPrice: row.originalPrice ?? undefined,
-    title: row.title,
-  });
-  return {
-    id: row.id,
-    title: row.title,
-    url: row.url,
-    image: row.image,
-    price: row.price,
-    originalPrice: row.originalPrice ?? undefined,
-    discountPercent: row.discountPercent ?? undefined,
-    rating: row.rating,
-    reviewCount: row.reviewCount,
-    soldCount: row.soldCount,
-    soldPerDay,
-    timestamp: ts,
-    marketplace: (row.marketplace || "shopee") as Marketplace,
-    category: row.category,
-    viralScore,
-    isViral: row.isViral || viralScore >= VIRAL_SCORE_THRESHOLD,
-    location: row.location ?? undefined,
-  };
-}
 
 /**
  * GET /api/products?category=<id>&filter=latest|viral|weekly&search=<q>
