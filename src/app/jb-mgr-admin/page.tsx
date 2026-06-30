@@ -41,6 +41,8 @@ import {
   Image as ImageLucide,
   Upload,
   CloudUpload,
+  Download,
+  LinkIcon,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -235,7 +237,6 @@ export default function AdminPage() {
 
     setBannerUploading(true);
     try {
-      // Coba upload ke API (Vercel Blob)
       const formData = new FormData();
       formData.append("file", file);
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
@@ -243,7 +244,7 @@ export default function AdminPage() {
       if (uploadRes.ok) {
         const { url } = await uploadRes.json();
         setBannerForm((prev: typeof EMPTY_BANNER) => ({ ...prev, image: url }));
-        toast({ title: "Gambar berhasil diupload" });
+        toast({ title: "Gambar berhasil diupload!" });
       } else {
         // Fallback: konversi ke base64
         console.warn("[Banner upload] API upload gagal, fallback ke base64");
@@ -279,6 +280,40 @@ export default function AdminPage() {
       setBannerUploading(false);
     }
   }, [toast]);
+
+  // Download gambar dari URL (bypass hotlink protection), upload ke Blob
+  const [bannerUrlInput, setBannerUrlInput] = React.useState("");
+  const handleBannerUrlDownload = React.useCallback(async () => {
+    const url = bannerUrlInput.trim();
+    if (!url) {
+      toast({ title: "Masukkan URL gambar dulu", variant: "destructive" });
+      return;
+    }
+
+    setBannerUploading(true);
+    try {
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+
+      if (uploadRes.ok) {
+        const data = await uploadRes.json();
+        setBannerForm((prev: typeof EMPTY_BANNER) => ({ ...prev, image: data.url }));
+        setBannerUrlInput("");
+        toast({ title: "Gambar berhasil diambil dari URL!" });
+      } else {
+        const errData = await uploadRes.json().catch(() => ({}));
+        toast({ title: errData.error || "Gagal mengambil gambar dari URL", variant: "destructive" });
+      }
+    } catch (err) {
+      console.error("[Banner URL download] Error:", err);
+      toast({ title: "Gagal mengambil gambar dari URL", variant: "destructive" });
+    } finally {
+      setBannerUploading(false);
+    }
+  }, [bannerUrlInput, toast]);
 
   const saveBannerMutation = useMutation({
     mutationFn: async () => {
@@ -1081,14 +1116,29 @@ export default function AdminPage() {
                       </button>
                     </div>
                   )}
-                  {/* URL input fallback */}
-                  <div className="mt-2">
+                  {/* URL download section */}
+                  <div className="mt-3 flex gap-2">
                     <Input
-                      placeholder="atau paste URL gambar langsung (https://...)"
-                      value={bannerForm.image.startsWith("blob:") || bannerForm.image.startsWith("/api/upload") ? "" : bannerForm.image}
-                      onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })}
+                      placeholder="Ambil gambar dari URL (Tokped, Shopee, dll) — paste di sini..."
+                      value={bannerUrlInput}
+                      onChange={(e) => setBannerUrlInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleBannerUrlDownload(); }}
                     />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      disabled={bannerUploading || !bannerUrlInput.trim()}
+                      onClick={handleBannerUrlDownload}
+                    >
+                      <Download className="w-3.5 h-3.5 mr-1" /> Ambil
+                    </Button>
                   </div>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    <LinkIcon className="w-3 h-3 inline mr-0.5" />
+                    Paste URL gambar dari mana aja — server kami yang download & simpan, jadi gak ada masalah hotlink
+                  </p>
                 </div>
                 <div>
                   <Label className="text-xs">Link Tujuan</Label>
