@@ -54,11 +54,13 @@ export interface ShopeeProduct {
   soldCount: number;
   location: string | null;
   category: string;
+  marketplace: string;
   isViral: boolean;
   isPinned: boolean;
   isHidden: boolean;
   affiliateUrl: string | null;
   notes: string | null;
+  enabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -126,6 +128,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   const { displayedText, isDone: typewriterDone } = useTypewriterEffect(aiExplanation);
 
   const savings = product.originalPrice ? product.originalPrice - product.price : 0;
+  const mpMeta = MARKETPLACE_META[product.marketplace as keyof typeof MARKETPLACE_META] ?? MARKETPLACE_META.mock;
 
   // Fetch AI explanation + recommendations
   React.useEffect(() => {
@@ -137,7 +140,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
       setRecsLoading(true);
 
       const productPayload = {
-        id: `shopee-${product.id}`,
+        id: `${product.marketplace}-${product.id}`,
         title: product.title,
         url: product.url,
         image: product.image,
@@ -150,7 +153,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
         location: product.location,
         category: product.category,
         isViral: product.isViral,
-        marketplace: "shopee",
+        marketplace: product.marketplace,
         soldPerDay: 0,
         timestamp: product.createdAt,
         viralScore: 0,
@@ -272,8 +275,8 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/40 to-transparent" />
               <div className="absolute bottom-3 left-3 flex gap-1.5">
                 {product.isViral && <ViralBadge size="md" />}
-                <Badge className={cn(MARKETPLACE_META.shopee.className, "text-xs font-semibold px-2.5 py-1 h-7 shadow-lg")}>
-                  {MARKETPLACE_META.shopee.label}
+                <Badge className={cn(mpMeta.className, "text-xs font-semibold px-2.5 py-1 h-7 shadow-lg")}>
+                  {mpMeta.label}
                 </Badge>
               </div>
               {product.discountPercent && product.discountPercent > 0 && (
@@ -407,12 +410,12 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
         <div className="container mx-auto max-w-5xl">
           <Button asChild size="lg" className={cn("w-full h-12 text-base", BUY_BUTTON_GRADIENT)}>
             <a
-              href={product.affiliateUrl || `/beli/shopee-${product.id}`}
+              href={product.affiliateUrl || `/beli/${product.marketplace}-${product.id}`}
               target="_blank"
               rel={AFFILIATE_LINK_REL}
             >
               <ShoppingBag className="w-5 h-5 mr-2" />
-              Beli di Shopee
+              Beli di {mpMeta.label}
               <ExternalLink className="w-4 h-4 ml-2" />
             </a>
           </Button>

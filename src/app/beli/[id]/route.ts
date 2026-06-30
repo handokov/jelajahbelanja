@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { stripShopeePrefix } from "@/lib/utils";
+import { stripMarketplacePrefix } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +24,8 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  // Strip "shopee-" prefix kalau ada (frontend format: shopee-cuid123)
-  const dbId = stripShopeePrefix(id);
+  // Strip marketplace prefix (shopee-xxx, tokopedia-xxx, dll)
+  const dbId = stripMarketplacePrefix(id);
 
   try {
     const product = await db.shopeeProduct.findUnique({
