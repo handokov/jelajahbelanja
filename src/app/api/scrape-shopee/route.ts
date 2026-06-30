@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import ZAI from "z-ai-web-dev-sdk";
 
 export const dynamic = "force-dynamic";
 
@@ -524,6 +525,65 @@ async function scrapeHtmlPage(url: string): Promise<Record<string, unknown>> {
  * Groq AI fallback extraction
  */
 async function extractWithAI(pageContent: string, product: Record<string, unknown>): Promise<Record<string, unknown>> {
+  // Try ZAI LLM first (more reliable), then fall back to Groq
+  const existingTitle = product.title || "";
+  const existingPrice = product.price || "";
+  const existingImage = product.image || "";
+
+  // ZAI LLM approach
+  try {
+    const zai = await ZAI.create();
+    const prompt = `Kamu adalah extractor data produk Shopee Indonesia. Dari konten halaman Shopee berikut, extract info produk dan kembalikan HANYA JSON object dengan field ini:
+- title: nama produk (string)
+- image: URL foto produk utama (string)
+- price: harga dalam Rupiah, angka saja tanpa titik/koma (number)
+- originalPrice: harga asli sebelum diskon, angka saja, atau null (number|null)
+- rating: rating 0-5 (number)
+- reviewCount: jumlah review (number)
+- soldCount: jumlah terjual (number)
+- location: kota seller (string atau null)
+- category: salah satu dari Fashion, Beauty, Elektronik, Home, Gaming, Olahraga, Mainan, Otomotif (string)
+
+Data yang sudah diketahui: ${existingTitle ? `title="${existingTitle}"` : ""} ${existingPrice ? `price=${existingPrice}` : ""} ${existingImage ? `image="${existingImage}"` : ""}
+
+PENTING: Shopee adalah SPA (Single Page Application) jadi HTML mungkin tidak berisi data produk langsung. Cari data di:
+1. Script tags yang berisi JSON data (window.__INITIAL_STATE__, __NEXT_DATA__, dsb)
+2. Meta tags (og:title, og:image, product:price:amount)
+3. URL pattern (nama produk di URL)
+4. Teks yang mengandung nama produk, harga, rating
+
+Jika data tidak ditemukan sama sekali, isi null. JANGAN tambahkan teks lain selain JSON.
+
+Konten halaman:
+${pageContent.substring(0, 20000)}`;
+
+    const response = await zai.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 500,
+    });
+
+    const content = response.choices?.[0]?.message?.content || "";
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (!product.title && parsed.title) product.title = parsed.title;
+      if (!product.image && parsed.image) product.image = parsed.image;
+      if (!product.price && parsed.price) product.price = parsed.price;
+      if (!product.originalPrice && parsed.originalPrice) product.originalPrice = parsed.originalPrice;
+      if (parsed.rating) product.rating = parsed.rating;
+      if (parsed.reviewCount) product.reviewCount = parsed.reviewCount;
+      if (parsed.soldCount) product.soldCount = parsed.soldCount;
+      if (parsed.location) product.location = parsed.location;
+      if (parsed.category) product.category = parsed.category;
+      console.log("[scrape-shopee] ZAI AI extraction success, title:", parsed.title);
+    }
+    return product;
+  } catch (zaiErr) {
+    console.error("[scrape-shopee] ZAI AI extraction failed:", zaiErr);
+  }
+
+  // Fallback: Groq
   if (!GROQ_API_KEY) return product;
 
   try {
@@ -614,10 +674,10 @@ export async function POST(req: NextRequest) {
 
     let product: Record<string, unknown> = {};
 
-    // Strategy 1: Use Shopee API v4 (best approach)
+    // Strategy 1: Use Shopee API v4 (best approach, but often blocked now)
     const ids = extractIds(url);
     if (ids) {
-      console.log("[scrape-shopee] Using API v4, shopId:", ids.shopId, "itemId:", ids.itemId);
+      console.log("[scrape-shopee] Trying API v4, shopId:", ids.shopId, "itemId:", ids.itemId);
       const apiResult = await fetchShopeeApi(ids.shopId, ids.itemId);
       if (apiResult) {
         product = apiResult;
@@ -637,27 +697,49 @@ export async function POST(req: NextRequest) {
       if (!product.soldCount && htmlResult.soldCount) product.soldCount = htmlResult.soldCount;
       if (!product.location && htmlResult.location) product.location = htmlResult.location;
       if (!product.category && htmlResult.category) product.category = htmlResult.category;
+    }
 
-      // Strategy 3: Groq AI fallback on HTML content
-      if (!product.title || !product.price) {
-        console.log("[scrape-shopee] HTML incomplete, trying AI extraction...");
-        try {
-          const pageRes = await fetch(url, {
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-              Accept: "text/html,application/xhtml+xml",
-              "Accept-Language": "id-ID,id;q=0.9",
-            },
-            signal: AbortSignal.timeout(15000),
-            redirect: "follow",
-          });
-          const pageContent = await pageRes.text();
-          if (pageContent.length > 100) {
-            product = await extractWithAI(pageContent, product);
-          }
-        } catch {}
+    // Strategy 3: ZAI page_reader + AI extraction (most reliable for Shopee)
+    if (!product.title || !product.price) {
+      console.log("[scrape-shopee] Trying ZAI page_reader + AI extraction...");
+      try {
+        const zai = await ZAI.create();
+        const pageResult = await zai.functions.invoke("page_reader", { url });
+        const pageHtml = pageResult?.data?.html || "";
+        const pageTitle = pageResult?.data?.title || "";
+
+        if (pageHtml.length > 100) {
+          product = await extractWithAI(pageHtml, product);
+        }
+
+        // Jika masih belum dapat judul, coba dari page title
+        if (!product.title && pageTitle && pageTitle !== "Shopee Indonesia | Situs Belanja Online Terlengkap & Terpercaya") {
+          product.title = pageTitle.replace(/\s*[-|–]\s*Shopee\s*Indonesia\s*/gi, "").replace(/\s*[-|–]\s*Shopee\s*/gi, "").trim();
+        }
+      } catch (zaiErr) {
+        console.error("[scrape-shopee] ZAI page_reader failed:", zaiErr);
       }
+    }
+
+    // Strategy 4: Groq AI fallback on HTML content (original approach)
+    if (!product.title || !product.price) {
+      console.log("[scrape-shopee] Trying Groq AI fallback...");
+      try {
+        const pageRes = await fetch(url, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            Accept: "text/html,application/xhtml+xml",
+            "Accept-Language": "id-ID,id;q=0.9",
+          },
+          signal: AbortSignal.timeout(15000),
+          redirect: "follow",
+        });
+        const pageContent = await pageRes.text();
+        if (pageContent.length > 100) {
+          product = await extractWithAI(pageContent, product);
+        }
+      } catch {}
     }
 
     // Set defaults
