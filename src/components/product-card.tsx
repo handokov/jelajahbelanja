@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { MARKETPLACE_META } from "@/lib/config";
 import type { Product, Marketplace } from "@/lib/types";
 import {
   formatRupiah,
@@ -21,33 +22,6 @@ interface ProductCardProps {
   variant?: Variant;
   rank?: number;
 }
-
-const MARKETPLACE_META: Record<Marketplace, { label: string; className: string }> = {
-  shopee: {
-    label: "Shopee",
-    className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 hover:bg-orange-100",
-  },
-  tokopedia: {
-    label: "Tokopedia",
-    className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-100",
-  },
-  lazada: {
-    label: "Lazada",
-    className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-100",
-  },
-  aliexpress: {
-    label: "AliExpress",
-    className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 hover:bg-red-100",
-  },
-  amazon: {
-    label: "Amazon",
-    className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 hover:bg-yellow-100",
-  },
-  mock: {
-    label: "Mock",
-    className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 hover:bg-zinc-100",
-  },
-};
 
 function MarketplaceBadge({ marketplace }: { marketplace: Marketplace }) {
   const meta = MARKETPLACE_META[marketplace] ?? MARKETPLACE_META.mock;

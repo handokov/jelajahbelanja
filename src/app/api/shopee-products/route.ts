@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
+import { injectAffiliateUrls } from "@/lib/affiliate";
 import { dbRowToProduct } from "@/lib/product-mapper";
 import type { Product } from "@/lib/types";
 
@@ -28,11 +28,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Inject affiliate URL
-    const tags = await getAffiliateTags();
-    const withAffiliate = products.map((p) => ({
-      ...p,
-      affiliateUrl: p.affiliateUrl || buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
-    }));
+    const withAffiliate = await injectAffiliateUrls(products);
 
     return NextResponse.json({ products: withAffiliate, total: withAffiliate.length });
   } catch (err) {

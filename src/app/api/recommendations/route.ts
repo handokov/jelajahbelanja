@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
+import { buildAffiliateUrl, getAffiliateTags, injectAffiliateUrls } from "@/lib/affiliate";
 import { dbRowToProduct } from "@/lib/product-mapper";
 import { stripShopeePrefix } from "@/lib/utils";
 import type { Product } from "@/lib/types";
@@ -197,12 +197,7 @@ export async function POST(req: NextRequest) {
 
     // Jika setelah filter harga gak ada yang cocok, fallback ke semua produk tanpa filter harga
     if (scored.length === 0 && allCandidates.length > 0) {
-      const fallback = allCandidates
-        .slice(0, limit)
-        .map((p) => ({
-          ...p,
-          affiliateUrl: buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
-        }));
+      const fallback = await injectAffiliateUrls(allCandidates.slice(0, limit));
       return NextResponse.json({ recommendations: fallback });
     }
 

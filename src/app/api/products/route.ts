@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureCategoriesSeeded, ensureAffiliateTagsSeeded } from "@/lib/seed";
-import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
+import { injectAffiliateUrls } from "@/lib/affiliate";
 import { topViralQuarter } from "@/lib/viral-score";
 import { dbRowToProduct } from "@/lib/product-mapper";
 import type { Product, ProductsResponse, ProductFilter } from "@/lib/types";
@@ -53,11 +53,7 @@ export async function GET(req: NextRequest) {
     const manualProducts: Product[] = manualRows.map(dbRowToProduct);
 
     // Inject affiliate URL ke setiap produk
-    const tags = await getAffiliateTags();
-    const withAffiliate: Product[] = manualProducts.map((p) => ({
-      ...p,
-      affiliateUrl: p.affiliateUrl || buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
-    }));
+    const withAffiliate = await injectAffiliateUrls(manualProducts);
 
     let filtered = withAffiliate;
     if (search) {

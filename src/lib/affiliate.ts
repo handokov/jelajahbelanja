@@ -97,6 +97,21 @@ export function buildAffiliateUrl(
 }
 
 /**
+ * Inject affiliate URL ke array produk.
+ * Sebelumnya: pola ini duplikat di 3 API route (products, shopee-products, recommendations).
+ * Sekarang: panggil injectAffiliateUrls(products) di tiap route.
+ */
+export async function injectAffiliateUrls<T extends { url: string; marketplace: Marketplace; affiliateUrl?: string }>(
+  products: T[]
+): Promise<T[]> {
+  const tags = await getAffiliateTags();
+  return products.map((p) => ({
+    ...p,
+    affiliateUrl: p.affiliateUrl || buildAffiliateUrl(p.url, p.marketplace, tags) || p.url,
+  }));
+}
+
+/**
  * Daftar marketplace yang didukung JelajahBelanja.
  */
 export const SUPPORTED_MARKETPLACES: Array<{
