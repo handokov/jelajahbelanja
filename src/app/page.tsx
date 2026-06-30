@@ -356,12 +356,12 @@ export default function Home() {
               <aside className="hidden lg:block lg:col-span-1">
                 <div
                   className={cn(
-                    "sticky rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden",
+                    "sticky rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900",
                     heroVisible ? "top-20" : "top-[104px]"
                   )}
                 >
                   {/* Header — selalu visible, tidak ikut scroll */}
-                  <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                  <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 rounded-t-2xl bg-white dark:bg-zinc-900">
                     <Flame className="w-4 h-4 text-fuchsia-500" />
                     <h2 className="text-sm font-semibold">Trending Sekarang</h2>
                   </div>
