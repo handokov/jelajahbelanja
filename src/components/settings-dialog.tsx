@@ -36,7 +36,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         </DialogHeader>
 
         <div className="flex flex-col gap-3 py-4">
-          <Link href="/jb-mgr-2bO1FuMlWZQqvXeV" onClick={() => onOpenChange(false)}>
+          <Link href="/jb-mgr-admin" onClick={() => onOpenChange(false)}>
             <Button variant="outline" className="w-full justify-start gap-3 h-14">
               <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-fuchsia-100 dark:bg-fuchsia-900/30">
                 <LayoutDashboard className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
