@@ -2,7 +2,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { stripShopeePrefix } from "@/lib/utils";
-import ProductDetailClient from "./ProductDetailClient";
+import ProductDetailClient, { type ShopeeProduct } from "./ProductDetailClient";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -33,6 +33,27 @@ export async function generateMetadata({ params }: Props) {
       type: "website",
     },
   };
+}
+
+/**
+ * Serialize Prisma ShopeeProduct row for client component.
+ * Prisma returns Date objects, but client expects ISO strings.
+ */
+function serialize(row: Awaited<ReturnType<typeof getProduct>>): ShopeeProduct | null {
+  if (!row) return null;
+  return {
+    ...row,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function serializeMany(rows: Awaited<ReturnType<typeof db.shopeeProduct.findMany>>): ShopeeProduct[] {
+  return rows.map((r) => ({
+    ...r,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  }));
 }
 
 export default async function ProductPage({ params }: Props) {
@@ -80,7 +101,7 @@ export default async function ProductPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ProductDetailClient product={product} related={related} />
+      <ProductDetailClient product={serialize(product)!} related={serializeMany(related)} />
     </>
   );
 }

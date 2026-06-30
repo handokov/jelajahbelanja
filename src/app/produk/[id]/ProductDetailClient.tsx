@@ -41,7 +41,7 @@ function cleanMarkdown(text: string): string {
     .trim();
 }
 
-interface ShopeeProduct {
+export interface ShopeeProduct {
   id: string;
   title: string;
   url: string;
