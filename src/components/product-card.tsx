@@ -127,9 +127,9 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
 
   if (variant === "featured") {
     return (
-      <Link href={detailUrl} className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
+      <div className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
       >
-        <div className="relative w-full md:w-2/5 aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+        <Link href={detailUrl} className="relative w-full md:w-2/5 aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800 block">
           <img
             src={product.image}
             alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller`}
@@ -145,7 +145,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
           <div className="absolute top-2 right-2">
             <MarketplaceBadge marketplace={product.marketplace} />
           </div>
-        </div>
+        </Link>
         <div className="flex-1 flex flex-col gap-3 p-4 md:p-6">
           <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
             <span>{product.category}</span>
@@ -161,9 +161,11 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
               </>
             )}
           </div>
-          <h3 className="text-lg md:text-xl font-semibold text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug">
-            {product.title}
-          </h3>
+          <Link href={detailUrl} className="hover:underline">
+            <h3 className="text-lg md:text-xl font-semibold text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug">
+              {product.title}
+            </h3>
+          </Link>
           <PriceBlock
             price={product.price}
             originalPrice={product.originalPrice}
@@ -179,7 +181,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
               · Viral score: {product.viralScore.toFixed(1)}
             </span>
           </div>
-          <Button asChild size="sm" className="mt-auto w-fit" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+          <Button asChild size="sm" className="mt-auto w-fit">
             <a
               href={buyUrl}
               target="_blank"
@@ -191,7 +193,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             </a>
           </Button>
         </div>
-      </Link>
+      </div>
     );
   }
 
@@ -241,11 +243,8 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
 
   // Default variant
   return (
-    <Link
-      href={detailUrl}
-      className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
-    >
-      <div className="relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+    <div className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
+      <Link href={detailUrl} className="relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800 block">
         <img
           src={product.image}
           alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller di Indonesia`}
@@ -261,7 +260,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             −{product.discountPercent}%
           </Badge>
         )}
-      </div>
+      </Link>
       <div className="flex-1 flex flex-col gap-2 p-3">
         <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-500 dark:text-zinc-400">
           <span>{formatTimeAgo(product.timestamp)}</span>
@@ -272,9 +271,11 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             </span>
           )}
         </div>
-        <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug min-h-[2.5rem]">
-          {product.title}
-        </h3>
+        <Link href={detailUrl} className="hover:underline">
+          <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug min-h-[2.5rem]">
+            {product.title}
+          </h3>
+        </Link>
         <PriceBlock price={product.price} originalPrice={product.originalPrice} />
         <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
         <div className="text-xs text-zinc-600 dark:text-zinc-400">
@@ -282,7 +283,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             {formatSoldCount(product.soldCount)}
           </span>
         </div>
-        <Button asChild size="sm" variant="outline" className="mt-auto w-full" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+        <Button asChild size="sm" variant="outline" className="mt-auto w-full">
           <a
             href={buyUrl}
             target="_blank"
@@ -294,6 +295,6 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
           </a>
         </Button>
       </div>
-    </Link>
+    </div>
   );
 }
