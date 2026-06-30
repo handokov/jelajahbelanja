@@ -28,6 +28,7 @@ import { ProductCard } from "@/components/product-card";
 
 import type { CategoryDTO, Product, ProductFilter, ProductsResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { LEGAL_DISCLAIMER } from "@/lib/config";
 
 export default function Home() {
   const { theme, setTheme } = useTheme();
@@ -541,12 +542,7 @@ export default function Home() {
           </p>
           {/* Legal disclaimer — nominative fair use */}
           <p className="text-[11px] text-white/50 leading-relaxed border-t border-white/15 pt-2 mt-2">
-            <strong className="text-white/70">Disclaimer:</strong> Shopee, Tokopedia,
-            Lazada, AliExpress, dan nama marketplace lain yang disebutkan di situs ini
-            adalah merek dagang milik masing-masing perusahaan. JelajahBelanja bukan
-            berafiliasi dengan, didukung oleh, atau mewakili perusahaan tersebut.
-            Informasi produk ditampilkan untuk keperluan perbandingan dan referensi
-            belanja saja.
+            <strong className="text-white/70">Disclaimer:</strong> {LEGAL_DISCLAIMER}
           </p>
         </div>
       </footer>

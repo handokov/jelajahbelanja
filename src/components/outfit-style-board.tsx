@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { MARKETPLACE_META } from "@/lib/config";
+import { MARKETPLACE_META, AFFILIATE_LINK_REL } from "@/lib/config";
 import { ViralBadge, DiscountBadge } from "@/components/badges";
 import type { Product, Marketplace } from "@/lib/types";
 import { formatRupiah } from "@/lib/format";
@@ -254,7 +254,7 @@ function OutfitBoardItem({
           <a
             href={targetUrl}
             target="_blank"
-            rel="nofollow sponsored noopener noreferrer"
+            rel={AFFILIATE_LINK_REL}
             onClick={(e) => e.stopPropagation()}
             className="mt-1 inline-flex items-center gap-0.5 text-[8px] font-bold text-fuchsia-300 hover:text-white"
           >

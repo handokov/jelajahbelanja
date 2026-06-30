@@ -52,3 +52,20 @@ export const MARKETPLACE_META: Record<Marketplace, { label: string; className: s
     className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   },
 };
+
+// ─── Legal Disclaimer ───
+// Sebelumnya: teks disclaimer duplikat di page.tsx & ProductDetailClient.tsx.
+// Sekarang: satu sumber kebenaran, konsisten di semua halaman.
+export const LEGAL_DISCLAIMER =
+  "Shopee, Tokopedia, Lazada, AliExpress, dan nama marketplace lain yang disebutkan di situs ini adalah merek dagang milik masing-masing perusahaan. JelajahBelanja bukan berafiliasi dengan, didukung oleh, atau mewakili perusahaan tersebut. Informasi produk ditampilkan untuk keperluan perbandingan dan referensi belanja saja.";
+
+// ─── Buy Button Gradient ───
+// Sebelumnya: class string duplikat di product-detail-dialog.tsx & ProductDetailClient.tsx.
+// Sekarang: satu definisi, kalau mau ganti brand color cukup edit di sini.
+export const BUY_BUTTON_GRADIENT =
+  "bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold shadow-lg shadow-violet-500/25";
+
+// ─── Affiliate Link rel ───
+// Sebelumnya: "nofollow sponsored noopener noreferrer" duplikat di 5 tempat.
+// Sekarang: satu konstanta, kalau policy berubah cukup edit di sini.
+export const AFFILIATE_LINK_REL = "nofollow sponsored noopener noreferrer";

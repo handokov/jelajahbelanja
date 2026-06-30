@@ -19,6 +19,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, addShopeePrefix } from "@/lib/utils";
+import { LEGAL_DISCLAIMER, BUY_BUTTON_GRADIENT, AFFILIATE_LINK_REL } from "@/lib/config";
 import { ViralBadge, DiscountBadge } from "@/components/badges";
 import {
   formatRupiah,
@@ -447,18 +448,18 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
       {/* Legal disclaimer */}
       <div className="container mx-auto max-w-5xl px-4 pb-24">
         <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-          <strong className="text-zinc-500 dark:text-zinc-400">Disclaimer:</strong> Shopee, Tokopedia, Lazada, dan nama marketplace lain yang disebutkan di situs ini adalah merek dagang milik masing-masing perusahaan. JelajahBelanja bukan berafiliasi dengan, didukung oleh, atau mewakili perusahaan tersebut. Informasi produk ditampilkan untuk keperluan perbandingan dan referensi belanja saja.
+          <strong className="text-zinc-500 dark:text-zinc-400">Disclaimer:</strong> {LEGAL_DISCLAIMER}
         </p>
       </div>
 
       {/* Sticky Bottom — Buy button */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md px-4 py-3">
         <div className="container mx-auto max-w-5xl">
-          <Button asChild size="lg" className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold shadow-lg shadow-violet-500/25 h-12 text-base">
+          <Button asChild size="lg" className={cn("w-full h-12 text-base", BUY_BUTTON_GRADIENT)}>
             <a
               href={product.affiliateUrl || `/beli/shopee-${product.id}`}
               target="_blank"
-              rel="nofollow sponsored noopener noreferrer"
+              rel={AFFILIATE_LINK_REL}
             >
               <ShoppingBag className="w-5 h-5 mr-2" />
               Beli di Shopee

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { MARKETPLACE_META } from "@/lib/config";
+import { MARKETPLACE_META, AFFILIATE_LINK_REL } from "@/lib/config";
 import { ViralBadge, DiscountBadge } from "@/components/badges";
 import type { Product, Marketplace } from "@/lib/types";
 import {
@@ -151,7 +151,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             <a
               href={buyUrl}
               target="_blank"
-              rel="nofollow sponsored noopener noreferrer"
+              rel={AFFILIATE_LINK_REL}
               aria-label={`Beli ${product.title} di ${product.marketplace}`}
             >
               Beli Sekarang
@@ -251,7 +251,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
           <a
             href={buyUrl}
             target="_blank"
-            rel="nofollow sponsored noopener noreferrer"
+            rel={AFFILIATE_LINK_REL}
             aria-label={`Beli ${product.title} di ${product.marketplace}`}
           >
             Beli Sekarang

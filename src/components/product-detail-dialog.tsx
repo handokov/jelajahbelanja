@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Product, Marketplace } from "@/lib/types";
-import { MARKETPLACE_META } from "@/lib/config";
+import { MARKETPLACE_META, BUY_BUTTON_GRADIENT, AFFILIATE_LINK_REL } from "@/lib/config";
 import { ViralBadge, DiscountBadge } from "@/components/badges";
 import {
   formatRupiah,
@@ -280,11 +280,11 @@ export function ProductDetailDialog({
 
         {/* ===== STICKY BOTTOM — Buy button always visible ===== */}
         <div className="flex-shrink-0 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-5 py-4">
-          <Button asChild size="lg" className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold shadow-lg shadow-violet-500/25">
+          <Button asChild size="lg" className={cn("w-full", BUY_BUTTON_GRADIENT)}>
             <a
               href={targetUrl}
               target="_blank"
-              rel="nofollow sponsored noopener noreferrer"
+              rel={AFFILIATE_LINK_REL}
               aria-label={`Beli ${product.title} di ${mpMeta.label}`}
             >
               <ShoppingBag className="w-4 h-4 mr-2" />
