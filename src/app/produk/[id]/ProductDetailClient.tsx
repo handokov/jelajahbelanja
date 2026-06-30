@@ -448,6 +448,13 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
         )}
       </main>
 
+      {/* Legal disclaimer */}
+      <div className="container mx-auto max-w-5xl px-4 pb-24">
+        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+          <strong className="text-zinc-500 dark:text-zinc-400">Disclaimer:</strong> Shopee, Tokopedia, Lazada, dan nama marketplace lain yang disebutkan di situs ini adalah merek dagang milik masing-masing perusahaan. JelajahBelanja bukan berafiliasi dengan, didukung oleh, atau mewakili perusahaan tersebut. Informasi produk ditampilkan untuk keperluan perbandingan dan referensi belanja saja.
+        </p>
+      </div>
+
       {/* Sticky Bottom — Buy button */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md px-4 py-3">
         <div className="container mx-auto max-w-5xl">

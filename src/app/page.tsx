@@ -539,6 +539,15 @@ export default function Home() {
             tanpa biaya tambahan untuk kamu. Ini membantu kami terus menyediakan layanan
             gratis. Terima kasih atas dukunganmu!
           </p>
+          {/* Legal disclaimer — nominative fair use */}
+          <p className="text-[11px] text-white/50 leading-relaxed border-t border-white/15 pt-2 mt-2">
+            <strong className="text-white/70">Disclaimer:</strong> Shopee, Tokopedia,
+            Lazada, AliExpress, dan nama marketplace lain yang disebutkan di situs ini
+            adalah merek dagang milik masing-masing perusahaan. JelajahBelanja bukan
+            berafiliasi dengan, didukung oleh, atau mewakili perusahaan tersebut.
+            Informasi produk ditampilkan untuk keperluan perbandingan dan referensi
+            belanja saja.
+          </p>
         </div>
       </footer>
 
