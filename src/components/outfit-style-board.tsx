@@ -19,6 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { MARKETPLACE_META } from "@/lib/config";
+import { ViralBadge, DiscountBadge } from "@/components/badges";
 import type { Product, Marketplace } from "@/lib/types";
 import { formatRupiah } from "@/lib/format";
 import { OUTFIT_STYLE_IMAGES } from "@/data/outfit-images";
@@ -227,15 +228,14 @@ function OutfitBoardItem({
           </Badge>
         </div>
         {product.discountPercent && product.discountPercent > 0 && (
-          <Badge className="absolute top-1.5 right-1.5 bg-red-500 text-white hover:bg-red-500 text-[7px] font-bold px-1 py-0 h-4">
-            −{product.discountPercent}%
-          </Badge>
+          <div className="absolute top-1.5 right-1.5">
+            <DiscountBadge percent={product.discountPercent} size="xs" />
+          </div>
         )}
         {product.isViral && (
-          <Badge className="absolute bottom-1.5 left-1.5 bg-yellow-400 text-yellow-950 hover:bg-yellow-400 text-[7px] font-bold px-1 py-0 h-4 animate-pulse">
-            <Sparkles className="w-2 h-2 mr-0.5" />
-            VIRAL
-          </Badge>
+          <div className="absolute bottom-1.5 left-1.5">
+            <ViralBadge size="xs" />
+          </div>
         )}
 
         <div className="absolute bottom-0 left-0 right-0 p-2.5 translate-y-full group-hover:translate-y-0 transition-transform duration-300">

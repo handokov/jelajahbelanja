@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Product, Marketplace } from "@/lib/types";
 import { MARKETPLACE_META } from "@/lib/config";
+import { ViralBadge, DiscountBadge } from "@/components/badges";
 import {
   formatRupiah,
   formatSoldCount,
@@ -159,20 +160,15 @@ export function ProductDetailDialog({
             />
             {/* Overlay badges */}
             <div className="absolute bottom-2 left-2 flex gap-1.5">
-              {product.isViral && (
-                <Badge className="bg-yellow-400 text-yellow-950 hover:bg-yellow-400 text-[10px] font-bold px-2 py-0.5 h-6 animate-pulse shadow-lg">
-                  <Sparkles className="w-3 h-3 mr-0.5" />
-                  VIRAL
-                </Badge>
-              )}
+              {product.isViral && <ViralBadge size="md" />}
               <Badge className={cn(mpMeta.className, "text-[10px] font-semibold px-2 py-0.5 h-6 shadow-lg")}>
                 {mpMeta.label}
               </Badge>
             </div>
             {product.discountPercent && product.discountPercent > 0 && (
-              <Badge className="absolute bottom-2 right-2 bg-red-500 text-white hover:bg-red-500 text-xs font-bold px-2 py-0.5 h-6 shadow-lg">
-                −{product.discountPercent}%
-              </Badge>
+              <div className="absolute bottom-2 right-2">
+                <DiscountBadge percent={product.discountPercent} size="md" />
+              </div>
             )}
             {/* Bottom gradient */}
             <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/40 to-transparent" />

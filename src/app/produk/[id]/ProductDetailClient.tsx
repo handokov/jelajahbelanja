@@ -19,6 +19,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, addShopeePrefix } from "@/lib/utils";
+import { ViralBadge, DiscountBadge } from "@/components/badges";
 import {
   formatRupiah,
   formatSoldCount,
@@ -78,14 +79,14 @@ function RecCard({ product }: { product: ShopeeProduct }) {
           className="w-full h-full object-cover"
         />
         {product.discountPercent && product.discountPercent > 0 && (
-          <Badge className="absolute top-1.5 right-1.5 bg-red-500 text-white hover:bg-red-500 text-[8px] font-bold px-1 py-0 h-4">
-            −{product.discountPercent}%
-          </Badge>
+          <div className="absolute top-1.5 right-1.5">
+            <DiscountBadge percent={product.discountPercent} size="xs" />
+          </div>
         )}
         {product.isViral && (
-          <Badge className="absolute bottom-1.5 left-1.5 bg-yellow-400 text-yellow-950 hover:bg-yellow-400 text-[7px] font-bold px-1 py-0 h-3.5 animate-pulse">
-            <Sparkles className="w-2 h-2 mr-0.5" />VIRAL
-          </Badge>
+          <div className="absolute bottom-1.5 left-1.5">
+            <ViralBadge size="xs" />
+          </div>
         )}
       </div>
       <div className="p-2.5">
@@ -285,20 +286,15 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               />
               <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/40 to-transparent" />
               <div className="absolute bottom-3 left-3 flex gap-1.5">
-                {product.isViral && (
-                  <Badge className="bg-yellow-400 text-yellow-950 hover:bg-yellow-400 text-xs font-bold px-2.5 py-1 h-7 animate-pulse shadow-lg">
-                    <Sparkles className="w-3.5 h-3.5 mr-0.5" />
-                    VIRAL
-                  </Badge>
-                )}
+                {product.isViral && <ViralBadge size="md" />}
                 <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold px-2.5 py-1 h-7 shadow-lg">
                   Shopee
                 </Badge>
               </div>
               {product.discountPercent && product.discountPercent > 0 && (
-                <Badge className="absolute top-3 right-3 bg-red-500 text-white hover:bg-red-500 text-sm font-bold px-3 py-1 h-7 shadow-lg">
-                  −{product.discountPercent}%
-                </Badge>
+                <div className="absolute top-3 right-3">
+                  <DiscountBadge percent={product.discountPercent} size="md" />
+                </div>
               )}
             </div>
           </div>

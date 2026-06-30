@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, Star, ExternalLink, MapPin } from "lucide-react";
+import { Star, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MARKETPLACE_META } from "@/lib/config";
+import { ViralBadge, DiscountBadge } from "@/components/badges";
 import type { Product, Marketplace } from "@/lib/types";
 import {
   formatRupiah,
@@ -28,15 +29,6 @@ function MarketplaceBadge({ marketplace }: { marketplace: Marketplace }) {
   return (
     <Badge className={cn(meta.className, "text-[10px] font-semibold px-1.5 py-0 h-5")}>
       {meta.label}
-    </Badge>
-  );
-}
-
-function ViralBadge() {
-  return (
-    <Badge className="bg-yellow-400 text-yellow-950 hover:bg-yellow-400 text-[10px] font-bold px-1.5 py-0 h-5 animate-pulse">
-      <Sparkles className="w-2.5 h-2.5 mr-0.5" />
-      VIRAL
     </Badge>
   );
 }
@@ -199,9 +191,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
               {formatRupiah(product.price)}
             </span>
             {product.isViral && (
-              <Badge className="bg-yellow-400 text-yellow-950 hover:bg-yellow-400 text-[9px] font-bold px-1 py-0 h-3.5">
-                VIRAL
-              </Badge>
+              <ViralBadge size="xs" />
             )}
           </div>
           <div className="flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
@@ -230,9 +220,9 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
           <MarketplaceBadge marketplace={product.marketplace} />
         </div>
         {product.discountPercent && product.discountPercent > 0 && (
-          <Badge className="absolute top-2 right-2 bg-red-500 text-white hover:bg-red-500 text-[10px] font-bold px-1.5 py-0 h-5">
-            −{product.discountPercent}%
-          </Badge>
+          <div className="absolute top-2 right-2">
+            <DiscountBadge percent={product.discountPercent} size="sm" />
+          </div>
         )}
       </Link>
       <div className="flex-1 flex flex-col gap-2 p-3">
