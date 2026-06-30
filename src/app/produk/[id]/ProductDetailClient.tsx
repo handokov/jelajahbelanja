@@ -63,9 +63,11 @@ interface ShopeeProduct {
 
 /* ─── Simple Recommendation Card ─── */
 function RecCard({ product }: { product: ShopeeProduct }) {
+  // product.id bisa "shopee-xxx" atau "xxx" — pastikan link bener
+  const linkId = product.id.startsWith("shopee-") ? product.id : `shopee-${product.id}`;
   return (
     <Link
-      href={`/produk/shopee-${product.id}`}
+      href={`/produk/${linkId}`}
       className="flex-shrink-0 w-[150px] text-left bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden hover:shadow-md transition-shadow"
     >
       <div className="relative w-full aspect-square bg-zinc-100 dark:bg-zinc-800">
