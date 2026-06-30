@@ -79,9 +79,20 @@ export default function Home() {
   const { data: bannersData } = useQuery({
     queryKey: ["active-banners"],
     queryFn: async () => {
-      const res = await fetch("/api/banners?active=true");
-      if (!res.ok) return { banners: [] };
-      return res.json();
+      try {
+        const res = await fetch("/api/banners?active=true");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          console.error("[banners] API error:", res.status, errData);
+          return { banners: [] };
+        }
+        const json = await res.json();
+        console.log("[banners] loaded:", json.banners?.length ?? 0, "banners");
+        return json;
+      } catch (err) {
+        console.error("[banners] fetch error:", err);
+        return { banners: [] };
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
