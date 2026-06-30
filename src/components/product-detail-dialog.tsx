@@ -2,16 +2,11 @@
 
 import * as React from "react";
 import {
-  Sparkles,
   Star,
   ExternalLink,
   MapPin,
   X,
-  Bot,
-  Loader2,
   TrendingUp,
-  ShieldCheck,
-  Zap,
   ShoppingBag,
 } from "lucide-react";
 import {
@@ -31,6 +26,7 @@ import {
   formatReviewCount,
 } from "@/lib/format";
 import { useTypewriterEffect } from "@/hooks/use-typewriter-effect";
+import { AiAdvisorBlock } from "@/components/ai-advisor-block";
 
 interface ProductDetailDialogProps {
   product: Product | null;
@@ -48,7 +44,7 @@ export function ProductDetailDialog({
   const [aiError, setAiError] = React.useState(false);
 
   // Typewriter effect — shared hook
-  const { displayedText, isDone: typewriterDone } = useTypewriterEffect(aiExplanation);
+  const { displayedText } = useTypewriterEffect(aiExplanation);
 
   // Fetch AI explanation when product changes
   React.useEffect(() => {
@@ -204,54 +200,15 @@ export function ProductDetailDialog({
           </div>
 
           {/* AI Advisor section */}
-          <div className="mx-5 mb-4 rounded-xl bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-violet-950/30 dark:to-fuchsia-950/30 border border-violet-200/60 dark:border-violet-800/30 overflow-hidden">
-            {/* AI header */}
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-violet-100/60 dark:bg-violet-900/20 border-b border-violet-200/60 dark:border-violet-800/30">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-white flex-shrink-0">
-                <Bot className="w-3.5 h-3.5" />
-              </div>
-              <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">
-                JB AI Advisor
-              </span>
-              {aiLoading && (
-                <Loader2 className="w-3 h-3 animate-spin text-violet-500 flex-shrink-0" />
-              )}
-              {typewriterDone && (
-                <ShieldCheck className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-              )}
-            </div>
-
-            {/* AI content */}
-            <div className="px-4 py-3 min-h-[60px]">
-              {aiLoading && !aiExplanation ? (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 text-xs text-violet-600 dark:text-violet-400">
-                    <Zap className="w-3 h-3 animate-pulse" />
-                    <span>JB lagi analisis produk ini...</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="h-3 bg-violet-200/50 dark:bg-violet-800/30 rounded-full animate-pulse w-full" />
-                    <div className="h-3 bg-violet-200/50 dark:bg-violet-800/30 rounded-full animate-pulse w-4/5" />
-                    <div className="h-3 bg-violet-200/50 dark:bg-violet-800/30 rounded-full animate-pulse w-3/5" />
-                  </div>
-                </div>
-              ) : aiError ? (
-                <div className="text-xs text-violet-600 dark:text-violet-400">
-                  <p>Oops, JB lagi istirahat sebentar.</p>
-                  <p className="mt-1 text-zinc-500">
-                    Tapi produk ini tetap worth it buat dicek langsung di {mpMeta.label}!
-                  </p>
-                </div>
-              ) : (
-                <div className="text-[13px] leading-relaxed text-violet-900 dark:text-violet-100 whitespace-pre-wrap">
-                  {displayedText}
-                  {!typewriterDone && aiExplanation && (
-                    <span className="inline-block w-0.5 h-4 bg-violet-500 animate-pulse ml-0.5 align-text-bottom" />
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+          <AiAdvisorBlock
+            loading={aiLoading}
+            error={aiError}
+            displayedText={displayedText}
+            fullText={aiExplanation}
+            size="compact"
+            errorFallbackLabel={mpMeta.label}
+            className="mx-5 mb-4"
+          />
         </div>
 
         {/* ===== STICKY BOTTOM — Buy button always visible ===== */}

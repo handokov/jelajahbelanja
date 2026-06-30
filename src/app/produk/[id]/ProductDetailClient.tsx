@@ -7,13 +7,11 @@ import {
   ExternalLink,
   MapPin,
   ArrowLeft,
-  Bot,
-  Loader2,
   TrendingUp,
-  ShieldCheck,
   ShoppingBag,
   Shirt,
   Share2,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { cn, addShopeePrefix } from "@/lib/utils";
 import { LEGAL_DISCLAIMER, BUY_BUTTON_GRADIENT, AFFILIATE_LINK_REL, MARKETPLACE_META } from "@/lib/config";
 import { useTypewriterEffect } from "@/hooks/use-typewriter-effect";
+import { AiAdvisorBlock } from "@/components/ai-advisor-block";
 import { ViralBadge, DiscountBadge } from "@/components/badges";
 import {
   formatRupiah,
@@ -333,50 +332,16 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               </span>
             </div>
 
-            {/* JB Stylist — Review (kotak sendiri) */}
-            <div className="rounded-xl bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-violet-950/30 dark:to-fuchsia-950/30 border border-violet-200/60 dark:border-violet-800/30 overflow-hidden mb-4">
-              <div className="flex items-center gap-2 px-4 py-3 bg-violet-100/60 dark:bg-violet-900/20 border-b border-violet-200/60 dark:border-violet-800/30">
-                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-violet-600 text-white flex-shrink-0">
-                  <Bot className="w-4 h-4" />
-                </div>
-                <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">
-                  JB Stylist
-                </span>
-                {aiLoading && (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500 flex-shrink-0" />
-                )}
-                {typewriterDone && (
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                )}
-              </div>
-
-              <div className="px-4 py-4 min-h-[60px]">
-                {aiLoading && !aiExplanation ? (
-                  <div className="flex flex-col gap-2.5">
-                    <div className="flex items-center gap-2 text-sm text-violet-600 dark:text-violet-400">
-                      <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                      <span>JB lagi analisis produk ini...</span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="h-3.5 bg-violet-200/50 dark:bg-violet-800/30 rounded-full animate-pulse w-full" />
-                      <div className="h-3.5 bg-violet-200/50 dark:bg-violet-800/30 rounded-full animate-pulse w-4/5" />
-                      <div className="h-3.5 bg-violet-200/50 dark:bg-violet-800/30 rounded-full animate-pulse w-3/5" />
-                    </div>
-                  </div>
-                ) : aiError ? (
-                  <div className="text-sm text-violet-600 dark:text-violet-400">
-                    <p>JB lagi istirahat sebentar, tapi produk ini tetap worth it buat dicek!</p>
-                  </div>
-                ) : (
-                  <div className="text-sm leading-relaxed text-violet-900 dark:text-violet-100 whitespace-pre-wrap">
-                    {displayedText}
-                    {!typewriterDone && aiExplanation && (
-                      <span className="inline-block w-0.5 h-4 bg-violet-500 animate-pulse ml-0.5 align-text-bottom" />
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+            {/* JB Stylist — Review */}
+            <AiAdvisorBlock
+              loading={aiLoading}
+              error={aiError}
+              displayedText={displayedText}
+              fullText={aiExplanation}
+              size="default"
+              label="JB Stylist"
+              className="mb-4"
+            />
 
             {/* Style It Up — Outfit Tips (kotak sendiri) */}
             {outfitTips && typewriterDone && (
