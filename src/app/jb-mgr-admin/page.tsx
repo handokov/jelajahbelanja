@@ -310,6 +310,7 @@ export default function AdminPage() {
       setBannerForm(EMPTY_BANNER);
       setEditingBannerId(null);
       queryClient.invalidateQueries({ queryKey: ["banners"] });
+      queryClient.invalidateQueries({ queryKey: ["active-banners"] });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -323,6 +324,7 @@ export default function AdminPage() {
       toast({ title: "Banner dihapus" });
       setDeleteBannerTarget(null);
       queryClient.invalidateQueries({ queryKey: ["banners"] });
+      queryClient.invalidateQueries({ queryKey: ["active-banners"] });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
