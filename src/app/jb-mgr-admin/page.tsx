@@ -40,6 +40,8 @@ import {
   MapPin,
   Image as ImageLucide,
   Upload,
+  Wand2,
+  Loader2,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -202,6 +204,8 @@ export default function AdminPage() {
   const [editingProductId, setEditingProductId] = React.useState<string | null>(null);
   const [deleteProductTarget, setDeleteProductTarget] = React.useState<any>(null);
   const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const [autoFillUrl, setAutoFillUrl] = React.useState("");
+  const [autoFillLoading, setAutoFillLoading] = React.useState(false);
 
   // ─── Banner state ───
   const { data: bannersData, isLoading: bannersLoading } = useQuery({
@@ -442,6 +446,7 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Produk ditambahkan", description: "Produk baru berhasil diupload." });
       setProductForm(EMPTY_PRODUCT);
+      setAutoFillUrl("");
     },
     onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
   });
@@ -460,7 +465,7 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Produk diperbarui" });
-      setEditingProductId(null); setProductForm(EMPTY_PRODUCT);
+      setEditingProductId(null); setProductForm(EMPTY_PRODUCT); setAutoFillUrl("");
     },
     onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
   });
@@ -546,6 +551,76 @@ export default function AdminPage() {
   }
 
   // ─── Product handlers ───
+
+  async function handleAutoFill() {
+    const url = autoFillUrl.trim();
+    if (!url) {
+      toast({ title: "URL kosong", description: "Paste link produk Shopee dulu.", variant: "destructive" });
+      return;
+    }
+    if (!url.includes("shopee") && !url.includes("shope")) {
+      toast({ title: "URL tidak valid", description: "Masukkan link produk Shopee yang valid.", variant: "destructive" });
+      return;
+    }
+
+    setAutoFillLoading(true);
+    try {
+      const res = await fetch("/api/scrape-shopee", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_ADMIN_SECRET || "jelajahbelanja2024"}`,
+        },
+        body: JSON.stringify({ url }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        toast({
+          title: "Gagal ambil data",
+          description: data.error || "Tidak bisa mengambil data produk. Coba link lain.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const p = data.product;
+      setProductForm({
+        ...productForm,
+        title: p.title || productForm.title,
+        image: p.image || productForm.image,
+        price: p.price ? String(p.price) : productForm.price,
+        originalPrice: p.originalPrice ? String(p.originalPrice) : productForm.originalPrice,
+        discountPercent: p.discountPercent ? String(p.discountPercent) : productForm.discountPercent,
+        rating: p.rating ? String(p.rating) : productForm.rating,
+        reviewCount: p.reviewCount ? String(p.reviewCount) : productForm.reviewCount,
+        soldCount: p.soldCount ? String(p.soldCount) : productForm.soldCount,
+        location: p.location || productForm.location,
+        category: p.category || productForm.category,
+        url: url,
+        marketplace: "shopee",
+      });
+
+      // Auto-show advanced fields supaya user bisa review semua data
+      if (p.rating || p.reviewCount || p.soldCount || p.location) {
+        setShowAdvanced(true);
+      }
+
+      toast({
+        title: "Data produk berhasil diambil! ✨",
+        description: `${p.title?.substring(0, 50)}${(p.title?.length || 0) > 50 ? "..." : ""} — Rp${(p.price || 0).toLocaleString("id-ID")}`,
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Gagal menghubungi server. Coba lagi.",
+        variant: "destructive",
+      });
+    } finally {
+      setAutoFillLoading(false);
+    }
+  }
 
   function handleSubmitProduct() {
     if (!productForm.title.trim() || !productForm.price || !productForm.category) {
@@ -707,6 +782,39 @@ export default function AdminPage() {
                     {showAdvanced ? "Sembunyikan Detail" : "Lihat Semua Field"}
                   </Button>
                 )}
+              </div>
+
+              {/* Auto-fill dari link Shopee */}
+              <div className="rounded-xl border-2 border-dashed border-fuchsia-200 dark:border-fuchsia-800/40 bg-fuchsia-50/50 dark:bg-fuchsia-950/20 p-4 mb-4">
+                <Label className="text-xs font-semibold flex items-center gap-1.5 mb-2">
+                  <Wand2 className="w-3.5 h-3.5 text-fuchsia-600" />
+                  Auto-Fill dari Link Shopee
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Paste link produk Shopee di sini... (https://shopee.co.id/... atau https://shope.ee/...)"
+                    value={autoFillUrl}
+                    onChange={(e) => setAutoFillUrl(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !autoFillLoading) handleAutoFill(); }}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAutoFill}
+                    disabled={autoFillLoading || !autoFillUrl.trim()}
+                    className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white shrink-0"
+                  >
+                    {autoFillLoading ? (
+                      <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Mengambil...</>
+                    ) : (
+                      <><Wand2 className="w-3.5 h-3.5 mr-1" /> Ambil Data</>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-[10px] text-zinc-400 mt-1.5">
+                  Otomatis isi judul, harga, gambar, rating, terjual, lokasi & kategori dari link Shopee
+                </p>
               </div>
 
               {/* Wajib fields - selalu tampil */}
@@ -889,7 +997,7 @@ export default function AdminPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => { setEditingProductId(null); setProductForm(EMPTY_PRODUCT); }}
+                      onClick={() => { setEditingProductId(null); setProductForm(EMPTY_PRODUCT); setAutoFillUrl(""); }}
                     >
                       <X className="w-3.5 h-3.5 mr-1" /> Batal
                     </Button>
