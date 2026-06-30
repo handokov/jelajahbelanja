@@ -11,6 +11,8 @@ import {
   TrendingUp,
   ShoppingBag,
   ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
@@ -37,6 +39,10 @@ export default function Home() {
   const [search, setSearch] = React.useState("");
   const [debouncedSearch, setDebouncedSearch] = React.useState("");
   const [heroVisible, setHeroVisible] = React.useState(true);
+
+  // Banner state
+  const [bannerIdx, setBannerIdx] = React.useState(0);
+  const bannerIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Ref for hero search bar to detect when it scrolls off screen
   const heroSearchRef = React.useRef<HTMLDivElement>(null);
@@ -69,6 +75,27 @@ export default function Home() {
   });
 
   const categories = React.useMemo(() => categoriesData ?? [], [categoriesData]);
+
+  const { data: bannersData } = useQuery({
+    queryKey: ["active-banners"],
+    queryFn: async () => {
+      const res = await fetch("/api/banners?active=true");
+      if (!res.ok) return { banners: [] };
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const activeBanners = React.useMemo(() => (bannersData?.banners ?? []).filter((b: any) => b.image), [bannersData]);
+
+  // Auto-slide banners
+  React.useEffect(() => {
+    if (activeBanners.length <= 1) return;
+    bannerIntervalRef.current = setInterval(() => {
+      setBannerIdx((prev) => (prev + 1) % activeBanners.length);
+    }, 5000);
+    return () => { if (bannerIntervalRef.current) clearInterval(bannerIntervalRef.current); };
+  }, [activeBanners.length]);
 
   const productsQuery = useQuery({
     queryKey: ["products", activeCategory, filter, debouncedSearch],
@@ -252,6 +279,77 @@ export default function Home() {
 
       {/* ===== Main content ===== */}
       <main className="flex-1 container mx-auto px-4 max-w-7xl py-6">
+        {/* Banner promo slider */}
+        {activeBanners.length > 0 && (
+          <section aria-label="Banner promo" className="mb-6">
+            <div className="relative rounded-2xl overflow-hidden">
+              {/* Current banner */}
+              <a
+                href={activeBanners[bannerIdx]?.linkUrl || undefined}
+                target={activeBanners[bannerIdx]?.linkUrl ? "_blank" : undefined}
+                rel={activeBanners[bannerIdx]?.linkUrl ? "noopener noreferrer" : undefined}
+                className="block relative aspect-[3/1] md:aspect-[4/1] overflow-hidden rounded-2xl"
+                style={{ backgroundColor: activeBanners[bannerIdx]?.bgColor || "#7c3aed" }}
+              >
+                <img
+                  src={activeBanners[bannerIdx].image}
+                  alt={activeBanners[bannerIdx].title}
+                  className="w-full h-full object-cover"
+                />
+                {/* Text overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent flex flex-col justify-center px-6 md:px-10">
+                  <h3 className="text-white font-bold text-lg md:text-2xl drop-shadow-lg mb-1">
+                    {activeBanners[bannerIdx].title}
+                  </h3>
+                  {activeBanners[bannerIdx].subtitle && (
+                    <p className="text-white/90 text-sm md:text-base drop-shadow">
+                      {activeBanners[bannerIdx].subtitle}
+                    </p>
+                  )}
+                  {activeBanners[bannerIdx].linkLabel && (
+                    <span className="mt-2 inline-block bg-white text-zinc-900 text-xs md:text-sm font-semibold px-4 py-1.5 rounded-full shadow-lg">
+                      {activeBanners[bannerIdx].linkLabel}
+                    </span>
+                  )}
+                </div>
+              </a>
+              {/* Nav arrows */}
+              {activeBanners.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setBannerIdx((bannerIdx - 1 + activeBanners.length) % activeBanners.length)}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition"
+                    aria-label="Banner sebelumnya"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setBannerIdx((bannerIdx + 1) % activeBanners.length)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition"
+                    aria-label="Banner berikutnya"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                  {/* Dots */}
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {activeBanners.map((_: any, i: number) => (
+                      <button
+                        key={i}
+                        onClick={() => setBannerIdx(i)}
+                        className={cn(
+                          "w-2 h-2 rounded-full transition",
+                          i === bannerIdx ? "bg-white w-4" : "bg-white/50"
+                        )}
+                        aria-label={`Banner ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Category chips */}
         <section aria-label="Kategori produk viral" className="mb-6">
           {categoriesLoading ? (

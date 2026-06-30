@@ -58,3 +58,19 @@ model ShopeeProduct {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+model PromoBanner {
+  id          String   @id @default(cuid())
+  title       String                   // judul banner (cth: "Flash Sale Akhir Tahun")
+  subtitle    String?                  // sub judul (cth: "Diskon sampai 70%")
+  image       String                   // URL gambar banner
+  linkUrl     String?                  // link tujuan saat diklik
+  linkLabel   String?                  // text tombol (cth: "Belanja Sekarang")
+  bgColor     String   @default("#7c3aed") // warna background
+  order       Int      @default(0)     // urutan tampil
+  isActive    Boolean  @default(true)  // tampilkan / sembunyikan
+  startDate   DateTime?               // mulai tayang
+  endDate     DateTime?               // berakhir tayang
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

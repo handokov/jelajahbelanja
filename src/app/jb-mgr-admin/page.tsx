@@ -38,6 +38,7 @@ import {
   DollarSign,
   Star,
   MapPin,
+  Image,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -200,6 +201,70 @@ export default function AdminPage() {
   const [editingProductId, setEditingProductId] = React.useState<string | null>(null);
   const [deleteProductTarget, setDeleteProductTarget] = React.useState<any>(null);
   const [showAdvanced, setShowAdvanced] = React.useState(false);
+
+  // ─── Banner state ───
+  const { data: bannersData, isLoading: bannersLoading } = useQuery({
+    queryKey: ["banners"],
+    queryFn: async () => {
+      const res = await fetch("/api/banners");
+      if (!res.ok) throw new Error("Gagal memuat banner");
+      const json = await res.json();
+      return json.banners as any[];
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const EMPTY_BANNER = { title: "", subtitle: "", image: "", linkUrl: "", linkLabel: "", bgColor: "#7c3aed", order: "0", isActive: true, startDate: "", endDate: "" };
+  const [bannerForm, setBannerForm] = React.useState(EMPTY_BANNER);
+  const [editingBannerId, setEditingBannerId] = React.useState<string | null>(null);
+  const [deleteBannerTarget, setDeleteBannerTarget] = React.useState<any>(null);
+
+  const saveBannerMutation = useMutation({
+    mutationFn: async () => {
+      const payload: Record<string, unknown> = {
+        title: bannerForm.title,
+        subtitle: bannerForm.subtitle || null,
+        image: bannerForm.image,
+        linkUrl: bannerForm.linkUrl || null,
+        linkLabel: bannerForm.linkLabel || null,
+        bgColor: bannerForm.bgColor || "#7c3aed",
+        order: Number(bannerForm.order) || 0,
+        isActive: bannerForm.isActive,
+        startDate: bannerForm.startDate || null,
+        endDate: bannerForm.endDate || null,
+      };
+      if (editingBannerId) {
+        payload.id = editingBannerId;
+        const res = await fetch("/api/banners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        if (!res.ok) throw new Error("Gagal update banner");
+        return res.json();
+      } else {
+        const res = await fetch("/api/banners", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        if (!res.ok) throw new Error("Gagal buat banner");
+        return res.json();
+      }
+    },
+    onSuccess: () => {
+      toast({ title: editingBannerId ? "Banner diperbarui" : "Banner dibuat" });
+      setBannerForm(EMPTY_BANNER);
+      setEditingBannerId(null);
+      queryClient.invalidateQueries({ queryKey: ["banners"] });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteBannerMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/banners?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Gagal hapus banner");
+    },
+    onSuccess: () => {
+      toast({ title: "Banner dihapus" });
+      setDeleteBannerTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["banners"] });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
 
   // ─── Affiliate state ───
   const [affDrafts, setAffDrafts] = React.useState<Record<string, { tag: string; enabled: boolean }>>({});
@@ -521,10 +586,14 @@ export default function AdminPage() {
       {/* Main */}
       <main className="container mx-auto px-4 max-w-5xl py-6">
         <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="grid w-full max-w-lg grid-cols-3 h-11">
+          <TabsList className="grid w-full max-w-xl grid-cols-4 h-11">
             <TabsTrigger value="products" className="text-sm">
               <Package className="w-4 h-4 mr-1.5" />
               Produk
+            </TabsTrigger>
+            <TabsTrigger value="banners" className="text-sm">
+              <Image className="w-4 h-4 mr-1.5" />
+              Banner
             </TabsTrigger>
             <TabsTrigger value="categories" className="text-sm">
               <Settings2 className="w-4 h-4 mr-1.5" />
@@ -859,7 +928,131 @@ export default function AdminPage() {
             </div>
           </TabsContent>
 
-          {/* ===== TAB KATEGORI ===== */}
+          {/* ===== TAB BANNER ===== */}
+          <TabsContent value="banners" className="space-y-4">
+            {/* Info */}
+            <div className="rounded-2xl border border-violet-200 dark:border-violet-900/50 bg-violet-50 dark:bg-violet-900/20 p-4">
+              <p className="text-sm font-semibold text-violet-900 dark:text-violet-100 mb-1">
+                Kelola Banner Promo
+              </p>
+              <p className="text-xs text-violet-900/80 dark:text-violet-100/80">
+                Banner muncul di homepage sebagai slider. Upload gambar landscape (disarankan 1200x400px). Atur tanggal mulai & selesai untuk auto-tayang.
+              </p>
+            </div>
+
+            {/* Form */}
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                {editingBannerId ? <><Pencil className="w-3.5 h-3.5" /> Edit Banner</> : <><Plus className="w-3.5 h-3.5" /> Tambah Banner Baru</>}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Judul Banner *</Label>
+                  <Input placeholder="cth: Flash Sale Akhir Tahun" value={bannerForm.title} onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Sub Judul</Label>
+                  <Input placeholder="cth: Diskon sampai 70%" value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })} />
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-xs">URL Gambar Banner *</Label>
+                  <Input placeholder="https://... (disarankan 1200x400px)" value={bannerForm.image} onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })} />
+                  {bannerForm.image && (
+                    <img src={bannerForm.image} alt="Preview" className="mt-2 h-20 rounded-lg object-contain bg-zinc-100 dark:bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  )}
+                </div>
+                <div>
+                  <Label className="text-xs">Link Tujuan</Label>
+                  <Input placeholder="https://... (opsional)" value={bannerForm.linkUrl} onChange={(e) => setBannerForm({ ...bannerForm, linkUrl: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Text Tombol</Label>
+                  <Input placeholder="cth: Belanja Sekarang" value={bannerForm.linkLabel} onChange={(e) => setBannerForm({ ...bannerForm, linkLabel: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Warna Background</Label>
+                  <div className="flex gap-2 items-center">
+                    <input type="color" value={bannerForm.bgColor} onChange={(e) => setBannerForm({ ...bannerForm, bgColor: e.target.value })} className="w-9 h-9 rounded border cursor-pointer" />
+                    <Input value={bannerForm.bgColor} onChange={(e) => setBannerForm({ ...bannerForm, bgColor: e.target.value })} className="flex-1" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Urutan</Label>
+                  <Input type="number" value={bannerForm.order} onChange={(e) => setBannerForm({ ...bannerForm, order: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Mulai Tayang</Label>
+                  <Input type="datetime-local" value={bannerForm.startDate} onChange={(e) => setBannerForm({ ...bannerForm, startDate: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Selesai Tayang</Label>
+                  <Input type="datetime-local" value={bannerForm.endDate} onChange={(e) => setBannerForm({ ...bannerForm, endDate: e.target.value })} />
+                </div>
+                <div className="flex items-center gap-2 pt-5">
+                  <Switch checked={bannerForm.isActive} onCheckedChange={(v) => setBannerForm({ ...bannerForm, isActive: v })} />
+                  <Label className="text-xs">Aktif</Label>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button size="sm" onClick={() => saveBannerMutation.mutate()} disabled={saveBannerMutation.isPending || !bannerForm.title || !bannerForm.image}>
+                  <Save className="w-3.5 h-3.5 mr-1" /> {editingBannerId ? "Simpan" : "Tambah"}
+                </Button>
+                {editingBannerId && (
+                  <Button size="sm" variant="outline" onClick={() => { setEditingBannerId(null); setBannerForm(EMPTY_BANNER); }}>Batal</Button>
+                )}
+              </div>
+            </div>
+
+            {/* List */}
+            {bannersLoading ? (
+              <p className="text-xs text-zinc-500">Memuat banner...</p>
+            ) : (bannersData ?? []).length === 0 ? (
+              <div className="text-center py-8 text-sm text-zinc-500">
+                <Image className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                Belum ada banner. Tambahkan di atas.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(bannersData ?? []).map((b: any) => (
+                  <div key={b.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+                    <div className="flex gap-3 p-3">
+                      <div className="w-32 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                        {b.image && <img src={b.image} alt={b.title} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold truncate">{b.title}</span>
+                          {!b.isActive && <Badge className="bg-zinc-200 text-zinc-600 text-[9px]">Nonaktif</Badge>}
+                          {b.isActive && <Badge className="bg-emerald-100 text-emerald-700 text-[9px]">Aktif</Badge>}
+                        </div>
+                        {b.subtitle && <p className="text-xs text-zinc-500 truncate">{b.subtitle}</p>}
+                        {b.linkLabel && <p className="text-[10px] text-violet-600 mt-0.5">Tombol: {b.linkLabel}</p>}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
+                          setEditingBannerId(b.id);
+                          setBannerForm({
+                            title: b.title,
+                            subtitle: b.subtitle || "",
+                            image: b.image,
+                            linkUrl: b.linkUrl || "",
+                            linkLabel: b.linkLabel || "",
+                            bgColor: b.bgColor || "#7c3aed",
+                            order: String(b.order ?? 0),
+                            isActive: b.isActive,
+                            startDate: b.startDate ? new Date(b.startDate).toISOString().slice(0, 16) : "",
+                            endDate: b.endDate ? new Date(b.endDate).toISOString().slice(0, 16) : "",
+                          });
+                        }}><Pencil className="w-3 h-3" /></Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDeleteBannerTarget(b)}><Trash2 className="w-3 h-3" /></Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="categories" className="space-y-4">
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1036,6 +1229,22 @@ export default function AdminPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} className="bg-red-600 hover:bg-red-700">Hapus</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete banner dialog */}
+      <AlertDialog open={!!deleteBannerTarget} onOpenChange={(o) => !o && setDeleteBannerTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus banner?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Banner <strong>{deleteBannerTarget?.title}</strong> akan dihapus permanen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteBannerTarget && deleteBannerMutation.mutate(deleteBannerTarget.id)} className="bg-red-600 hover:bg-red-700">Hapus</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
