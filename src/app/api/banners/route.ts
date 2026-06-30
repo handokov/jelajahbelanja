@@ -12,8 +12,16 @@ export async function GET(req: NextRequest) {
     const where = activeOnly
       ? {
           isActive: true,
-          startDate: { lte: new Date() },
-          endDate: { gte: new Date() },
+          OR: [
+            // Tanpa tanggal — selalu tampil
+            { startDate: null, endDate: null },
+            // Hanya ada startDate — tampil jika sudah lewat startDate
+            { startDate: { lte: new Date() }, endDate: null },
+            // Hanya ada endDate — tampil jika belum lewat endDate
+            { startDate: null, endDate: { gte: new Date() } },
+            // Ada keduanya — tampil jika dalam rentang
+            { startDate: { lte: new Date() }, endDate: { gte: new Date() } },
+          ],
         }
       : {};
 
