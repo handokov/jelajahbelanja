@@ -97,7 +97,7 @@ export default function Home() {
     staleTime: 30 * 1000,
   });
 
-  const activeBanners = React.useMemo(() => (bannersData?.banners ?? []).filter((b: any) => b.image), [bannersData]);
+  const activeBanners = React.useMemo(() => (bannersData?.banners ?? []).filter((b: any) => b.image && b.image.length > 5), [bannersData]);
 
   // Auto-slide banners
   React.useEffect(() => {

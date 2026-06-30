@@ -10,7 +10,6 @@ export async function GET(req: NextRequest) {
     const activeOnly = searchParams.get("active") === "true";
 
     if (activeOnly) {
-      // Untuk public: ambil semua yang isActive, filter tanggal di JS (lebih aman)
       const all = await db.promoBanner.findMany({
         where: { isActive: true },
         orderBy: { order: "asc" },
@@ -20,15 +19,19 @@ export async function GET(req: NextRequest) {
       const banners = all.filter((b) => {
         // Tanpa tanggal = selalu tampil
         if (!b.startDate && !b.endDate) return true;
-        // Hanya startDate = tampil setelah mulai
-        if (b.startDate && !b.endDate) return b.startDate <= now;
         // Hanya endDate = tampil sebelum berakhir
         if (!b.startDate && b.endDate) return b.endDate >= now;
-        // Keduanya = dalam rentang
-        return b.startDate! <= now && b.endDate! >= now;
+        // Hanya startDate = tampil (kasih toleransi 24 jam untuk timezone)
+        if (b.startDate && !b.endDate) {
+          const startPlus24h = new Date(b.startDate.getTime() - 24 * 60 * 60 * 1000);
+          return now >= startPlus24h;
+        }
+        // Keduanya = dalam rentang (kasih toleransi 24 jam di startDate)
+        const startPlus24h = new Date(b.startDate!.getTime() - 24 * 60 * 60 * 1000);
+        return now >= startPlus24h && b.endDate! >= now;
       });
 
-      return NextResponse.json({ banners });
+      return NextResponse.json({ banners, debug: { now: now.toISOString(), total: all.length, filtered: banners.length } });
     }
 
     // Admin: ambil semua
