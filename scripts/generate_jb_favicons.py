@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Generate proper JelajahBelanja favicon — shopping bag + JB brand, NOT the Z logo."""
+"""Generate JelajahBelanja favicon — unique JB monogram with flame/viral element, NO shopping bag."""
 
 import os
-import json
 import cairosvg
 from PIL import Image
 import io
 
 PUBLIC_DIR = "/home/z/my-project/public"
 
-# JelajahBelanja SVG — shopping bag icon with "JB" text on violet/purple background
+# JelajahBelanja SVG — JB monogram with viral flame accent
+# Design: Bold "JB" with a flame/sparkle above, violet gradient background
+# NO shopping bag — avoids Shopee trademark similarity
 jb_svg = '''<?xml version="1.0" encoding="utf-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
@@ -17,17 +18,31 @@ jb_svg = '''<?xml version="1.0" encoding="utf-8"?>
       <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
     </linearGradient>
+    <linearGradient id="flame" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#ef4444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+    </linearGradient>
   </defs>
   <!-- Rounded square background -->
   <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#bg)"/>
-  <!-- Shopping bag body -->
-  <rect x="140" y="180" width="232" height="240" rx="20" ry="20" fill="white" opacity="0.95"/>
-  <!-- Shopping bag handle -->
-  <path d="M 200 180 L 200 140 Q 200 100 256 100 Q 312 100 312 140 L 312 180" 
-        fill="none" stroke="white" stroke-width="28" stroke-linecap="round" opacity="0.95"/>
-  <!-- JB text -->
-  <text x="256" y="340" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" 
-        font-size="120" font-weight="900" fill="#7c3aed" letter-spacing="-4">JB</text>
+  
+  <!-- Flame/trending icon above JB -->
+  <g transform="translate(256, 120) scale(1.1)">
+    <!-- Outer flame -->
+    <path d="M 0 -52 C -8 -40 -28 -16 -28 8 C -28 26 -16 38 0 42 C 16 38 28 26 28 8 C 28 -16 8 -40 0 -52 Z" 
+          fill="url(#flame)" opacity="0.9"/>
+    <!-- Inner flame -->
+    <path d="M 0 -22 C -4 -14 -14 0 -14 12 C -14 22 -8 28 0 30 C 8 28 14 22 14 12 C 14 0 4 -14 0 -22 Z" 
+          fill="#fbbf24" opacity="0.95"/>
+  </g>
+  
+  <!-- JB text — bold and modern -->
+  <text x="256" y="350" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" 
+        font-size="180" font-weight="900" fill="white" letter-spacing="-6">JB</text>
+  
+  <!-- Subtle tagline line -->
+  <rect x="136" y="375" width="240" height="4" rx="2" fill="white" opacity="0.4"/>
 </svg>'''
 
 # Generate PNG at multiple sizes for favicon.ico
@@ -63,7 +78,6 @@ print(f"Created: {apple_path}")
 chrome_192_size = 192
 png_data = cairosvg.svg2png(bytestring=jb_svg.encode(), output_width=chrome_192_size, output_height=chrome_192_size)
 chrome_192_img = Image.open(io.BytesIO(png_data))
-chrome_192_img = chrome_img = Image.open(io.BytesIO(png_data))
 chrome_192_img = chrome_192_img.convert("RGBA")
 chrome_192_path = os.path.join(PUBLIC_DIR, "android-chrome-192x192.png")
 chrome_192_img.save(chrome_192_path, format="PNG")
@@ -78,16 +92,10 @@ chrome_512_path = os.path.join(PUBLIC_DIR, "android-chrome-512x512.png")
 chrome_512_img.save(chrome_512_path, format="PNG")
 print(f"Created: {chrome_512_path}")
 
-# Also save the SVG as the new logo
+# Also update the logo.svg
 logo_svg_path = os.path.join(PUBLIC_DIR, "logo.svg")
-# Keep the original Z logo as logo-z.svg backup
-if os.path.exists(logo_svg_path):
-    import shutil
-    shutil.copy2(logo_svg_path, os.path.join(PUBLIC_DIR, "logo-z-backup.svg"))
-    print(f"Backed up original Z logo to logo-z-backup.svg")
-
 with open(logo_svg_path, "w") as f:
     f.write(jb_svg)
 print(f"Updated: {logo_svg_path}")
 
-print("\nAll JelajahBelanja favicon files generated successfully!")
+print("\nAll JelajahBelanja favicon files regenerated — no shopping bag!")
