@@ -955,10 +955,70 @@ export default function AdminPage() {
                   <Input placeholder="cth: Diskon sampai 70%" value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })} />
                 </div>
                 <div className="md:col-span-2">
-                  <Label className="text-xs">URL Gambar Banner *</Label>
-                  <Input placeholder="https://... (disarankan 1200x400px)" value={bannerForm.image} onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })} />
+                  <Label className="text-xs mb-1 block">Gambar Banner * (disarankan 1200x400px)</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.accept = "image/*";
+                        input.onchange = async (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (!file) return;
+                          // Resize & convert to base64
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            const img = new Image();
+                            img.onload = () => {
+                              const canvas = document.createElement("canvas");
+                              const maxW = 1200;
+                              const maxH = 400;
+                              let w = img.width;
+                              let h = img.height;
+                              if (w > maxW) { h = h * maxW / w; w = maxW; }
+                              if (h > maxH) { w = w * maxH / h; h = maxH; }
+                              canvas.width = w;
+                              canvas.height = h;
+                              const ctx = canvas.getContext("2d");
+                              ctx?.drawImage(img, 0, 0, w, h);
+                              const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+                              setBannerForm({ ...bannerForm, image: dataUrl });
+                            };
+                            img.src = reader.result as string;
+                          };
+                          reader.readAsDataURL(file);
+                        };
+                        input.click();
+                      }}
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 mr-1" /> Upload Lokal
+                    </Button>
+                    <div className="flex-1 relative">
+                      <Input
+                        placeholder="atau paste URL gambar..."
+                        value={bannerForm.image.startsWith("data:") ? "(gambar dari upload)" : bannerForm.image}
+                        onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })}
+                      />
+                      {bannerForm.image.startsWith("data:") && (
+                        <button
+                          type="button"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-red-500 hover:text-red-700"
+                          onClick={() => setBannerForm({ ...bannerForm, image: "" })}
+                        >Hapus</button>
+                      )}
+                    </div>
+                  </div>
                   {bannerForm.image && (
-                    <img src={bannerForm.image} alt="Preview" className="mt-2 h-20 rounded-lg object-contain bg-zinc-100 dark:bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    <img
+                      src={bannerForm.image}
+                      alt="Preview"
+                      className="mt-2 h-20 rounded-lg object-contain bg-zinc-100 dark:bg-zinc-800"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
                   )}
                 </div>
                 <div>
