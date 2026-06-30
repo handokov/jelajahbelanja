@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { stripMarketplacePrefix } from "@/lib/utils";
+import { stripMarketplacePrefix, detectMarketplaceFromUrl } from "@/lib/utils";
 import ProductDetailClient, { type ShopeeProduct } from "./ProductDetailClient";
 
 interface Props {
@@ -43,6 +43,11 @@ function serialize(row: Awaited<ReturnType<typeof getProduct>>): ShopeeProduct |
   if (!row) return null;
   return {
     ...row,
+    // Fix: kalau DB marketplace default "shopee" tapi URL-nya dari marketplace lain,
+    // override berdasarkan URL (supaya badge & tombol bener di detail page)
+    marketplace: row.marketplace === "shopee" && row.url
+      ? detectMarketplaceFromUrl(row.url)
+      : row.marketplace,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -51,6 +56,9 @@ function serialize(row: Awaited<ReturnType<typeof getProduct>>): ShopeeProduct |
 function serializeMany(rows: Awaited<ReturnType<typeof db.shopeeProduct.findMany>>): ShopeeProduct[] {
   return rows.map((r) => ({
     ...r,
+    marketplace: r.marketplace === "shopee" && r.url
+      ? detectMarketplaceFromUrl(r.url)
+      : r.marketplace,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   }));
