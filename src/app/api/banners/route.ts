@@ -9,24 +9,30 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const activeOnly = searchParams.get("active") === "true";
 
-    const where = activeOnly
-      ? {
-          isActive: true,
-          OR: [
-            // Tanpa tanggal — selalu tampil
-            { startDate: null, endDate: null },
-            // Hanya ada startDate — tampil jika sudah lewat startDate
-            { startDate: { lte: new Date() }, endDate: null },
-            // Hanya ada endDate — tampil jika belum lewat endDate
-            { startDate: null, endDate: { gte: new Date() } },
-            // Ada keduanya — tampil jika dalam rentang
-            { startDate: { lte: new Date() }, endDate: { gte: new Date() } },
-          ],
-        }
-      : {};
+    if (activeOnly) {
+      // Untuk public: ambil semua yang isActive, filter tanggal di JS (lebih aman)
+      const all = await db.promoBanner.findMany({
+        where: { isActive: true },
+        orderBy: { order: "asc" },
+      });
 
+      const now = new Date();
+      const banners = all.filter((b) => {
+        // Tanpa tanggal = selalu tampil
+        if (!b.startDate && !b.endDate) return true;
+        // Hanya startDate = tampil setelah mulai
+        if (b.startDate && !b.endDate) return b.startDate <= now;
+        // Hanya endDate = tampil sebelum berakhir
+        if (!b.startDate && b.endDate) return b.endDate >= now;
+        // Keduanya = dalam rentang
+        return b.startDate! <= now && b.endDate! >= now;
+      });
+
+      return NextResponse.json({ banners });
+    }
+
+    // Admin: ambil semua
     const banners = await db.promoBanner.findMany({
-      where,
       orderBy: { order: "asc" },
     });
 
@@ -34,7 +40,7 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     console.error("[api/banners GET] Error:", err?.message || err);
     return NextResponse.json(
-      { error: "Gagal memuat banner" },
+      { error: "Gagal memuat banner: " + (err?.message || "Unknown error") },
       { status: 500 }
     );
   }
@@ -71,7 +77,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error("[api/banners POST] Error:", err?.message || err);
     return NextResponse.json(
-      { error: "Gagal membuat banner" },
+      { error: "Gagal membuat banner: " + (err?.message || "Unknown error") },
       { status: 500 }
     );
   }
