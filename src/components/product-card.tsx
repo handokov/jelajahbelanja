@@ -85,11 +85,9 @@ function PriceBlock({
 
 export function ProductCard({ product, variant = "default", rank }: ProductCardProps) {
   // Link ke halaman detail produk
-  const detailUrl = `/produk/${product.id}`;
+  const detailUrl = `/produk/${product.marketplace}-${product.id}`;
   // Link beli langsung (shortlink / affiliate)
-  const buyUrl = product.id.startsWith("shopee-")
-    ? `/beli/${product.id}`
-    : (product.affiliateUrl || product.url);
+  const buyUrl = `/beli/${product.marketplace}-${product.id}`;
 
   if (variant === "featured") {
     return (

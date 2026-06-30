@@ -16,7 +16,7 @@ import {
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn, addShopeePrefix } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { LEGAL_DISCLAIMER, BUY_BUTTON_GRADIENT, AFFILIATE_LINK_REL, MARKETPLACE_META } from "@/lib/config";
 import { useTypewriterEffect } from "@/hooks/use-typewriter-effect";
 import { AiAdvisorBlock } from "@/components/ai-advisor-block";
@@ -67,8 +67,8 @@ export interface ShopeeProduct {
 
 /* ─── Simple Recommendation Card ─── */
 function RecCard({ product }: { product: ShopeeProduct }) {
-  // product.id bisa "shopee-xxx" atau "xxx" — pastikan link bener
-  const linkId = addShopeePrefix(product.id);
+  // Gunakan marketplace prefix untuk link detail produk
+  const linkId = `${product.marketplace}-${product.id}`;
   return (
     <Link
       href={`/produk/${linkId}`}

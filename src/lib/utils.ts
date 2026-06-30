@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { VALID_MARKETPLACES } from "@/lib/config"
+import type { Marketplace } from "@/lib/types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -35,4 +36,26 @@ export function stripShopeePrefix(id: string): string {
  */
 export function addShopeePrefix(id: string): string {
   return id.startsWith("shopee-") ? id : `shopee-${id}`;
+}
+
+/**
+ * Auto-detect marketplace dari URL produk.
+ * Dipakai sebagai fallback kalau field marketplace di DB kosong/salah.
+ *
+ * Contoh:
+ *   detectMarketplaceFromUrl("https://tokopedia.com/xxx") → "tokopedia"
+ *   detectMarketplaceFromUrl("https://shopee.co.id/xxx") → "shopee"
+ *   detectMarketplaceFromUrl("https://lazada.co.id/xxx") → "lazada"
+ *   detectMarketplaceFromUrl("https://aliexpress.com/xxx") → "aliexpress"
+ *   detectMarketplaceFromUrl("unknown") → "shopee" (default)
+ */
+export function detectMarketplaceFromUrl(url: string): Marketplace {
+  if (!url) return "shopee";
+  const lower = url.toLowerCase();
+  if (lower.includes("tokopedia")) return "tokopedia";
+  if (lower.includes("shopee")) return "shopee";
+  if (lower.includes("lazada")) return "lazada";
+  if (lower.includes("aliexpress")) return "aliexpress";
+  if (lower.includes("amazon")) return "amazon";
+  return "shopee"; // default fallback
 }

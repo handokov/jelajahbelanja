@@ -53,7 +53,9 @@ import type {
   Marketplace,
 } from "@/lib/types";
 import { formatRupiah } from "@/lib/format";
-import { VALID_MARKETPLACES } from "@/lib/config";
+import { VALID_MARKETPLACES, MARKETPLACE_META } from "@/lib/config";
+import { detectMarketplaceFromUrl } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 // ─── Shared constants ───
 
@@ -598,7 +600,7 @@ export default function AdminPage() {
         location: p.location || productForm.location,
         category: p.category || productForm.category,
         url: url,
-        marketplace: "shopee",
+        marketplace: detectMarketplaceFromUrl(url),
       });
 
       // Auto-show advanced fields supaya user bisa review semua data
@@ -1041,7 +1043,11 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-sm line-clamp-1">{p.title}</span>
-                          <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] px-1.5 py-0 h-4">
+                          <Badge className={cn(
+                            (MARKETPLACE_META as Record<string, { className: string }>)[p.marketplace || "shopee"]?.className
+                              ?? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+                            "text-[10px] px-1.5 py-0 h-4"
+                          )}>
                             {p.marketplace || "shopee"}
                           </Badge>
                           <Badge variant="outline" className="text-[10px]">{p.category}</Badge>

@@ -14,6 +14,7 @@ import {
   computeViralScore,
   VIRAL_SCORE_THRESHOLD,
 } from "@/lib/viral-score";
+import { detectMarketplaceFromUrl } from "@/lib/utils";
 import type { Product, Marketplace } from "@/lib/types";
 
 /** Tipe parameter — cocok dengan Prisma ShopeeProduct row */
@@ -42,6 +43,26 @@ export interface ShopeeProductRow {
 }
 
 /** Convert DB ShopeeProduct row to Product DTO */
+
+/**
+ * Resolve marketplace: jika DB field salah/default ("shopee") tapi URL menunjukkan
+ * marketplace lain, percaya URL-nya. Ini fix kasus produk Tokopedia yang marketplace-nya
+ * tertulis "shopee" di DB karena default value atau scraper yang tidak detect.
+ */
+function resolveMarketplace(dbMarketplace: string, url: string): Marketplace {
+  const fromDb = (dbMarketplace || "shopee") as Marketplace;
+  const fromUrl = detectMarketplaceFromUrl(url);
+
+  // Kalau DB bilang "shopee" tapi URL-nya tokopedia/lazada/aliexpress/amazon,
+  // percaya URL (karena DB default = "shopee", sering salah).
+  if (fromDb === "shopee" && fromUrl !== "shopee") {
+    return fromUrl;
+  }
+
+  // Kalau DB dan URL konsisten, atau DB bukan "shopee", pakai DB value.
+  return fromDb;
+}
+
 export function dbRowToProduct(row: ShopeeProductRow): Product {
   const ts = row.createdAt.toISOString();
   const soldPerDay = computeSoldPerDay(row.soldCount, ts);
@@ -67,7 +88,7 @@ export function dbRowToProduct(row: ShopeeProductRow): Product {
     soldCount: row.soldCount,
     soldPerDay,
     timestamp: ts,
-    marketplace: (row.marketplace || "shopee") as Marketplace,
+    marketplace: resolveMarketplace(row.marketplace, row.url),
     category: row.category,
     viralScore,
     isViral: row.isViral || viralScore >= VIRAL_SCORE_THRESHOLD,
