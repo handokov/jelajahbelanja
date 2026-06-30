@@ -40,9 +40,6 @@ import {
   MapPin,
   Image as ImageLucide,
   Upload,
-  CloudUpload,
-  Download,
-  LinkIcon,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -271,7 +268,7 @@ export default function AdminPage() {
           reader.readAsDataURL(file);
         });
         setBannerForm((prev: typeof EMPTY_BANNER) => ({ ...prev, image: dataUrl }));
-        toast({ title: "Gambar berhasil dimuat (mode base64)" });
+        toast({ title: "Gambar berhasil dimuat (mode lokal)" });
       }
     } catch (err) {
       console.error("[Banner upload] Error:", err);
@@ -280,40 +277,6 @@ export default function AdminPage() {
       setBannerUploading(false);
     }
   }, [toast]);
-
-  // Download gambar dari URL (bypass hotlink protection), upload ke Blob
-  const [bannerUrlInput, setBannerUrlInput] = React.useState("");
-  const handleBannerUrlDownload = React.useCallback(async () => {
-    const url = bannerUrlInput.trim();
-    if (!url) {
-      toast({ title: "Masukkan URL gambar dulu", variant: "destructive" });
-      return;
-    }
-
-    setBannerUploading(true);
-    try {
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-
-      if (uploadRes.ok) {
-        const data = await uploadRes.json();
-        setBannerForm((prev: typeof EMPTY_BANNER) => ({ ...prev, image: data.url }));
-        setBannerUrlInput("");
-        toast({ title: "Gambar berhasil diambil dari URL!" });
-      } else {
-        const errData = await uploadRes.json().catch(() => ({}));
-        toast({ title: errData.error || "Gagal mengambil gambar dari URL", variant: "destructive" });
-      }
-    } catch (err) {
-      console.error("[Banner URL download] Error:", err);
-      toast({ title: "Gagal mengambil gambar dari URL", variant: "destructive" });
-    } finally {
-      setBannerUploading(false);
-    }
-  }, [bannerUrlInput, toast]);
 
   const saveBannerMutation = useMutation({
     mutationFn: async () => {
@@ -1053,24 +1016,21 @@ export default function AdminPage() {
                   <Input placeholder="cth: Diskon sampai 70%" value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })} />
                 </div>
                 <div className="md:col-span-2">
-                  <Label className="text-xs mb-1 block">Gambar Banner * (disarankan 1200x400px)</Label>
-                  {/* Drag & Drop Zone */}
-                  {!bannerForm.image ? (
-                    <div
-                      className="relative border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-xl p-6 text-center cursor-pointer hover:border-violet-500 hover:bg-violet-50/50 dark:hover:bg-violet-900/20 transition-all"
-                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add("border-violet-500", "bg-violet-50", "dark:bg-violet-900/20"); }}
-                      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("border-violet-500", "bg-violet-50", "dark:bg-violet-900/20"); }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.currentTarget.classList.remove("border-violet-500", "bg-violet-50", "dark:bg-violet-900/20");
-                        const file = e.dataTransfer.files?.[0];
-                        if (file && file.type.startsWith("image/")) {
-                          handleBannerImageUpload(file);
-                        } else {
-                          toast({ title: "Hanya file gambar yang diperbolehkan", variant: "destructive" });
-                        }
-                      }}
+                  <Label className="text-xs font-semibold flex items-center gap-1 mb-1">
+                    <ImageIcon className="w-3 h-3" /> Gambar Banner * (disarankan 1200x400px)
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="https://... paste URL gambar di sini"
+                      value={bannerForm.image}
+                      onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      disabled={bannerUploading}
                       onClick={() => {
                         const input = document.createElement("input");
                         input.type = "file";
@@ -1082,63 +1042,21 @@ export default function AdminPage() {
                         input.click();
                       }}
                     >
-                      <CloudUpload className="w-10 h-10 mx-auto mb-2 text-violet-400" />
-                      <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
-                        Drag & drop gambar di sini
-                      </p>
-                      <p className="text-xs text-zinc-500 mt-1">
-                        atau klik untuk pilih file dari komputer
-                      </p>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        JPG, PNG, WebP (maks 5MB)
-                      </p>
-                      {bannerUploading && (
-                        <div className="mt-2 flex items-center justify-center gap-2 text-xs text-violet-600">
-                          <div className="w-4 h-4 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
-                          Mengupload...
-                        </div>
+                      {bannerUploading ? (
+                        <><div className="w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /></>
+                      ) : (
+                        <><Upload className="w-3.5 h-3.5 mr-1" /> Upload</>
                       )}
-                    </div>
-                  ) : (
-                    <div className="relative rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
-                      <img
-                        src={bannerForm.image}
-                        alt="Preview Banner"
-                        className="w-full h-32 object-contain bg-zinc-100 dark:bg-zinc-800"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
-                      <button
-                        type="button"
-                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-lg transition-colors"
-                        onClick={() => setBannerForm({ ...bannerForm, image: "" })}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                  {/* URL download section */}
-                  <div className="mt-3 flex gap-2">
-                    <Input
-                      placeholder="Ambil gambar dari URL (Tokped, Shopee, dll) — paste di sini..."
-                      value={bannerUrlInput}
-                      onChange={(e) => setBannerUrlInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleBannerUrlDownload(); }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      disabled={bannerUploading || !bannerUrlInput.trim()}
-                      onClick={handleBannerUrlDownload}
-                    >
-                      <Download className="w-3.5 h-3.5 mr-1" /> Ambil
                     </Button>
                   </div>
-                  <p className="text-xs text-zinc-400 mt-1">
-                    <LinkIcon className="w-3 h-3 inline mr-0.5" />
-                    Paste URL gambar dari mana aja — server kami yang download & simpan, jadi gak ada masalah hotlink
-                  </p>
+                  {bannerForm.image && (
+                    <img
+                      src={bannerForm.image}
+                      alt="Preview"
+                      className="mt-2 h-20 rounded-lg object-contain bg-zinc-100 dark:bg-zinc-800"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs">Link Tujuan</Label>
