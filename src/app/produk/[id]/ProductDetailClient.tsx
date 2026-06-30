@@ -19,7 +19,8 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, addShopeePrefix } from "@/lib/utils";
-import { LEGAL_DISCLAIMER, BUY_BUTTON_GRADIENT, AFFILIATE_LINK_REL } from "@/lib/config";
+import { LEGAL_DISCLAIMER, BUY_BUTTON_GRADIENT, AFFILIATE_LINK_REL, MARKETPLACE_META } from "@/lib/config";
+import { useTypewriterEffect } from "@/hooks/use-typewriter-effect";
 import { ViralBadge, DiscountBadge } from "@/components/badges";
 import {
   formatRupiah,
@@ -118,11 +119,12 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   const [outfitTips, setOutfitTips] = React.useState("");
   const [aiLoading, setAiLoading] = React.useState(false);
   const [aiError, setAiError] = React.useState(false);
-  const [displayedText, setDisplayedText] = React.useState("");
-  const [typewriterDone, setTypewriterDone] = React.useState(false);
   const [recommendations, setRecommendations] = React.useState<ShopeeProduct[]>([]);
   const [recsLoading, setRecsLoading] = React.useState(false);
   const [shareCopied, setShareCopied] = React.useState(false);
+
+  // Typewriter effect — shared hook
+  const { displayedText, isDone: typewriterDone } = useTypewriterEffect(aiExplanation);
 
   const savings = product.originalPrice ? product.originalPrice - product.price : 0;
 
@@ -198,24 +200,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
     return () => { cancelled = true; };
   }, [product.id, product.title, product.url, product.image, product.price, product.originalPrice, product.discountPercent, product.rating, product.reviewCount, product.soldCount, product.location, product.category, product.isViral, product.createdAt]);
 
-  // Typewriter effect
-  React.useEffect(() => {
-    if (!aiExplanation) return;
-    let i = 0;
-    setDisplayedText("");
-    setTypewriterDone(false);
-    const interval = setInterval(() => {
-      i += 2;
-      if (i >= aiExplanation.length) {
-        setDisplayedText(aiExplanation);
-        setTypewriterDone(true);
-        clearInterval(interval);
-      } else {
-        setDisplayedText(aiExplanation.slice(0, i));
-      }
-    }, 20);
-    return () => clearInterval(interval);
-  }, [aiExplanation]);
+  // (Typewriter effect now handled by useTypewriterEffect hook above)
 
   async function handleShare() {
     const shareUrl = window.location.href;
@@ -288,8 +273,8 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/40 to-transparent" />
               <div className="absolute bottom-3 left-3 flex gap-1.5">
                 {product.isViral && <ViralBadge size="md" />}
-                <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold px-2.5 py-1 h-7 shadow-lg">
-                  Shopee
+                <Badge className={cn(MARKETPLACE_META.shopee.className, "text-xs font-semibold px-2.5 py-1 h-7 shadow-lg")}>
+                  {MARKETPLACE_META.shopee.label}
                 </Badge>
               </div>
               {product.discountPercent && product.discountPercent > 0 && (

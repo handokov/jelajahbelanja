@@ -30,6 +30,7 @@ import {
   formatSoldCount,
   formatReviewCount,
 } from "@/lib/format";
+import { useTypewriterEffect } from "@/hooks/use-typewriter-effect";
 
 interface ProductDetailDialogProps {
   product: Product | null;
@@ -45,17 +46,16 @@ export function ProductDetailDialog({
   const [aiExplanation, setAiExplanation] = React.useState("");
   const [aiLoading, setAiLoading] = React.useState(false);
   const [aiError, setAiError] = React.useState(false);
-  const [displayedText, setDisplayedText] = React.useState("");
-  const [typewriterDone, setTypewriterDone] = React.useState(false);
+
+  // Typewriter effect — shared hook
+  const { displayedText, isDone: typewriterDone } = useTypewriterEffect(aiExplanation);
 
   // Fetch AI explanation when product changes
   React.useEffect(() => {
     if (!product || !open) {
       setAiExplanation("");
-      setDisplayedText("");
       setAiLoading(false);
       setAiError(false);
-      setTypewriterDone(false);
       return;
     }
 
@@ -65,8 +65,6 @@ export function ProductDetailDialog({
       setAiLoading(true);
       setAiError(false);
       setAiExplanation("");
-      setDisplayedText("");
-      setTypewriterDone(false);
 
       try {
         const res = await fetch("/api/ai-explain", {
@@ -97,28 +95,6 @@ export function ProductDetailDialog({
       cancelled = true;
     };
   }, [product, open]);
-
-  // Typewriter effect
-  React.useEffect(() => {
-    if (!aiExplanation) return;
-
-    let i = 0;
-    setDisplayedText("");
-    setTypewriterDone(false);
-
-    const interval = setInterval(() => {
-      i += 2;
-      if (i >= aiExplanation.length) {
-        setDisplayedText(aiExplanation);
-        setTypewriterDone(true);
-        clearInterval(interval);
-      } else {
-        setDisplayedText(aiExplanation.slice(0, i));
-      }
-    }, 20);
-
-    return () => clearInterval(interval);
-  }, [aiExplanation]);
 
   if (!product) return null;
 
