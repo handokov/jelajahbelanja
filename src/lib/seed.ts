@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { VALID_MARKETPLACES } from "@/lib/config";
 
 export interface DefaultCategory {
   name: string;
@@ -140,7 +141,7 @@ export async function ensureCategoriesSeeded(): Promise<void> {
  */
 export async function ensureAffiliateTagsSeeded(): Promise<void> {
   try {
-    const marketplaces = ["shopee", "tokopedia", "lazada", "aliexpress"];
+    const marketplaces = VALID_MARKETPLACES;
     for (const m of marketplaces) {
       const existing = await db.affiliateTag.findUnique({
         where: { marketplace: m },

@@ -11,10 +11,7 @@ const interSans = Inter({
   display: "swap",
 });
 
-const SITE_URL = "https://jelajahbelanja.vercel.app";
-const SITE_NAME = "JelajahBelanja";
-const SITE_DESCRIPTION =
-  "JelajahBelanja adalah platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada. Temukan produk viral 24 jam, best seller mingguan, dan diskon terbesar hari ini.";
+import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/lib/config";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { buildAffiliateUrl, getAffiliateTags } from "@/lib/affiliate";
 import { dbRowToProduct } from "@/lib/product-mapper";
+import { stripShopeePrefix } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -112,9 +113,7 @@ export async function POST(req: NextRequest) {
     const uniqueKeywords = [...new Set(matchedKeywords)];
 
     // Strip "shopee-" prefix dari product ID untuk DB query
-    const dbProductId = product.id.startsWith("shopee-")
-      ? product.id.replace("shopee-", "")
-      : product.id;
+    const dbProductId = stripShopeePrefix(product.id);
 
     // Query produk asli dari database — kategori pelengkap + isHidden bukan true
     const dbProducts = await db.shopeeProduct.findMany({

@@ -2,14 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureAffiliateTagsSeeded } from "@/lib/seed";
 import { invalidateAffiliateCache } from "@/lib/affiliate";
+import { VALID_MARKETPLACES } from "@/lib/config";
 import type { AffiliateTagDTO, UpdateAffiliateTagInput, Marketplace } from "@/lib/types";
-
-const VALID_MARKETPLACES: Marketplace[] = [
-  "shopee",
-  "tokopedia",
-  "lazada",
-  "aliexpress",
-];
 
 function toDTO(row: {
   id: string;

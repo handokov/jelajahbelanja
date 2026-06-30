@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
+import { stripShopeePrefix } from "@/lib/utils";
 import ProductDetailClient from "./ProductDetailClient";
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
 // React.cache() deduplikasi DB query dalam 1 request
 // Jadi generateMetadata + ProductPage share hasil yang sama, gak query 2x
 const getProduct = cache(async (id: string) => {
-  const dbId = id.startsWith("shopee-") ? id.replace("shopee-", "") : id;
+  const dbId = stripShopeePrefix(id);
   return db.shopeeProduct.findUnique({ where: { id: dbId } });
 });
 

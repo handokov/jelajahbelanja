@@ -18,7 +18,7 @@ import {
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, addShopeePrefix } from "@/lib/utils";
 import {
   formatRupiah,
   formatSoldCount,
@@ -64,7 +64,7 @@ interface ShopeeProduct {
 /* ─── Simple Recommendation Card ─── */
 function RecCard({ product }: { product: ShopeeProduct }) {
   // product.id bisa "shopee-xxx" atau "xxx" — pastikan link bener
-  const linkId = product.id.startsWith("shopee-") ? product.id : `shopee-${product.id}`;
+  const linkId = addShopeePrefix(product.id);
   return (
     <Link
       href={`/produk/${linkId}`}

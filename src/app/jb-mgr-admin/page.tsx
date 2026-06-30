@@ -52,6 +52,8 @@ import type {
   UpdateAffiliateTagInput,
   Marketplace,
 } from "@/lib/types";
+import { formatRupiah } from "@/lib/format";
+import { VALID_MARKETPLACES } from "@/lib/config";
 
 // ─── Shared constants ───
 
@@ -103,12 +105,14 @@ interface ProductFormInput {
   isViral: boolean;
 }
 
-const MARKETPLACE_OPTIONS = [
-  { value: "shopee", label: "Shopee" },
-  { value: "tokopedia", label: "Tokopedia" },
-  { value: "lazada", label: "Lazada" },
-  { value: "aliexpress", label: "AliExpress" },
-];
+// ─── Helper: format Rupiah (imported from lib/format) ───
+// formatRp() diganti formatRupiah() dari @/lib/format
+
+// ─── Marketplace options (from config) ───
+const MARKETPLACE_OPTIONS = VALID_MARKETPLACES.map((m) => ({
+  value: m,
+  label: m.charAt(0).toUpperCase() + m.slice(1),
+}));
 
 const AFFILIATE_INFO: Array<{
   id: Marketplace;
@@ -146,11 +150,6 @@ const AFFILIATE_INFO: Array<{
     hint: "Daftar di portals.aliexpress.com. Salin tracking ID Anda.",
   },
 ];
-
-// ─── Helper: format Rupiah ───
-function formatRp(n: number): string {
-  return "Rp " + n.toLocaleString("id-ID");
-}
 
 // ─── Main component ───
 
@@ -1051,9 +1050,9 @@ export default function AdminPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-zinc-500 mt-1">
-                          <span className="font-bold text-zinc-900 dark:text-zinc-100">{formatRp(p.price)}</span>
+                          <span className="font-bold text-zinc-900 dark:text-zinc-100">{formatRupiah(p.price)}</span>
                           {p.originalPrice && p.originalPrice > p.price && (
-                            <span className="line-through">{formatRp(p.originalPrice)}</span>
+                            <span className="line-through">{formatRupiah(p.originalPrice)}</span>
                           )}
                           {p.discountPercent && <span className="text-red-500">-{p.discountPercent}%</span>}
                           <span>· ★ {p.rating?.toFixed(1)}</span>
