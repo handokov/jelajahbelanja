@@ -149,7 +149,7 @@ export default function Home() {
         <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-14">
           <div className="flex items-center gap-2">
             <Link href="/" className="flex items-center gap-2">
-              <ShoppingBag className="w-6 h-6 text-white" aria-hidden />
+              <img src="/logo.svg" alt="JB" className="w-7 h-7" />
               <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
                 JelajahBelanja
               </h1>
@@ -414,7 +414,7 @@ export default function Home() {
         <div className="container mx-auto px-4 max-w-7xl py-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-sm mb-3">
             <div className="flex items-center gap-2">
-              <ShoppingBag className="w-4 h-4" aria-hidden />
+              <img src="/logo.svg" alt="JB" className="w-5 h-5" />
               <span className="font-semibold">JelajahBelanja</span>
               <span className="text-white/70">© 2024</span>
             </div>
