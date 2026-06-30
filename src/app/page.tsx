@@ -94,7 +94,7 @@ export default function Home() {
         return { banners: [] };
       }
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
   });
 
   const activeBanners = React.useMemo(() => (bannersData?.banners ?? []).filter((b: any) => b.image), [bannersData]);
