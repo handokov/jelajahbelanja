@@ -38,7 +38,9 @@ import {
   DollarSign,
   Star,
   MapPin,
-  Image,
+  Image as ImageLucide,
+  Upload,
+  CloudUpload,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -218,6 +220,65 @@ export default function AdminPage() {
   const [bannerForm, setBannerForm] = React.useState(EMPTY_BANNER);
   const [editingBannerId, setEditingBannerId] = React.useState<string | null>(null);
   const [deleteBannerTarget, setDeleteBannerTarget] = React.useState<any>(null);
+  const [bannerUploading, setBannerUploading] = React.useState(false);
+
+  // Upload gambar banner ke server (Vercel Blob), fallback ke base64
+  const handleBannerImageUpload = React.useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Hanya file gambar yang diperbolehkan", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Ukuran file maksimal 5MB", variant: "destructive" });
+      return;
+    }
+
+    setBannerUploading(true);
+    try {
+      // Coba upload ke API (Vercel Blob)
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+
+      if (uploadRes.ok) {
+        const { url } = await uploadRes.json();
+        setBannerForm((prev: typeof EMPTY_BANNER) => ({ ...prev, image: url }));
+        toast({ title: "Gambar berhasil diupload" });
+      } else {
+        // Fallback: konversi ke base64
+        console.warn("[Banner upload] API upload gagal, fallback ke base64");
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const img = document.createElement("img");
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              const maxW = 1200;
+              const maxH = 400;
+              let w = img.width;
+              let h = img.height;
+              if (w > maxW) { h = h * maxW / w; w = maxW; }
+              if (h > maxH) { w = w * maxH / h; h = maxH; }
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext("2d");
+              ctx?.drawImage(img, 0, 0, w, h);
+              resolve(canvas.toDataURL("image/jpeg", 0.85));
+            };
+            img.src = reader.result as string;
+          };
+          reader.readAsDataURL(file);
+        });
+        setBannerForm((prev: typeof EMPTY_BANNER) => ({ ...prev, image: dataUrl }));
+        toast({ title: "Gambar berhasil dimuat (mode base64)" });
+      }
+    } catch (err) {
+      console.error("[Banner upload] Error:", err);
+      toast({ title: "Gagal mengupload gambar", variant: "destructive" });
+    } finally {
+      setBannerUploading(false);
+    }
+  }, [toast]);
 
   const saveBannerMutation = useMutation({
     mutationFn: async () => {
@@ -592,7 +653,7 @@ export default function AdminPage() {
               Produk
             </TabsTrigger>
             <TabsTrigger value="banners" className="text-sm">
-              <Image className="w-4 h-4 mr-1.5" />
+              <ImageLucide className="w-4 h-4 mr-1.5" />
               Banner
             </TabsTrigger>
             <TabsTrigger value="categories" className="text-sm">
@@ -956,70 +1017,76 @@ export default function AdminPage() {
                 </div>
                 <div className="md:col-span-2">
                   <Label className="text-xs mb-1 block">Gambar Banner * (disarankan 1200x400px)</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
+                  {/* Drag & Drop Zone */}
+                  {!bannerForm.image ? (
+                    <div
+                      className="relative border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-xl p-6 text-center cursor-pointer hover:border-violet-500 hover:bg-violet-50/50 dark:hover:bg-violet-900/20 transition-all"
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add("border-violet-500", "bg-violet-50", "dark:bg-violet-900/20"); }}
+                      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("border-violet-500", "bg-violet-50", "dark:bg-violet-900/20"); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.currentTarget.classList.remove("border-violet-500", "bg-violet-50", "dark:bg-violet-900/20");
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && file.type.startsWith("image/")) {
+                          handleBannerImageUpload(file);
+                        } else {
+                          toast({ title: "Hanya file gambar yang diperbolehkan", variant: "destructive" });
+                        }
+                      }}
                       onClick={() => {
                         const input = document.createElement("input");
                         input.type = "file";
                         input.accept = "image/*";
-                        input.onchange = async (e) => {
+                        input.onchange = (e) => {
                           const file = (e.target as HTMLInputElement).files?.[0];
-                          if (!file) return;
-                          // Resize & convert to base64
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            const img = new Image();
-                            img.onload = () => {
-                              const canvas = document.createElement("canvas");
-                              const maxW = 1200;
-                              const maxH = 400;
-                              let w = img.width;
-                              let h = img.height;
-                              if (w > maxW) { h = h * maxW / w; w = maxW; }
-                              if (h > maxH) { w = w * maxH / h; h = maxH; }
-                              canvas.width = w;
-                              canvas.height = h;
-                              const ctx = canvas.getContext("2d");
-                              ctx?.drawImage(img, 0, 0, w, h);
-                              const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-                              setBannerForm({ ...bannerForm, image: dataUrl });
-                            };
-                            img.src = reader.result as string;
-                          };
-                          reader.readAsDataURL(file);
+                          if (file) handleBannerImageUpload(file);
                         };
                         input.click();
                       }}
                     >
-                      <ImageIcon className="w-3.5 h-3.5 mr-1" /> Upload Lokal
-                    </Button>
-                    <div className="flex-1 relative">
-                      <Input
-                        placeholder="atau paste URL gambar..."
-                        value={bannerForm.image.startsWith("data:") ? "(gambar dari upload)" : bannerForm.image}
-                        onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })}
-                      />
-                      {bannerForm.image.startsWith("data:") && (
-                        <button
-                          type="button"
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-red-500 hover:text-red-700"
-                          onClick={() => setBannerForm({ ...bannerForm, image: "" })}
-                        >Hapus</button>
+                      <CloudUpload className="w-10 h-10 mx-auto mb-2 text-violet-400" />
+                      <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
+                        Drag & drop gambar di sini
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        atau klik untuk pilih file dari komputer
+                      </p>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        JPG, PNG, WebP (maks 5MB)
+                      </p>
+                      {bannerUploading && (
+                        <div className="mt-2 flex items-center justify-center gap-2 text-xs text-violet-600">
+                          <div className="w-4 h-4 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+                          Mengupload...
+                        </div>
                       )}
                     </div>
-                  </div>
-                  {bannerForm.image && (
-                    <img
-                      src={bannerForm.image}
-                      alt="Preview"
-                      className="mt-2 h-20 rounded-lg object-contain bg-zinc-100 dark:bg-zinc-800"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    />
+                  ) : (
+                    <div className="relative rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
+                      <img
+                        src={bannerForm.image}
+                        alt="Preview Banner"
+                        className="w-full h-32 object-contain bg-zinc-100 dark:bg-zinc-800"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                      <button
+                        type="button"
+                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-lg transition-colors"
+                        onClick={() => setBannerForm({ ...bannerForm, image: "" })}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   )}
+                  {/* URL input fallback */}
+                  <div className="mt-2">
+                    <Input
+                      placeholder="atau paste URL gambar langsung (https://...)"
+                      value={bannerForm.image.startsWith("blob:") || bannerForm.image.startsWith("/api/upload") ? "" : bannerForm.image}
+                      onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label className="text-xs">Link Tujuan</Label>
@@ -1054,7 +1121,7 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
-                <Button size="sm" onClick={() => saveBannerMutation.mutate()} disabled={saveBannerMutation.isPending || !bannerForm.title || !bannerForm.image}>
+                <Button size="sm" onClick={() => saveBannerMutation.mutate()} disabled={saveBannerMutation.isPending || bannerUploading || !bannerForm.title || !bannerForm.image}>
                   <Save className="w-3.5 h-3.5 mr-1" /> {editingBannerId ? "Simpan" : "Tambah"}
                 </Button>
                 {editingBannerId && (
@@ -1068,7 +1135,7 @@ export default function AdminPage() {
               <p className="text-xs text-zinc-500">Memuat banner...</p>
             ) : (bannersData ?? []).length === 0 ? (
               <div className="text-center py-8 text-sm text-zinc-500">
-                <Image className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <ImageLucide className="w-8 h-8 mx-auto mb-2 opacity-40" />
                 Belum ada banner. Tambahkan di atas.
               </div>
             ) : (
