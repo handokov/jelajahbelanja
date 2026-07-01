@@ -24,7 +24,7 @@ function toDTO(row: {
  * GET /api/affiliate -> list semua tag affiliate (admin only)
  */
 export async function GET(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
  * Body: { marketplace, tag, enabled }
  */
 export async function PATCH(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
@@ -88,7 +88,7 @@ export async function PATCH(req: NextRequest) {
  * POST /api/affiliate?reset=true -> reset semua tag (kosong + disabled)
  */
 export async function POST(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {

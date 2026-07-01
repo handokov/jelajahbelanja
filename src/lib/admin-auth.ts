@@ -5,13 +5,13 @@
  * Tidak ada fallback default — app akan crash jika env var tidak ada,
  * daripada jalan dengan secret yang bisa ditebak.
  *
- * Session tokens menggunakan HMAC-SHA256 — cookie berisi signed token,
- * BUKAN raw secret. Jadi kalau cookie ke-leak, attacker tidak bisa
- * derive admin secret dari token.
+ * Session tokens menggunakan HMAC-SHA256 via Web Crypto API —
+ * compatible dengan Edge Runtime (Vercel) dan Node.js.
+ * Cookie berisi signed token, BUKAN raw secret.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac, timingSafeEqual, randomBytes } from "crypto";
+import { randomBytes } from "crypto";
 
 function getAdminSecret(): string {
   const secret = process.env.ADMIN_SECRET;
@@ -25,6 +25,48 @@ function getAdminSecret(): string {
 }
 
 /**
+ * HMAC-SHA256 sign menggunakan Web Crypto API.
+ * Compatible dengan Edge Runtime dan Node.js.
+ */
+async function hmacSign(data: string, key: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    cryptoKey,
+    encoder.encode(data)
+  );
+  return Array.from(new Uint8Array(signature))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Timing-safe string comparison untuk mencegah timing attacks.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    // Tetap proses full comparison agar timing konsisten
+    let _ = 0;
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      _ |= (a.charCodeAt(i % a.length) || 0) ^ (b.charCodeAt(i % b.length) || 0);
+    }
+    return false;
+  }
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
+/**
  * Buat session token yang di-sign dengan HMAC.
  * Token format: "{randomHex}.{hmacSignature}"
  * Signature dibuat dari randomHex + ADMIN_SECRET, jadi:
@@ -32,33 +74,25 @@ function getAdminSecret(): string {
  * - Kalau cookie ke-leak, attacker tidak bisa derive ADMIN_SECRET
  * - Token tidak bisa di-forge tanpa ADMIN_SECRET
  */
-export function createSessionToken(): string {
+export async function createSessionToken(): Promise<string> {
   const randomPart = randomBytes(32).toString("hex");
   const secret = getAdminSecret();
-  const signature = createHmac("sha256", secret)
-    .update(randomPart)
-    .digest("hex");
+  const signature = await hmacSign(randomPart, secret);
   return `${randomPart}.${signature}`;
 }
 
 /**
  * Verify session token yang di-sign dengan HMAC.
  */
-export function verifySessionToken(token: string): boolean {
+export async function verifySessionToken(token: string): Promise<boolean> {
   try {
     const [randomPart, signature] = token.split(".");
     if (!randomPart || !signature) return false;
 
     const secret = getAdminSecret();
-    const expectedSignature = createHmac("sha256", secret)
-      .update(randomPart)
-      .digest("hex");
+    const expectedSignature = await hmacSign(randomPart, secret);
 
-    // Timing-safe comparison untuk mencegah timing attacks
-    return timingSafeEqual(
-      Buffer.from(signature, "hex"),
-      Buffer.from(expectedSignature, "hex")
-    );
+    return timingSafeEqual(signature, expectedSignature);
   } catch {
     return false;
   }
@@ -70,9 +104,9 @@ export function verifySessionToken(token: string): boolean {
  * 1. Bearer token di Authorization header (dari API calls)
  * 2. httpOnly cookie "jb-admin-session" (dari login flow — HMAC-signed token)
  *
- * Pakai: const authErr = checkAuth(req); if (authErr) return authErr;
+ * Pakai: const authErr = await checkAuth(req); if (authErr) return authErr;
  */
-export function checkAuth(req: NextRequest): NextResponse | null {
+export async function checkAuth(req: NextRequest): Promise<NextResponse | null> {
   const secret = getAdminSecret();
 
   // Method 1: Bearer token di Authorization header
@@ -83,7 +117,7 @@ export function checkAuth(req: NextRequest): NextResponse | null {
 
   // Method 2: Cookie-based session (HMAC-signed token)
   const cookieSession = req.cookies.get("jb-admin-session")?.value;
-  if (cookieSession && verifySessionToken(cookieSession)) {
+  if (cookieSession && (await verifySessionToken(cookieSession))) {
     return null;
   }
 

@@ -32,7 +32,7 @@ function isAdminApiPath(pathname: string, method: string): boolean {
   return false;
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const method = req.method;
 
@@ -40,7 +40,7 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith("/jb-mgr-admin")) {
     const sessionCookie = req.cookies.get("jb-admin-session")?.value;
 
-    if (!sessionCookie || !verifySessionToken(sessionCookie)) {
+    if (!sessionCookie || !(await verifySessionToken(sessionCookie))) {
       // Redirect ke login page
       const loginUrl = new URL("/jb-mgr-login", req.url);
       return NextResponse.redirect(loginUrl);
@@ -54,7 +54,7 @@ export function middleware(req: NextRequest) {
     const adminSecret = process.env.ADMIN_SECRET;
 
     // Cek cookie (HMAC-signed token) ATAU bearer token
-    const cookieValid = sessionCookie && verifySessionToken(sessionCookie);
+    const cookieValid = sessionCookie && (await verifySessionToken(sessionCookie));
     const bearerValid = authHeader && adminSecret && authHeader === `Bearer ${adminSecret}`;
 
     if (!cookieValid && !bearerValid) {

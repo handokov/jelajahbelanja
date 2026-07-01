@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Buat session token (HMAC-signed, bukan raw secret)
-    const sessionToken = createSessionToken();
+    const sessionToken = await createSessionToken();
 
     const response = NextResponse.json({ success: true });
 

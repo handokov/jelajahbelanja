@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Admin: ambil semua — butuh auth
-    const authErr = checkAuth(req);
+    const authErr = await checkAuth(req);
     if (authErr) return authErr;
 
     const banners = await db.promoBanner.findMany({
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/banners — buat banner baru
 export async function POST(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/banners — update banner
 export async function PATCH(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
@@ -148,7 +148,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/banners — hapus banner
 export async function DELETE(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {

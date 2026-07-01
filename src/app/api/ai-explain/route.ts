@@ -31,7 +31,7 @@ function parseAIResponse(fullResponse: string): { explanation: string; outfitTip
  * Response: { explanation: string, outfitTips: string }
  */
 export async function POST(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {

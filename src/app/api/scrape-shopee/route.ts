@@ -644,7 +644,7 @@ Jika data tidak ditemukan, isi null. JANGAN tambahkan teks lain selain JSON.`,
 }
 
 export async function POST(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {

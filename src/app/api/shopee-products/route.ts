@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const search = (searchParams.get("search") || "").trim().toLowerCase();
 
     // Cek auth — kalau admin, tampilkan semua; kalau public, filter hidden/disabled
-    const isAdmin = !checkAuth(req);
+    const isAdmin = !(await checkAuth(req));
 
     const where: any = {};
     if (category) where.category = category;
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 
 /** POST /api/shopee-products — tambah produk baru */
 export async function POST(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
 
 /** PATCH /api/shopee-products — update produk */
 export async function PATCH(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
@@ -147,7 +147,7 @@ export async function PATCH(req: NextRequest) {
 
 /** DELETE /api/shopee-products?id=xxx */
 export async function DELETE(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {

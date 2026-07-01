@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     await ensureCategoriesSeeded();
 
     // Cek auth — admin lihat semua, public hanya yang enabled
-    const isAdmin = !checkAuth(req);
+    const isAdmin = !(await checkAuth(req));
     const where = isAdmin ? {} : { enabled: true };
 
     const categories = await db.category.findMany({ where, orderBy: { order: "asc" } });
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
@@ -170,7 +170,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
@@ -192,7 +192,7 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const authErr = checkAuth(req);
+  const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   try {
