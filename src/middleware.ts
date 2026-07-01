@@ -1,29 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/admin-auth";
 
 /**
  * Middleware — route-level protection untuk JelajahBelanja.
  *
  * Fungsi:
  * 1. Protect admin page (/jb-mgr-admin) — redirect ke login kalau belum auth
- * 2. Protect admin API routes (write operations) — cek cookie session
+ * 2. Protect admin API routes (write operations + sensitive reads) — cek cookie session
  * 3. Add security headers ke semua response
  */
 
-// API routes yang butuh auth (write operations)
+// API routes yang butuh auth (write operations + sensitive reads)
 const PROTECTED_API_PATTERNS = [
   { path: "/api/scrape-shopee", methods: ["POST"] },
   { path: "/api/admin-login", methods: [] }, // Login route itself — NOT protected
-  { path: "/api/affiliate", methods: ["PATCH", "POST"] },
+  { path: "/api/affiliate", methods: ["GET", "PATCH", "POST"] },
   { path: "/api/banners", methods: ["POST", "PATCH", "DELETE"] },
   { path: "/api/categories", methods: ["POST", "PATCH", "DELETE", "PUT"] },
   { path: "/api/shopee-products", methods: ["POST", "PATCH", "DELETE"] },
   { path: "/api/ai-explain", methods: ["POST"] },
-];
-
-// Public API routes (tidak butuh auth)
-const PUBLIC_API_PATTERNS = [
-  "/api/products",       // Public read
-  "/api/recommendations", // Public read
 ];
 
 function isAdminApiPath(pathname: string, method: string): boolean {
@@ -44,9 +39,8 @@ export function middleware(req: NextRequest) {
   // === 1. Protect admin page ===
   if (pathname.startsWith("/jb-mgr-admin")) {
     const sessionCookie = req.cookies.get("jb-admin-session")?.value;
-    const adminSecret = process.env.ADMIN_SECRET;
 
-    if (!sessionCookie || !adminSecret || sessionCookie !== adminSecret) {
+    if (!sessionCookie || !verifySessionToken(sessionCookie)) {
       // Redirect ke login page
       const loginUrl = new URL("/jb-mgr-login", req.url);
       return NextResponse.redirect(loginUrl);
@@ -56,11 +50,11 @@ export function middleware(req: NextRequest) {
   // === 2. Protect admin API routes ===
   if (pathname.startsWith("/api/") && isAdminApiPath(pathname, method)) {
     const sessionCookie = req.cookies.get("jb-admin-session")?.value;
-    const adminSecret = process.env.ADMIN_SECRET;
     const authHeader = req.headers.get("authorization");
+    const adminSecret = process.env.ADMIN_SECRET;
 
-    // Cek cookie ATAU bearer token
-    const cookieValid = sessionCookie && adminSecret && sessionCookie === adminSecret;
+    // Cek cookie (HMAC-signed token) ATAU bearer token
+    const cookieValid = sessionCookie && verifySessionToken(sessionCookie);
     const bearerValid = authHeader && adminSecret && authHeader === `Bearer ${adminSecret}`;
 
     if (!cookieValid && !bearerValid) {

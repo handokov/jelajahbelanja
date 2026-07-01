@@ -35,7 +35,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ banners });
     }
 
-    // Admin: ambil semua
+    // Admin: ambil semua — butuh auth
+    const authErr = checkAuth(req);
+    if (authErr) return authErr;
+
     const banners = await db.promoBanner.findMany({
       orderBy: { order: "asc" },
     });

@@ -52,3 +52,20 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Database (contains all product data, affiliate tags)
+/db/
+
+# Upload directory (user screenshots, images)
+/upload/
+
+# Tool results & debug output
+/tool-results/
+
+# Download directory (generated deliverables)
+/download/
+
+# Scraped data files
+search_jb*.json
+jb_*.json
+jb_search*.json

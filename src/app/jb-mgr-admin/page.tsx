@@ -167,12 +167,22 @@ export default function AdminPage() {
     router.push("/jb-mgr-login");
   }, [router]);
 
+  // Helper: fetch dengan 401 auto-redirect ke login
+  const adminFetch = React.useCallback(async (url: string, options?: RequestInit) => {
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+      router.push("/jb-mgr-login");
+      throw new Error("Session expired");
+    }
+    return res;
+  }, [router]);
+
   // ─── Queries ───
 
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
-      const res = await fetch("/api/categories");
+      const res = await adminFetch("/api/categories");
       if (!res.ok) throw new Error("Gagal memuat kategori");
       const json = await res.json();
       return json.categories as CategoryDTO[];
@@ -183,7 +193,7 @@ export default function AdminPage() {
   const { data: affiliateData, isLoading: affiliateLoading } = useQuery({
     queryKey: ["affiliate-tags"],
     queryFn: async () => {
-      const res = await fetch("/api/affiliate");
+      const res = await adminFetch("/api/affiliate");
       if (!res.ok) throw new Error("Gagal memuat tag affiliate");
       const json = await res.json();
       return json.tags as AffiliateTagDTO[];
@@ -194,7 +204,7 @@ export default function AdminPage() {
   const { data: productsData, isLoading: productsLoading } = useQuery({
     queryKey: ["admin-products"],
     queryFn: async () => {
-      const res = await fetch("/api/shopee-products");
+      const res = await adminFetch("/api/shopee-products");
       if (!res.ok) throw new Error("Gagal memuat produk");
       const json = await res.json();
       return json.products as any[];
@@ -220,7 +230,7 @@ export default function AdminPage() {
   const { data: bannersData, isLoading: bannersLoading } = useQuery({
     queryKey: ["banners"],
     queryFn: async () => {
-      const res = await fetch("/api/banners");
+      const res = await adminFetch("/api/banners");
       if (!res.ok) throw new Error("Gagal memuat banner");
       const json = await res.json();
       return json.banners as any[];
@@ -307,11 +317,11 @@ export default function AdminPage() {
       };
       if (editingBannerId) {
         payload.id = editingBannerId;
-        const res = await fetch("/api/banners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const res = await adminFetch("/api/banners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         if (!res.ok) throw new Error("Gagal update banner");
         return res.json();
       } else {
-        const res = await fetch("/api/banners", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const res = await adminFetch("/api/banners", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         if (!res.ok) throw new Error("Gagal buat banner");
         return res.json();
       }
@@ -358,7 +368,7 @@ export default function AdminPage() {
 
   const createMutation = useMutation({
     mutationFn: async (input: CreateCategoryInput) => {
-      const res = await fetch("/api/categories", {
+      const res = await adminFetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
@@ -377,7 +387,7 @@ export default function AdminPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (input: Partial<CreateCategoryInput> & { id: string }) => {
-      const res = await fetch("/api/categories", {
+      const res = await adminFetch("/api/categories", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
@@ -410,7 +420,7 @@ export default function AdminPage() {
   const reorderMutation = useMutation({
     mutationFn: async (cats: CategoryDTO[]) => {
       const payload = cats.map((c, i) => ({ id: c.id, order: i }));
-      const res = await fetch("/api/categories", {
+      const res = await adminFetch("/api/categories", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ categories: payload }),
@@ -426,7 +436,7 @@ export default function AdminPage() {
 
   const resetMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/categories", { method: "PUT" });
+      const res = await adminFetch("/api/categories", { method: "PUT" });
       if (!res.ok) throw new Error("Gagal reset kategori");
       return res.json();
     },
@@ -442,7 +452,7 @@ export default function AdminPage() {
 
   const createProductMutation = useMutation({
     mutationFn: async (input: any) => {
-      const res = await fetch("/api/shopee-products", {
+      const res = await adminFetch("/api/shopee-products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
@@ -462,7 +472,7 @@ export default function AdminPage() {
 
   const updateProductMutation = useMutation({
     mutationFn: async (input: any) => {
-      const res = await fetch("/api/shopee-products", {
+      const res = await adminFetch("/api/shopee-products", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
@@ -496,7 +506,7 @@ export default function AdminPage() {
 
   const updateAffiliateMutation = useMutation({
     mutationFn: async (input: UpdateAffiliateTagInput) => {
-      const res = await fetch("/api/affiliate", {
+      const res = await adminFetch("/api/affiliate", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
@@ -514,7 +524,7 @@ export default function AdminPage() {
 
   const resetAffiliateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/affiliate?reset=true", { method: "POST" });
+      const res = await adminFetch("/api/affiliate?reset=true", { method: "POST" });
       if (!res.ok) throw new Error("Gagal reset tag affiliate");
       return res.json();
     },
@@ -583,7 +593,7 @@ export default function AdminPage() {
 
     setAutoFillLoading(true);
     try {
-      const res = await fetch("/api/scrape-shopee", {
+      const res = await adminFetch("/api/scrape-shopee", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

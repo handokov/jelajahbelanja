@@ -7,15 +7,22 @@ import type { Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/shopee-products — list semua produk manual */
+/** GET /api/shopee-products — list produk (admin: semua, public: hanya yang enabled) */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category") || "";
     const search = (searchParams.get("search") || "").trim().toLowerCase();
 
+    // Cek auth — kalau admin, tampilkan semua; kalau public, filter hidden/disabled
+    const isAdmin = !checkAuth(req);
+
     const where: any = {};
     if (category) where.category = category;
+    if (!isAdmin) {
+      where.enabled = true;
+      where.isHidden = { not: true };
+    }
 
     const rows = await db.shopeeProduct.findMany({
       where,

@@ -21,9 +21,12 @@ function toDTO(row: {
 }
 
 /**
- * GET /api/affiliate -> list semua tag affiliate
+ * GET /api/affiliate -> list semua tag affiliate (admin only)
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     await ensureAffiliateTagsSeeded();
     const tags = await db.affiliateTag.findMany({

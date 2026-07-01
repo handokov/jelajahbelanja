@@ -36,10 +36,15 @@ function toDTO(c: {
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await ensureCategoriesSeeded();
-    const categories = await db.category.findMany({ orderBy: { order: "asc" } });
+
+    // Cek auth — admin lihat semua, public hanya yang enabled
+    const isAdmin = !checkAuth(req);
+    const where = isAdmin ? {} : { enabled: true };
+
+    const categories = await db.category.findMany({ where, orderBy: { order: "asc" } });
     return NextResponse.json<{ categories: CategoryDTO[] }>({
       categories: categories.map(toDTO),
     });

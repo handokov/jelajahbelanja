@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminSecret } from "@/lib/admin-auth";
+import { verifyAdminSecret, createSessionToken, verifySessionToken } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/admin-login
  *
- * Login admin dengan secret → set httpOnly cookie.
- * Cookie ini akan dicek oleh middleware untuk protect admin routes.
+ * Login admin dengan secret → set httpOnly cookie dengan session token.
+ * Cookie berisi HMAC-signed token, BUKAN raw secret.
+ * Ini aman kalau cookie ke-leak — attacker gak bisa derive admin secret dari token.
  *
  * Body: { secret: string }
  * Response: { success: true } + cookie "jb-admin-session"
@@ -33,10 +34,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Set httpOnly cookie — aman dari XSS, tidak bisa diakses JavaScript
+    // Buat session token (HMAC-signed, bukan raw secret)
+    const sessionToken = createSessionToken();
+
     const response = NextResponse.json({ success: true });
 
-    response.cookies.set("jb-admin-session", secret, {
+    response.cookies.set("jb-admin-session", sessionToken, {
       httpOnly: true,      // Tidak bisa diakses JS → aman dari XSS
       secure: process.env.NODE_ENV === "production", // HTTPS only di production
       sameSite: "strict",  // Proteksi CSRF
