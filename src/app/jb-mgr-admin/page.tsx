@@ -160,6 +160,14 @@ export default function AdminPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // ─── Admin fetch with auth cookie ───
+  const adminFetch = React.useCallback(async (url: string, options?: RequestInit) => {
+    return fetch(url, {
+      ...options,
+      credentials: "include",
+    });
+  }, []);
+
   // ─── Queries ───
 
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
