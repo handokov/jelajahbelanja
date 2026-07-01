@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ReactQueryProvider } from "@/components/react-query-provider";
+import { WhatsAppFloat } from "@/components/whatsapp-float";
 
 const interSans = Inter({
   variable: "--font-inter",
@@ -159,6 +160,7 @@ export default function RootLayout({
         >
           <ReactQueryProvider>
             {children}
+            <WhatsAppFloat />
             <Toaster />
           </ReactQueryProvider>
         </ThemeProvider>
