@@ -1,0 +1,793 @@
+     1→import { NextRequest, NextResponse } from "next/server";
+     2→import ZAI from "z-ai-web-dev-sdk";
+     3→
+     4→export const dynamic = "force-dynamic";
+     5→
+     6→const ADMIN_SECRET = process.env.ADMIN_SECRET || "jelajahbelanja2024";
+     7→const GROQ_API_KEY = process.env.GROQ_API_KEY;
+     8→
+     9→function checkAuth(req: NextRequest): NextResponse | null {
+    10→  const auth = req.headers.get("authorization");
+    11→  if (auth !== `Bearer ${ADMIN_SECRET}`) {
+    12→    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    13→  }
+    14→  return null;
+    15→}
+    16→
+    17→/**
+    18→ * Extract shopid and itemid from various Shopee URL formats:
+    19→ * - https://shopee.co.id/product-name-i.SHOPID.ITEMID
+    20→ * - https://shopee.co.id/product-name-i.SHOPID.ITEMID?...
+    21→ * - https://shope.ee/xxx (short URL, will be resolved)
+    22→ */
+    23→function extractIds(url: string): { shopId: number; itemId: number } | null {
+    24→  // Pattern: -i.SHOPID.ITEMID at end of path
+    25→  const match = url.match(/-i\.(\d+)\.(\d+)/);
+    26→  if (match) {
+    27→    return { shopId: parseInt(match[1], 10), itemId: parseInt(match[2], 10) };
+    28→  }
+    29→  return null;
+    30→}
+    31→
+    32→/**
+    33→ * Resolve short URL (shope.ee) to full URL
+    34→ */
+    35→async function resolveShortUrl(shortUrl: string): Promise<string | null> {
+    36→  try {
+    37→    const res = await fetch(shortUrl, {
+    38→      redirect: "follow",
+    39→      headers: {
+    40→        "User-Agent":
+    41→          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    42→      },
+    43→      signal: AbortSignal.timeout(10000),
+    44→    });
+    45→    return res.url || null;
+    46→  } catch {
+    47→    return null;
+    48→  }
+    49→}
+    50→
+    51→/**
+    52→ * Fetch product data using Shopee's internal API v4
+    53→ */
+    54→async function fetchShopeeApi(shopId: number, itemId: number): Promise<Record<string, unknown> | null> {
+    55→  const apiUrl = `https://shopee.co.id/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`;
+    56→
+    57→  try {
+    58→    const res = await fetch(apiUrl, {
+    59→      headers: {
+    60→        "User-Agent":
+    61→          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    62→        Accept: "application/json",
+    63→        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+    64→        "X-Shopee-Language": "id",
+    65→        "X-API-SOURCE": "pc",
+    66→        Referer: `https://shopee.co.id/`,
+    67→        "af-ac-enc-dat": "null",
+    68→      },
+    69→      signal: AbortSignal.timeout(15000),
+    70→    });
+    71→
+    72→    if (!res.ok) {
+    73→      console.error("[scrape-shopee] Shopee API status:", res.status);
+    74→      return null;
+    75→    }
+    76→
+    77→    const data = await res.json();
+    78→
+    79→    if (data.error) {
+    80→      console.error("[scrape-shopee] Shopee API error:", data.error, data.msg || "");
+    81→      return null;
+    82→    }
+    83→
+    84→    const item = data.data;
+    85→    if (!item) return null;
+    86→
+    87→    const product: Record<string, unknown> = {};
+    88→
+    89→    // Title
+    90→    product.title = item.name || "";
+    91→
+    92→    // Image - Shopee returns image field as "xxx" which needs prefix
+    93→    if (item.image) {
+    94→      product.image = `https://down-id.img.susercontent.com/file/${item.image}`;
+    95→    } else if (item.images && Array.isArray(item.images) && item.images.length > 0) {
+    96→      product.image = `https://down-id.img.susercontent.com/file/${item.images[0]}`;
+    97→    }
+    98→
+    99→    // Price - Shopee API returns prices in minor units (need to handle)
+   100→    // price_min and price_max are in the smallest currency unit
+   101→    // For IDR, Shopee sometimes returns the actual price (no conversion needed for IDR)
+   102→    const priceMin = item.price_min || item.price;
+   103→    const priceMax = item.price_max || item.price;
+   104→
+   105→    if (priceMin) {
+   106→      // Shopee API returns price as array [min, max] or single number
+   107→      const priceVal = Array.isArray(priceMin) ? priceMin[0] : priceMin;
+   108→      // If price is unreasonably large (above 10M IDR per unit), it might be in minor units
+   109→      product.price = typeof priceVal === "number" ? priceVal : parseInt(String(priceVal), 10);
+   110→    }
+   111→
+   112→    // Original price (before discount)
+   113→    const priceBeforeDiscount = item.price_min_before_discount || item.price_before_discount;
+   114→    if (priceBeforeDiscount) {
+   115→      const origVal = Array.isArray(priceBeforeDiscount) ? priceBeforeDiscount[0] : priceBeforeDiscount;
+   116→      product.originalPrice = typeof origVal === "number" ? origVal : parseInt(String(origVal), 10);
+   117→    }
+   118→
+   119→    // Historical price for original
+   120→    if (!product.originalPrice && item.historical_price) {
+   121→      const histVal = Array.isArray(item.historical_price) ? item.historical_price[0] : item.historical_price;
+   122→      if (histVal && Number(histVal) > Number(product.price || 0)) {
+   123→        product.originalPrice = typeof histVal === "number" ? histVal : parseInt(String(histVal), 10);
+   124→      }
+   125→    }
+   126→
+   127→    // Rating
+   128→    if (item.item_rating) {
+   129→      product.rating = item.item_rating.rating_star || 0;
+   130→      const ratingCount = item.item_rating.rating_count || [];
+   131→      product.reviewCount = Array.isArray(ratingCount)
+   132→        ? ratingCount.reduce((sum: number, c: number) => sum + (c || 0), 0)
+   133→        : 0;
+   134→    }
+   135→
+   136→    // Sold count
+   137→    if (item.historical_sold !== undefined && item.historical_sold !== null) {
+   138→      product.soldCount = item.historical_sold;
+   139→    } else if (item.sold !== undefined && item.sold !== null) {
+   140→      product.soldCount = item.sold;
+   141→    }
+   142→
+   143→    // Location / shop location
+   144→    if (item.shop_location) {
+   145→      product.location = item.shop_location;
+   146→    } else if (item.shop_info) {
+   147→      product.location = item.shop_info.shop_location || null;
+   148→    }
+   149→
+   150→    // Category
+   151→    if (item.catid) {
+   152→      product.category = mapCategoryId(String(item.catid));
+   153→    }
+   154→
+   155→    return product;
+   156→  } catch (err) {
+   157→    console.error("[scrape-shopee] Shopee API fetch failed:", err);
+   158→    return null;
+   159→  }
+   160→}
+   161→
+   162→/**
+   163→ * Map Shopee category IDs to our categories
+   164→ */
+   165→function mapCategoryId(catId: string): string {
+   166→  const catMap: Record<string, string> = {
+   167→    "16": "Elektronik",
+   168→    "42": "Elektronik",
+   169→    "75": "Elektronik",
+   170→    "76": "Elektronik",
+   171→    "77": "Elektronik",
+   172→    "78": "Elektronik",
+   173→    "79": "Elektronik",
+   174→    "80": "Elektronik",
+   175→    "81": "Elektronik",
+   176→    "100029": "Elektronik",
+   177→    "100041": "Elektronik",
+   178→    "100042": "Elektronik",
+   179→    "100043": "Elektronik",
+   180→    "100044": "Elektronik",
+   181→    "100630": "Elektronik",
+   182→    "100631": "Elektronik",
+   183→    "100632": "Elektronik",
+   184→    "100633": "Elektronik",
+   185→    "100634": "Elektronik",
+   186→    "100635": "Elektronik",
+   187→    "100636": "Elektronik",
+   188→    "100637": "Elektronik",
+   189→    "100638": "Elektronik",
+   190→    "100639": "Elektronik",
+   191→    "100640": "Elektronik",
+   192→    "100641": "Elektronik",
+   193→    "100642": "Elektronik",
+   194→    "100643": "Elektronik",
+   195→    "100644": "Elektronik",
+   196→    "100645": "Elektronik",
+   197→    "100646": "Elektronik",
+   198→    "100647": "Elektronik",
+   199→    "100648": "Elektronik",
+   200→    "100649": "Elektronik",
+   201→    "17": "Fashion",
+   202→    "18": "Fashion",
+   203→    "24": "Fashion",
+   204→    "25": "Fashion",
+   205→    "26": "Fashion",
+   206→    "27": "Fashion",
+   207→    "28": "Fashion",
+   208→    "29": "Fashion",
+   209→    "30": "Fashion",
+   210→    "31": "Fashion",
+   211→    "32": "Fashion",
+   212→    "33": "Fashion",
+   213→    "34": "Fashion",
+   214→    "35": "Fashion",
+   215→    "36": "Fashion",
+   216→    "37": "Fashion",
+   217→    "38": "Fashion",
+   218→    "39": "Fashion",
+   219→    "100009": "Fashion",
+   220→    "100010": "Fashion",
+   221→    "100011": "Fashion",
+   222→    "100012": "Fashion",
+   223→    "100013": "Fashion",
+   224→    "100014": "Fashion",
+   225→    "100015": "Fashion",
+   226→    "100016": "Fashion",
+   227→    "100017": "Fashion",
+   228→    "100018": "Fashion",
+   229→    "100019": "Fashion",
+   230→    "100020": "Fashion",
+   231→    "100021": "Fashion",
+   232→    "100022": "Fashion",
+   233→    "100023": "Fashion",
+   234→    "100024": "Fashion",
+   235→    "100025": "Fashion",
+   236→    "100026": "Fashion",
+   237→    "100027": "Fashion",
+   238→    "100028": "Fashion",
+   239→    "1": "Beauty",
+   240→    "2": "Beauty",
+   241→    "3": "Beauty",
+   242→    "4": "Beauty",
+   243→    "5": "Beauty",
+   244→    "6": "Beauty",
+   245→    "7": "Beauty",
+   246→    "8": "Beauty",
+   247→    "9": "Beauty",
+   248→    "10": "Beauty",
+   249→    "11": "Beauty",
+   250→    "12": "Beauty",
+   251→    "13": "Beauty",
+   252→    "14": "Beauty",
+   253→    "15": "Beauty",
+   254→    "100001": "Beauty",
+   255→    "100002": "Beauty",
+   256→    "100003": "Beauty",
+   257→    "100004": "Beauty",
+   258→    "100005": "Beauty",
+   259→    "100006": "Beauty",
+   260→    "100007": "Beauty",
+   261→    "100008": "Beauty",
+   262→    "40": "Home",
+   263→    "41": "Home",
+   264→    "43": "Home",
+   265→    "44": "Home",
+   266→    "45": "Home",
+   267→    "46": "Home",
+   268→    "47": "Home",
+   269→    "48": "Home",
+   270→    "49": "Home",
+   271→    "50": "Home",
+   272→    "51": "Home",
+   273→    "52": "Home",
+   274→    "53": "Home",
+   275→    "54": "Home",
+   276→    "55": "Home",
+   277→    "56": "Home",
+   278→    "57": "Home",
+   279→    "58": "Home",
+   280→    "59": "Home",
+   281→    "60": "Home",
+   282→    "61": "Home",
+   283→    "62": "Home",
+   284→    "63": "Home",
+   285→    "64": "Home",
+   286→    "65": "Home",
+   287→    "66": "Home",
+   288→    "67": "Home",
+   289→    "68": "Home",
+   290→    "69": "Home",
+   291→    "70": "Home",
+   292→    "71": "Home",
+   293→    "72": "Home",
+   294→    "73": "Home",
+   295→    "74": "Home",
+   296→    "100030": "Home",
+   297→    "100031": "Home",
+   298→    "100032": "Home",
+   299→    "100033": "Home",
+   300→    "100034": "Home",
+   301→    "100035": "Home",
+   302→    "100036": "Home",
+   303→    "100037": "Home",
+   304→    "100038": "Home",
+   305→    "100039": "Home",
+   306→    "100040": "Home",
+   307→    "82": "Gaming",
+   308→    "83": "Gaming",
+   309→    "84": "Gaming",
+   310→    "85": "Gaming",
+   311→    "86": "Gaming",
+   312→    "87": "Gaming",
+   313→    "88": "Gaming",
+   314→    "89": "Gaming",
+   315→    "90": "Gaming",
+   316→    "91": "Gaming",
+   317→    "92": "Gaming",
+   318→    "93": "Gaming",
+   319→    "94": "Gaming",
+   320→    "95": "Gaming",
+   321→    "96": "Gaming",
+   322→    "97": "Gaming",
+   323→    "98": "Gaming",
+   324→    "99": "Gaming",
+   325→    "100": "Gaming",
+   326→    "100050": "Gaming",
+   327→    "100051": "Gaming",
+   328→    "100052": "Gaming",
+   329→    "100053": "Gaming",
+   330→    "100054": "Gaming",
+   331→    "100055": "Gaming",
+   332→    "100056": "Gaming",
+   333→    "100057": "Gaming",
+   334→    "100058": "Gaming",
+   335→    "100059": "Gaming",
+   336→    "100060": "Gaming",
+   337→    "101": "Olahraga",
+   338→    "102": "Olahraga",
+   339→    "103": "Olahraga",
+   340→    "104": "Olahraga",
+   341→    "105": "Olahraga",
+   342→    "106": "Olahraga",
+   343→    "107": "Olahraga",
+   344→    "108": "Olahraga",
+   345→    "109": "Olahraga",
+   346→    "110": "Olahraga",
+   347→    "111": "Olahraga",
+   348→    "112": "Olahraga",
+   349→    "113": "Olahraga",
+   350→    "114": "Olahraga",
+   351→    "115": "Olahraga",
+   352→    "116": "Olahraga",
+   353→    "117": "Olahraga",
+   354→    "118": "Olahraga",
+   355→    "119": "Olahraga",
+   356→    "120": "Olahraga",
+   357→    "121": "Olahraga",
+   358→    "122": "Olahraga",
+   359→    "100061": "Olahraga",
+   360→    "100062": "Olahraga",
+   361→    "100063": "Olahraga",
+   362→    "100064": "Olahraga",
+   363→    "100065": "Olahraga",
+   364→    "100066": "Olahraga",
+   365→    "100067": "Olahraga",
+   366→    "100068": "Olahraga",
+   367→    "100069": "Olahraga",
+   368→    "100070": "Olahraga",
+   369→    "100071": "Olahraga",
+   370→    "100072": "Olahraga",
+   371→    "100073": "Olahraga",
+   372→    "100074": "Olahraga",
+   373→    "100075": "Olahraga",
+   374→    "100076": "Olahraga",
+   375→    "100077": "Olahraga",
+   376→    "100078": "Olahraga",
+   377→    "100079": "Olahraga",
+   378→    "100080": "Olahraga",
+   379→    "100081": "Olahraga",
+   380→    "100082": "Olahraga",
+   381→    "100083": "Olahraga",
+   382→    "100084": "Olahraga",
+   383→    "100085": "Olahraga",
+   384→    "100086": "Olahraga",
+   385→    "100087": "Olahraga",
+   386→    "100088": "Olahraga",
+   387→    "100089": "Olahraga",
+   388→    "100090": "Olahraga",
+   389→    "123": "Mainan",
+   390→    "124": "Mainan",
+   391→    "125": "Mainan",
+   392→    "126": "Mainan",
+   393→    "127": "Mainan",
+   394→    "128": "Mainan",
+   395→    "129": "Mainan",
+   396→    "130": "Mainan",
+   397→    "131": "Mainan",
+   398→    "132": "Mainan",
+   399→    "133": "Mainan",
+   400→    "134": "Mainan",
+   401→    "135": "Mainan",
+   402→    "100091": "Mainan",
+   403→    "100092": "Mainan",
+   404→    "100093": "Mainan",
+   405→    "100094": "Mainan",
+   406→    "100095": "Mainan",
+   407→    "100096": "Mainan",
+   408→    "100097": "Mainan",
+   409→    "100098": "Mainan",
+   410→    "100099": "Mainan",
+   411→    "100100": "Mainan",
+   412→    "136": "Otomotif",
+   413→    "137": "Otomotif",
+   414→    "138": "Otomotif",
+   415→    "139": "Otomotif",
+   416→    "140": "Otomotif",
+   417→    "141": "Otomotif",
+   418→    "142": "Otomotif",
+   419→    "143": "Otomotif",
+   420→    "144": "Otomotif",
+   421→    "145": "Otomotif",
+   422→    "146": "Otomotif",
+   423→    "147": "Otomotif",
+   424→    "148": "Otomotif",
+   425→    "149": "Otomotif",
+   426→    "150": "Otomotif",
+   427→    "100101": "Otomotif",
+   428→    "100102": "Otomotif",
+   429→    "100103": "Otomotif",
+   430→    "100104": "Otomotif",
+   431→    "100105": "Otomotif",
+   432→    "100106": "Otomotif",
+   433→    "100107": "Otomotif",
+   434→    "100108": "Otomotif",
+   435→    "100109": "Otomotif",
+   436→    "100110": "Otomotif",
+   437→    "100111": "Otomotif",
+   438→    "100112": "Otomotif",
+   439→    "100113": "Otomotif",
+   440→    "100114": "Otomotif",
+   441→    "100115": "Otomotif",
+   442→    "100116": "Otomotif",
+   443→    "100117": "Otomotif",
+   444→    "100118": "Otomotif",
+   445→    "100119": "Otomotif",
+   446→    "100120": "Otomotif",
+   447→  };
+   448→  return catMap[catId] || "Fashion";
+   449→}
+   450→
+   451→/**
+   452→ * Fallback: parse HTML page for meta tags and JSON-LD
+   453→ */
+   454→async function scrapeHtmlPage(url: string): Promise<Record<string, unknown>> {
+   455→  const product: Record<string, unknown> = {};
+   456→
+   457→  try {
+   458→    const res = await fetch(url, {
+   459→      headers: {
+   460→        "User-Agent":
+   461→          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+   462→        Accept: "text/html,application/xhtml+xml",
+   463→        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+   464→      },
+   465→      signal: AbortSignal.timeout(20000),
+   466→      redirect: "follow",
+   467→    });
+   468→    const pageContent = await res.text();
+   469→
+   470→    // JSON-LD
+   471→    const jsonLdMatch = pageContent.match(
+   472→      /<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+   473→    );
+   474→    if (jsonLdMatch) {
+   475→      for (const block of jsonLdMatch) {
+   476→        try {
+   477→          const inner = block.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+   478→          if (inner) {
+   479→            const parsed = JSON.parse(inner[1]);
+   480→            if (parsed["@type"] === "Product" || parsed.name) {
+   481→              product.title = parsed.name || "";
+   482→              if (parsed.image) {
+   483→                product.image = typeof parsed.image === "string" ? parsed.image : Array.isArray(parsed.image) ? parsed.image[0] : "";
+   484→              }
+   485→              if (parsed.offers) {
+   486→                const offers = parsed.offers;
+   487→                if (offers.price) product.price = parsePrice(offers.price);
+   488→                if (offers.highPrice) product.originalPrice = parsePrice(offers.highPrice);
+   489→              }
+   490→              if (parsed.aggregateRating) {
+   491→                product.rating = parseFloat(parsed.aggregateRating.ratingValue) || undefined;
+   492→                product.reviewCount = parseInt(parsed.aggregateRating.reviewCount) || undefined;
+   493→              }
+   494→            }
+   495→          }
+   496→        } catch {}
+   497→      }
+   498→    }
+   499→
+   500→    // Meta tags
+   501→    const ogTitle = pageContent.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+   502→    if (ogTitle && !product.title) product.title = ogTitle[1];
+   503→
+   504→    const ogImage = pageContent.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+   505→    if (ogImage && !product.image) product.image = ogImage[1];
+   506→
+   507→    const metaPrice = pageContent.match(/<meta\s+(?:property|name)=["']product:price:amount["']\s+content=["']([^"']+)["']/i);
+   508→    if (metaPrice && !product.price) product.price = parsePrice(metaPrice[1]);
+   509→
+   510→    // Clean up title
+   511→    if (product.title) {
+   512→      product.title = String(product.title)
+   513→        .replace(/\s*[-|–]\s*Shopee\s*Indonesia\s*/gi, "")
+   514→        .replace(/\s*[-|–]\s*Shopee\s*/gi, "")
+   515→        .trim();
+   516→    }
+   517→  } catch (err) {
+   518→    console.error("[scrape-shopee] HTML scrape failed:", err);
+   519→  }
+   520→
+   521→  return product;
+   522→}
+   523→
+   524→/**
+   525→ * Groq AI fallback extraction
+   526→ */
+   527→async function extractWithAI(pageContent: string, product: Record<string, unknown>): Promise<Record<string, unknown>> {
+   528→  // Try ZAI LLM first (more reliable), then fall back to Groq
+   529→  const existingTitle = product.title || "";
+   530→  const existingPrice = product.price || "";
+   531→  const existingImage = product.image || "";
+   532→
+   533→  // ZAI LLM approach
+   534→  try {
+   535→    const zai = await ZAI.create();
+   536→    const prompt = `Kamu adalah extractor data produk Shopee Indonesia. Dari konten halaman Shopee berikut, extract info produk dan kembalikan HANYA JSON object dengan field ini:
+   537→- title: nama produk (string)
+   538→- image: URL foto produk utama (string)
+   539→- price: harga dalam Rupiah, angka saja tanpa titik/koma (number)
+   540→- originalPrice: harga asli sebelum diskon, angka saja, atau null (number|null)
+   541→- rating: rating 0-5 (number)
+   542→- reviewCount: jumlah review (number)
+   543→- soldCount: jumlah terjual (number)
+   544→- location: kota seller (string atau null)
+   545→- category: salah satu dari Fashion, Beauty, Elektronik, Home, Gaming, Olahraga, Mainan, Otomotif (string)
+   546→
+   547→Data yang sudah diketahui: ${existingTitle ? `title="${existingTitle}"` : ""} ${existingPrice ? `price=${existingPrice}` : ""} ${existingImage ? `image="${existingImage}"` : ""}
+   548→
+   549→PENTING: Shopee adalah SPA (Single Page Application) jadi HTML mungkin tidak berisi data produk langsung. Cari data di:
+   550→1. Script tags yang berisi JSON data (window.__INITIAL_STATE__, __NEXT_DATA__, dsb)
+   551→2. Meta tags (og:title, og:image, product:price:amount)
+   552→3. URL pattern (nama produk di URL)
+   553→4. Teks yang mengandung nama produk, harga, rating
+   554→
+   555→Jika data tidak ditemukan sama sekali, isi null. JANGAN tambahkan teks lain selain JSON.
+   556→
+   557→Konten halaman:
+   558→${pageContent.substring(0, 20000)}`;
+   559→
+   560→    const response = await zai.chat.completions.create({
+   561→      messages: [{ role: "user", content: prompt }],
+   562→      temperature: 0.1,
+   563→      max_tokens: 500,
+   564→    });
+   565→
+   566→    const content = response.choices?.[0]?.message?.content || "";
+   567→    const jsonMatch = content.match(/\{[\s\S]*\}/);
+   568→    if (jsonMatch) {
+   569→      const parsed = JSON.parse(jsonMatch[0]);
+   570→      if (!product.title && parsed.title) product.title = parsed.title;
+   571→      if (!product.image && parsed.image) product.image = parsed.image;
+   572→      if (!product.price && parsed.price) product.price = parsed.price;
+   573→      if (!product.originalPrice && parsed.originalPrice) product.originalPrice = parsed.originalPrice;
+   574→      if (parsed.rating) product.rating = parsed.rating;
+   575→      if (parsed.reviewCount) product.reviewCount = parsed.reviewCount;
+   576→      if (parsed.soldCount) product.soldCount = parsed.soldCount;
+   577→      if (parsed.location) product.location = parsed.location;
+   578→      if (parsed.category) product.category = parsed.category;
+   579→      console.log("[scrape-shopee] ZAI AI extraction success, title:", parsed.title);
+   580→    }
+   581→    return product;
+   582→  } catch (zaiErr) {
+   583→    console.error("[scrape-shopee] ZAI AI extraction failed:", zaiErr);
+   584→  }
+   585→
+   586→  // Fallback: Groq
+   587→  if (!GROQ_API_KEY) return product;
+   588→
+   589→  try {
+   590→    const truncated = pageContent.substring(0, 15000);
+   591→    const aiRes = await fetch(
+   592→      "https://api.groq.com/openai/v1/chat/completions",
+   593→      {
+   594→        method: "POST",
+   595→        headers: {
+   596→          Authorization: `Bearer ${GROQ_API_KEY}`,
+   597→          "Content-Type": "application/json",
+   598→        },
+   599→        body: JSON.stringify({
+   600→          model: "meta-llama/llama-4-scout-17b-16e-instruct",
+   601→          messages: [
+   602→            {
+   603→              role: "system",
+   604→              content: `Kamu adalah extractor data produk Shopee Indonesia. Dari HTML halaman Shopee, extract info produk dan kembalikan HANYA JSON object dengan field ini:
+   605→- title: nama produk (string)
+   606→- image: URL foto produk utama (string)
+   607→- price: harga dalam Rupiah, angka saja tanpa titik/koma (number)
+   608→- originalPrice: harga asli sebelum diskon, angka saja, atau null (number|null)
+   609→- rating: rating 0-5 (number)
+   610→- reviewCount: jumlah review (number)
+   611→- soldCount: jumlah terjual (number)
+   612→- location: kota seller (string atau null)
+   613→- category: salah satu dari Fashion, Beauty, Elektronik, Home, Gaming, Olahraga, Mainan, Otomotif (string)
+   614→
+   615→Contoh: {"title":"Earbuds TWS Pro","image":"https://down-id.img.susercontent.com/xxx","price":89000,"originalPrice":250000,"rating":4.9,"reviewCount":28500,"soldCount":75000,"location":"Jakarta Barat","category":"Elektronik"}
+   616→
+   617→Jika data tidak ditemukan, isi null. JANGAN tambahkan teks lain selain JSON.`,
+   618→            },
+   619→            {
+   620→              role: "user",
+   621→              content: `Extract data produk dari halaman Shopee ini:\n\n${truncated}`,
+   622→            },
+   623→          ],
+   624→          temperature: 0.1,
+   625→          max_tokens: 500,
+   626→        }),
+   627→      }
+   628→    );
+   629→
+   630→    if (aiRes.ok) {
+   631→      const aiData = await aiRes.json();
+   632→      const content = aiData.choices?.[0]?.message?.content || "";
+   633→      const jsonMatch = content.match(/\{[\s\S]*\}/);
+   634→      if (jsonMatch) {
+   635→        const parsed = JSON.parse(jsonMatch[0]);
+   636→        if (!product.title && parsed.title) product.title = parsed.title;
+   637→        if (!product.image && parsed.image) product.image = parsed.image;
+   638→        if (!product.price && parsed.price) product.price = parsed.price;
+   639→        if (!product.originalPrice && parsed.originalPrice) product.originalPrice = parsed.originalPrice;
+   640→        if (parsed.rating) product.rating = parsed.rating;
+   641→        if (parsed.reviewCount) product.reviewCount = parsed.reviewCount;
+   642→        if (parsed.soldCount) product.soldCount = parsed.soldCount;
+   643→        if (parsed.location) product.location = parsed.location;
+   644→        if (parsed.category) product.category = parsed.category;
+   645→      }
+   646→    }
+   647→  } catch (aiErr) {
+   648→    console.error("[scrape-shopee] AI extraction failed:", aiErr);
+   649→  }
+   650→
+   651→  return product;
+   652→}
+   653→
+   654→export async function POST(req: NextRequest) {
+   655→  const authErr = checkAuth(req);
+   656→  if (authErr) return authErr;
+   657→
+   658→  try {
+   659→    const body = await req.json();
+   660→    let { url } = body;
+   661→
+   662→    if (!url || (!url.includes("shopee") && !url.includes("shope"))) {
+   663→      return NextResponse.json(
+   664→        { error: "URL Shopee tidak valid" },
+   665→        { status: 400 }
+   666→      );
+   667→    }
+   668→
+   669→    // Resolve short URLs (shope.ee)
+   670→    if (url.includes("shope.ee") || url.includes("shope.ee/")) {
+   671→      const resolved = await resolveShortUrl(url);
+   672→      if (resolved) url = resolved;
+   673→    }
+   674→
+   675→    let product: Record<string, unknown> = {};
+   676→
+   677→    // Strategy 1: Use Shopee API v4 (best approach, but often blocked now)
+   678→    const ids = extractIds(url);
+   679→    if (ids) {
+   680→      console.log("[scrape-shopee] Trying API v4, shopId:", ids.shopId, "itemId:", ids.itemId);
+   681→      const apiResult = await fetchShopeeApi(ids.shopId, ids.itemId);
+   682→      if (apiResult) {
+   683→        product = apiResult;
+   684→      }
+   685→    }
+   686→
+   687→    // Strategy 2: HTML scrape if API didn't return enough data
+   688→    if (!product.title || !product.image || !product.price) {
+   689→      console.log("[scrape-shopee] API incomplete, trying HTML scrape...");
+   690→      const htmlResult = await scrapeHtmlPage(url);
+   691→      if (!product.title && htmlResult.title) product.title = htmlResult.title;
+   692→      if (!product.image && htmlResult.image) product.image = htmlResult.image;
+   693→      if (!product.price && htmlResult.price) product.price = htmlResult.price;
+   694→      if (!product.originalPrice && htmlResult.originalPrice) product.originalPrice = htmlResult.originalPrice;
+   695→      if (!product.rating && htmlResult.rating) product.rating = htmlResult.rating;
+   696→      if (!product.reviewCount && htmlResult.reviewCount) product.reviewCount = htmlResult.reviewCount;
+   697→      if (!product.soldCount && htmlResult.soldCount) product.soldCount = htmlResult.soldCount;
+   698→      if (!product.location && htmlResult.location) product.location = htmlResult.location;
+   699→      if (!product.category && htmlResult.category) product.category = htmlResult.category;
+   700→    }
+   701→
+   702→    // Strategy 3: ZAI page_reader + AI extraction (most reliable for Shopee)
+   703→    if (!product.title || !product.price) {
+   704→      console.log("[scrape-shopee] Trying ZAI page_reader + AI extraction...");
+   705→      try {
+   706→        const zai = await ZAI.create();
+   707→        const pageResult = await zai.functions.invoke("page_reader", { url });
+   708→        const pageHtml = pageResult?.data?.html || "";
+   709→        const pageTitle = pageResult?.data?.title || "";
+   710→
+   711→        if (pageHtml.length > 100) {
+   712→          product = await extractWithAI(pageHtml, product);
+   713→        }
+   714→
+   715→        // Jika masih belum dapat judul, coba dari page title
+   716→        if (!product.title && pageTitle && pageTitle !== "Shopee Indonesia | Situs Belanja Online Terlengkap & Terpercaya") {
+   717→          product.title = pageTitle.replace(/\s*[-|–]\s*Shopee\s*Indonesia\s*/gi, "").replace(/\s*[-|–]\s*Shopee\s*/gi, "").trim();
+   718→        }
+   719→      } catch (zaiErr) {
+   720→        console.error("[scrape-shopee] ZAI page_reader failed:", zaiErr);
+   721→      }
+   722→    }
+   723→
+   724→    // Strategy 4: Groq AI fallback on HTML content (original approach)
+   725→    if (!product.title || !product.price) {
+   726→      console.log("[scrape-shopee] Trying Groq AI fallback...");
+   727→      try {
+   728→        const pageRes = await fetch(url, {
+   729→          headers: {
+   730→            "User-Agent":
+   731→              "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+   732→            Accept: "text/html,application/xhtml+xml",
+   733→            "Accept-Language": "id-ID,id;q=0.9",
+   734→          },
+   735→          signal: AbortSignal.timeout(15000),
+   736→          redirect: "follow",
+   737→        });
+   738→        const pageContent = await pageRes.text();
+   739→        if (pageContent.length > 100) {
+   740→          product = await extractWithAI(pageContent, product);
+   741→        }
+   742→      } catch {}
+   743→    }
+   744→
+   745→    // Set defaults
+   746→    if (!product.category) product.category = "Fashion";
+   747→    if (!product.rating) product.rating = 4.5;
+   748→    if (!product.reviewCount) product.reviewCount = 0;
+   749→    if (!product.soldCount) product.soldCount = 0;
+   750→
+   751→    const price = Number(product.price) || 0;
+   752→    const origPrice = Number(product.originalPrice) || 0;
+   753→    const discountPercent = origPrice > price ? Math.round(((origPrice - price) / origPrice) * 100) : null;
+   754→
+   755→    // Final validation - at minimum we need a title
+   756→    if (!product.title) {
+   757→      return NextResponse.json(
+   758→        { error: "Gagal mengambil data produk. Coba paste link produk yang lain." },
+   759→        { status: 422 }
+   760→      );
+   761→    }
+   762→
+   763→    return NextResponse.json({
+   764→      success: true,
+   765→      product: {
+   766→        title: String(product.title),
+   767→        image: String(product.image || ""),
+   768→        price,
+   769→        originalPrice: origPrice > 0 ? origPrice : null,
+   770→        discountPercent,
+   771→        rating: Number(product.rating) || 4.5,
+   772→        reviewCount: Number(product.reviewCount) || 0,
+   773→        soldCount: Number(product.soldCount) || 0,
+   774→        location: product.location ? String(product.location) : null,
+   775→        category: String(product.category || "Fashion"),
+   776→      },
+   777→    });
+   778→  } catch (err) {
+   779→    console.error("[scrape-shopee] Error:", err);
+   780→    return NextResponse.json(
+   781→      { error: "Gagal scrape produk Shopee. Coba lagi nanti." },
+   782→      { status: 500 }
+   783→    );
+   784→  }
+   785→}
+   786→
+   787→function parsePrice(val: unknown): number | null {
+   788→  if (val === null || val === undefined) return null;
+   789→  const str = String(val).replace(/[^\d]/g, "");
+   790→  const num = parseInt(str, 10);
+   791→  return isNaN(num) ? null : num;
+   792→}
+   793→
