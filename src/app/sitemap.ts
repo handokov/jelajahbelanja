@@ -48,6 +48,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "yearly",
       priority: 0.3,
     },
+    {
+      url: `${SITE_URL}/disclaimer`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.4,
+    },
   ];
 
   // Dynamic routes per kategori (virtual, karena pakai query param ?category=)

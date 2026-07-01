@@ -612,6 +612,8 @@ export default function Home() {
             <Link href="/privasi" className="hover:text-white transition-colors">Kebijakan Privasi</Link>
             <span aria-hidden>·</span>
             <Link href="/syarat" className="hover:text-white transition-colors">Syarat & Ketentuan</Link>
+            <span aria-hidden>·</span>
+            <Link href="/disclaimer" className="hover:text-white transition-colors">Disclaimer</Link>
           </div>
 
           {/* Affiliate disclosure — wajib sesuai aturan FTC & marketplace */}
