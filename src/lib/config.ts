@@ -21,6 +21,7 @@ export const VALID_MARKETPLACES: Marketplace[] = [
   "tokopedia",
   "lazada",
   "aliexpress",
+  "amazon",
 ];
 
 // ─── Marketplace UI Meta ───

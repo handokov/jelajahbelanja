@@ -73,6 +73,8 @@ export default async function ProductPage({ params }: Props) {
   const product = await getProduct(id);
 
   if (!product) {
+    // Debug: log kenapa product gak ketemu
+    console.warn(`[produk/${id}] Product NOT found. Raw id="${id}", stripped="${stripMarketplacePrefix(id)}"`);
     notFound();
   }
 
@@ -114,7 +116,7 @@ export default async function ProductPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ProductDetailClient product={serialize(product)!} related={serializeMany(related)} />
+      <ProductDetailClient key={product.id} product={serialize(product)!} related={serializeMany(related)} />
     </>
   );
 }
