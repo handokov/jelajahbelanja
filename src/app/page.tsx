@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import {
   Search,
   Moon,
@@ -109,25 +109,36 @@ export default function Home() {
     return () => { if (bannerIntervalRef.current) clearInterval(bannerIntervalRef.current); };
   }, [activeBanners.length]);
 
-  const productsQuery = useQuery({
+  const PAGE_SIZE = 24;
+
+  const productsQuery = useInfiniteQuery({
     queryKey: ["products", activeCategory, filter, debouncedSearch],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 1 }) => {
       const params = new URLSearchParams();
       if (activeCategory && activeCategory !== "all") {
         params.set("category", activeCategory);
       }
       params.set("filter", filter);
       if (debouncedSearch) params.set("search", debouncedSearch);
+      params.set("page", String(pageParam));
+      params.set("limit", String(PAGE_SIZE));
       const res = await fetch(`/api/products?${params.toString()}`);
       if (!res.ok) throw new Error("Gagal memuat produk");
       const json = (await res.json()) as ProductsResponse;
       return json;
     },
+    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.page + 1 : undefined,
+    initialPageParam: 1,
     staleTime: 5 * 60 * 1000,
   });
 
-  const products: Product[] = productsQuery.data?.products ?? [];
-  const source = productsQuery.data?.source ?? "live";
+  // Flatten all pages into single product array
+  const allProducts: Product[] = React.useMemo(
+    () => productsQuery.data?.pages.flatMap((p) => p.products) ?? [],
+    [productsQuery.data?.pages]
+  );
+  const products = allProducts;
+  const source = productsQuery.data?.pages?.[0]?.source ?? "live";
   const totalSold = React.useMemo(
     () => products.reduce((sum, p) => sum + p.soldCount, 0),
     [products]
@@ -460,6 +471,45 @@ export default function Home() {
                       />
                     ))}
                 </div>
+
+                {/* Infinite scroll trigger */}
+                {productsQuery.hasNextPage && (
+                  <div
+                    ref={(el) => {
+                      if (!el) return;
+                      const observer = new IntersectionObserver(
+                        ([entry]) => {
+                          if (entry.isIntersecting && productsQuery.hasNextPage && !productsQuery.isFetchingNextPage) {
+                            productsQuery.fetchNextPage();
+                          }
+                        },
+                        { rootMargin: "400px" } // Pre-fetch 400px before reaching bottom
+                      );
+                      observer.observe(el);
+                      return () => observer.disconnect();
+                    }}
+                    className="flex items-center justify-center py-8"
+                  >
+                    {productsQuery.isFetchingNextPage ? (
+                      <div className="flex items-center gap-2 text-sm text-zinc-500">
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Memuat produk lainnya...
+                      </div>
+                    ) : (
+                      <div className="text-xs text-zinc-400">Scroll untuk muat lebih banyak</div>
+                    )}
+                  </div>
+                )}
+
+                {/* End of results indicator */}
+                {!productsQuery.hasNextPage && products.length > 0 && !productsQuery.isLoading && (
+                  <div className="text-center py-6 text-xs text-zinc-400">
+                    Sudah menampilkan semua {products.length} produk
+                  </div>
+                )}
               </div>
 
               {/* Sidebar trending - desktop only */}

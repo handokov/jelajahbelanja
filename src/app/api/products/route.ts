@@ -8,8 +8,10 @@ import type { Product, ProductsResponse, ProductFilter } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+const PAGE_SIZE = 24; // Produk per halaman (cukup untuk 3 baris di desktop)
+
 /**
- * GET /api/products?category=<id>&filter=latest|viral|weekly&search=<q>
+ * GET /api/products?category=<id>&filter=latest|viral|weekly&search=<q>&page=1&limit=24
  */
 export async function GET(req: NextRequest) {
   try {
@@ -23,14 +25,15 @@ export async function GET(req: NextRequest) {
       ? filterParam
       : "latest";
     const search = (searchParams.get("search") || "").trim().toLowerCase();
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.max(1, Math.min(100, parseInt(searchParams.get("limit") || String(PAGE_SIZE), 10)));
 
-    // === 1. Ambil produk manual dari DB (prioritas utama) ===
+    // === 1. Ambil produk manual dari DB ===
     const categories = await db.category.findMany({
       where: { enabled: true },
       orderBy: { order: "asc" },
     });
 
-    // Tentukan kategori target
     const targetCategories =
       categoryId && categoryId !== "all"
         ? categories.filter((c) => c.id === categoryId)
@@ -38,7 +41,6 @@ export async function GET(req: NextRequest) {
 
     const targetCategoryNames = targetCategories.map((c) => c.name);
 
-    // Ambil produk yang enabled=true DAN isHidden bukan true (null juga ditampilkan)
     const manualRows = await db.shopeeProduct.findMany({
       where: {
         enabled: true,
@@ -50,7 +52,7 @@ export async function GET(req: NextRequest) {
       orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     });
 
-    const manualProducts: Product[] = manualRows.map(dbRowToProduct);
+    let manualProducts: Product[] = manualRows.map(dbRowToProduct);
 
     // Inject affiliate URL ke setiap produk
     const withAffiliate = await injectAffiliateUrls(manualProducts);
@@ -79,10 +81,19 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // === Pagination ===
+    const total = finalProducts.length;
+    const start = (page - 1) * limit;
+    const paged = finalProducts.slice(start, start + limit);
+    const hasMore = start + limit < total;
+
     return NextResponse.json<ProductsResponse>({
-      products: finalProducts,
-      total: finalProducts.length,
+      products: paged,
+      total,
       source: "live",
+      page,
+      limit,
+      hasMore,
     });
   } catch (err) {
     console.error("[api/products] Error:", err);
@@ -90,6 +101,9 @@ export async function GET(req: NextRequest) {
       products: [],
       total: 0,
       source: "live",
+      page: 1,
+      limit: PAGE_SIZE,
+      hasMore: false,
     });
   }
 }

@@ -39,6 +39,9 @@ export interface ProductsResponse {
   products: Product[];
   total: number;
   source: "live" | "mock";
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 export interface CategoryDTO {
