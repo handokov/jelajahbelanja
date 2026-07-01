@@ -64,11 +64,11 @@ const PRODUCT_KEYWORD_COMPLEMENTS: Record<string, string[]> = {
 /**
  * Helper: convert DB product to Product type.
  * Pakai dbRowToProduct dari product-mapper agar viralScore konsisten.
- * Tambahkan prefix "{marketplace}-" ke id untuk kompatibilitas frontend.
+ * ID tetap DB original (tanpa prefix) — RecCard akan menambahkan prefix sendiri.
  */
 function toProductWithPrefix(p: any): Product {
   const product = dbRowToProduct(p);
-  return { ...product, id: `${product.marketplace}-${product.id}` };
+  return product;
 }
 
 /**
