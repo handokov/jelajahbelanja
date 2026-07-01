@@ -55,3 +55,23 @@ export function DiscountBadge({ percent, size = "sm" }: DiscountBadgeProps) {
     </Badge>
   );
 }
+
+/**
+ * Viral urgency message — "Produk viral — stok terbatas, buruan!"
+ * Sebelumnya: duplikat di ProductDetailClient.tsx dan product-detail-dialog.tsx.
+ * Sekarang: satu komponen, import di mana pun.
+ */
+interface ViralUrgencyMessageProps {
+  size?: "sm" | "md";
+}
+
+import { TrendingUp } from "lucide-react";
+
+export function ViralUrgencyMessage({ size = "sm" }: ViralUrgencyMessageProps) {
+  return (
+    <div className={`flex items-center justify-center gap-1.5 text-fuchsia-600 dark:text-fuchsia-400 ${size === "sm" ? "text-[10px] mt-2" : "text-xs mt-1.5"}`}>
+      <TrendingUp className={size === "sm" ? "w-3 h-3" : "w-3.5 h-3.5"} />
+      <span className="font-medium">Produk viral — stok terbatas, buruan!</span>
+    </div>
+  );
+}

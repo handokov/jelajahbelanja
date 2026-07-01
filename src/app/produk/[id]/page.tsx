@@ -1,7 +1,8 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { stripMarketplacePrefix, detectMarketplaceFromUrl } from "@/lib/utils";
+import { stripMarketplacePrefix } from "@/lib/utils";
+import { dbRowToProduct, type ShopeeProductRow } from "@/lib/product-mapper";
 import ProductDetailClient, { type ShopeeProduct } from "./ProductDetailClient";
 
 interface Props {
@@ -23,13 +24,16 @@ export async function generateMetadata({ params }: Props) {
     return { title: "Produk tidak ditemukan - JelajahBelanja" };
   }
 
+  // Pakai dbRowToProduct supaya marketplace resolved dari URL
+  const dto = dbRowToProduct(product as ShopeeProductRow);
+
   return {
-    title: `${product.title} - JelajahBelanja`,
-    description: `Beli ${product.title} dengan harga Rp ${product.price.toLocaleString("id-ID")}${product.discountPercent ? ` diskon ${product.discountPercent}%` : ""}. Rating ${product.rating}/5, ${product.soldCount} terjual.`,
+    title: `${dto.title} - JelajahBelanja`,
+    description: `Beli ${dto.title} dengan harga Rp ${dto.price.toLocaleString("id-ID")}${dto.discountPercent ? ` diskon ${dto.discountPercent}%` : ""}. Rating ${dto.rating}/5, ${dto.soldCount} terjual.`,
     openGraph: {
-      title: product.title,
-      description: `Rp ${product.price.toLocaleString("id-ID")}${product.discountPercent ? ` | Diskon ${product.discountPercent}%` : ""}`,
-      images: product.image ? [{ url: product.image }] : [],
+      title: dto.title,
+      description: `Rp ${dto.price.toLocaleString("id-ID")}${dto.discountPercent ? ` | Diskon ${dto.discountPercent}%` : ""}`,
+      images: dto.image ? [{ url: dto.image }] : [],
       type: "website",
     },
   };
@@ -38,30 +42,30 @@ export async function generateMetadata({ params }: Props) {
 /**
  * Serialize Prisma ShopeeProduct row for client component.
  * Prisma returns Date objects, but client expects ISO strings.
+ * Uses dbRowToProduct() which already handles marketplace resolution via URL.
  */
 function serialize(row: Awaited<ReturnType<typeof getProduct>>): ShopeeProduct | null {
   if (!row) return null;
+  const dto = dbRowToProduct(row as ShopeeProductRow);
   return {
     ...row,
-    // Fix: kalau DB marketplace default "shopee" tapi URL-nya dari marketplace lain,
-    // override berdasarkan URL (supaya badge & tombol bener di detail page)
-    marketplace: row.marketplace === "shopee" && row.url
-      ? detectMarketplaceFromUrl(row.url)
-      : row.marketplace,
+    // Override marketplace with resolved value from dbRowToProduct
+    marketplace: dto.marketplace,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
 function serializeMany(rows: Awaited<ReturnType<typeof db.shopeeProduct.findMany>>): ShopeeProduct[] {
-  return rows.map((r) => ({
-    ...r,
-    marketplace: r.marketplace === "shopee" && r.url
-      ? detectMarketplaceFromUrl(r.url)
-      : r.marketplace,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }));
+  return rows.map((r) => {
+    const dto = dbRowToProduct(r as ShopeeProductRow);
+    return {
+      ...r,
+      marketplace: dto.marketplace,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    };
+  });
 }
 
 export default async function ProductPage({ params }: Props) {
@@ -84,22 +88,23 @@ export default async function ProductPage({ params }: Props) {
   });
 
   // JSON-LD structured data for SEO
+  const dto = dbRowToProduct(product as ShopeeProductRow);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: product.title,
-    image: product.image,
-    description: `${product.title} - Rp ${product.price.toLocaleString("id-ID")}`,
+    name: dto.title,
+    image: dto.image,
+    description: `${dto.title} - Rp ${dto.price.toLocaleString("id-ID")}`,
     offers: {
       "@type": "Offer",
       priceCurrency: "IDR",
-      price: product.price,
+      price: dto.price,
       availability: "https://schema.org/InStock",
     },
     aggregateRating: {
       "@type": "AggregateRating",
-      ratingValue: product.rating,
-      reviewCount: product.reviewCount,
+      ratingValue: dto.rating,
+      reviewCount: dto.reviewCount,
     },
   };
 

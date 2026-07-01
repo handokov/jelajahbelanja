@@ -74,3 +74,21 @@ export function starString(rating: number): string {
   const empty = 5 - full - (half ? 1 : 0);
   return "★".repeat(full) + (half ? "½" : "") + "☆".repeat(empty);
 }
+
+/**
+ * Bersihin markdown dari AI response biar gak kelihatan mentah.
+ * Sebelumnya: duplikat di ProductDetailClient.tsx saja.
+ * Sekarang: shared, dipakai juga di product-detail-dialog.tsx.
+ */
+export function cleanMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")     // hapus ## heading
+    .replace(/\*\*(.+?)\*\*/g, "$1")  // hapus **bold**
+    .replace(/\*(.+?)\*/g, "$1")      // hapus *italic*
+    .replace(/__(.+?)__/g, "$1")      // hapus __bold__
+    .replace(/_(.+?)_/g, "$1")        // hapus _italic_
+    .replace(/^[-*]\s+/gm, "• ")      // ganti - item jadi bullet
+    .replace(/^---+$/gm, "")          // hapus --- separator
+    .replace(/\n{3,}/g, "\n\n")       // max 2 newline
+    .trim();
+}

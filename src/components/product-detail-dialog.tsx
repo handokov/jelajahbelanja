@@ -6,7 +6,6 @@ import {
   ExternalLink,
   MapPin,
   X,
-  TrendingUp,
   ShoppingBag,
 } from "lucide-react";
 import {
@@ -19,11 +18,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Product, Marketplace } from "@/lib/types";
 import { MARKETPLACE_META, BUY_BUTTON_GRADIENT, AFFILIATE_LINK_REL } from "@/lib/config";
-import { ViralBadge, DiscountBadge } from "@/components/badges";
+import { ViralBadge, DiscountBadge, ViralUrgencyMessage } from "@/components/badges";
 import {
   formatRupiah,
   formatSoldCount,
   formatReviewCount,
+  cleanMarkdown,
 } from "@/lib/format";
 import { useTypewriterEffect } from "@/hooks/use-typewriter-effect";
 import { AiAdvisorBlock } from "@/components/ai-advisor-block";
@@ -73,7 +73,7 @@ export function ProductDetailDialog({
 
         const data = await res.json();
         if (!cancelled) {
-          setAiExplanation(data.explanation);
+          setAiExplanation(cleanMarkdown(data.explanation));
         }
       } catch {
         if (!cancelled) {
@@ -225,12 +225,7 @@ export function ProductDetailDialog({
               <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
             </a>
           </Button>
-          {product.isViral && (
-            <div className="flex items-center justify-center gap-1.5 text-[10px] text-fuchsia-600 dark:text-fuchsia-400 mt-2">
-              <TrendingUp className="w-3 h-3" />
-              <span className="font-medium">Produk viral — stok terbatas, buruan!</span>
-            </div>
-          )}
+          {product.isViral && <ViralUrgencyMessage size="sm" />}
         </div>
       </DialogContent>
     </Dialog>

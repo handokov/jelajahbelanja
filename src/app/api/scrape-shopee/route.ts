@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
+import { checkAuth } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
-const ADMIN_SECRET = process.env.ADMIN_SECRET || "jelajahbelanja2024";
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-
-function checkAuth(req: NextRequest): NextResponse | null {
-  const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${ADMIN_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
-}
 
 /**
  * Extract shopid and itemid from various Shopee URL formats:

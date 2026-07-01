@@ -1,4 +1,5 @@
 import type { Product } from "@/lib/types";
+import { USD_TO_IDR } from "@/lib/config";
 import {
   computeSoldPerDay,
   computeViralScore,
@@ -11,7 +12,7 @@ function hasRapidApiKey(): boolean {
   return Boolean(process.env.RAPIDAPI_KEY && process.env.RAPIDAPI_KEY.trim().length > 0);
 }
 
-const USD_TO_IDR = 15800;
+// USD_TO_IDR imported from config.ts
 
 interface AliExpressProduct {
   product_id?: string | number;

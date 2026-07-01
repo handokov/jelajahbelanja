@@ -6,6 +6,19 @@ const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 /**
+ * Parse AI response yang dipisahkan "---" jadi { explanation, outfitTips }.
+ * Sebelumnya: logika ini duplikat di Groq path dan ZAI fallback path.
+ * Sekarang: satu fungsi, dipanggil sekali.
+ */
+function parseAIResponse(fullResponse: string): { explanation: string; outfitTips: string } {
+  const parts = fullResponse.split("---");
+  return {
+    explanation: parts[0]?.trim() || fullResponse,
+    outfitTips: parts[1]?.trim() || "",
+  };
+}
+
+/**
  * POST /api/ai-explain
  *
  * AI Personal Stylist & Sales — menjelaskan produk + rekomendasi outfit pelengkap.
@@ -109,13 +122,7 @@ Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang coc
         const fullResponse: string | undefined = groqData.choices?.[0]?.message?.content;
 
         if (fullResponse) {
-          // Split response into review and outfit tips
-          const separator = "---";
-          const parts = fullResponse.split(separator);
-          const explanation = parts[0]?.trim() || fullResponse;
-          const outfitTips = parts[1]?.trim() || "";
-
-          return NextResponse.json({ explanation, outfitTips });
+          return NextResponse.json(parseAIResponse(fullResponse));
         }
       } else {
         const errText = await groqResponse.text();
@@ -146,12 +153,7 @@ Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang coc
       );
     }
 
-    const separator = "---";
-    const parts = fullResponse.split(separator);
-    const explanation = parts[0]?.trim() || fullResponse;
-    const outfitTips = parts[1]?.trim() || "";
-
-    return NextResponse.json({ explanation, outfitTips });
+    return NextResponse.json(parseAIResponse(fullResponse));
   } catch (err) {
     console.error("[api/ai-explain] Error:", err);
     return NextResponse.json(

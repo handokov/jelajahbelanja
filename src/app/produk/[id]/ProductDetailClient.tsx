@@ -7,7 +7,6 @@ import {
   ExternalLink,
   MapPin,
   ArrowLeft,
-  TrendingUp,
   ShoppingBag,
   Shirt,
   Share2,
@@ -20,26 +19,15 @@ import { cn } from "@/lib/utils";
 import { LEGAL_DISCLAIMER, BUY_BUTTON_GRADIENT, AFFILIATE_LINK_REL, MARKETPLACE_META } from "@/lib/config";
 import { useTypewriterEffect } from "@/hooks/use-typewriter-effect";
 import { AiAdvisorBlock } from "@/components/ai-advisor-block";
-import { ViralBadge, DiscountBadge } from "@/components/badges";
+import { ViralBadge, DiscountBadge, ViralUrgencyMessage } from "@/components/badges";
 import {
   formatRupiah,
   formatSoldCount,
   formatReviewCount,
+  cleanMarkdown,
 } from "@/lib/format";
 
-// Bersihin markdown dari AI response biar gak kelihatan mentah
-function cleanMarkdown(text: string): string {
-  return text
-    .replace(/^#{1,6}\s+/gm, "")     // hapus ## heading
-    .replace(/\*\*(.+?)\*\*/g, "$1")  // hapus **bold**
-    .replace(/\*(.+?)\*/g, "$1")      // hapus *italic*
-    .replace(/__(.+?)__/g, "$1")      // hapus __bold__
-    .replace(/_(.+?)_/g, "$1")        // hapus _italic_
-    .replace(/^[-*]\s+/gm, "• ")      // ganti - item jadi bullet
-    .replace(/^---+$/gm, "")          // hapus --- separator
-    .replace(/\n{3,}/g, "\n\n")       // max 2 newline
-    .trim();
-}
+
 
 export interface ShopeeProduct {
   id: string;
@@ -419,12 +407,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               <ExternalLink className="w-4 h-4 ml-2" />
             </a>
           </Button>
-          {product.isViral && (
-            <div className="flex items-center justify-center gap-1.5 text-xs text-fuchsia-600 dark:text-fuchsia-400 mt-1.5">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span className="font-medium">Produk viral — stok terbatas, buruan!</span>
-            </div>
-          )}
+          {product.isViral && <ViralUrgencyMessage size="md" />}
         </div>
       </div>
     </div>

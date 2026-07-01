@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import type { Product } from "@/lib/types";
+import { USD_TO_IDR } from "@/lib/config";
 import {
   computeSoldPerDay,
   computeViralScore,
@@ -21,10 +22,7 @@ interface AmazonRSSResponse {
   };
 }
 
-/**
- * Kurs USD -> IDR (konstan supaya stabil untuk demo).
- */
-const USD_TO_IDR = 15800;
+// USD_TO_IDR imported from config.ts
 
 /**
  * Extract harga dari HTML description Amazon RSS.

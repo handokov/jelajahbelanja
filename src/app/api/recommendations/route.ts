@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { buildAffiliateUrl, getAffiliateTags, injectAffiliateUrls } from "@/lib/affiliate";
 import { dbRowToProduct } from "@/lib/product-mapper";
-import { stripShopeePrefix } from "@/lib/utils";
+import { stripMarketplacePrefix } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -64,11 +64,11 @@ const PRODUCT_KEYWORD_COMPLEMENTS: Record<string, string[]> = {
 /**
  * Helper: convert DB product to Product type.
  * Pakai dbRowToProduct dari product-mapper agar viralScore konsisten.
- * Tambahkan prefix "shopee-" ke id untuk kompatibilitas frontend.
+ * Tambahkan prefix "{marketplace}-" ke id untuk kompatibilitas frontend.
  */
 function toProductWithPrefix(p: any): Product {
   const product = dbRowToProduct(p);
-  return { ...product, id: `shopee-${product.id}` };
+  return { ...product, id: `${product.marketplace}-${product.id}` };
 }
 
 /**
@@ -112,8 +112,8 @@ export async function POST(req: NextRequest) {
     }
     const uniqueKeywords = [...new Set(matchedKeywords)];
 
-    // Strip "shopee-" prefix dari product ID untuk DB query
-    const dbProductId = stripShopeePrefix(product.id);
+    // Strip marketplace prefix dari product ID untuk DB query
+    const dbProductId = stripMarketplacePrefix(product.id);
 
     // Query produk asli dari database — kategori pelengkap + isHidden bukan true
     const dbProducts = await db.shopeeProduct.findMany({

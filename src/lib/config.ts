@@ -69,3 +69,8 @@ export const BUY_BUTTON_GRADIENT =
 // Sebelumnya: "nofollow sponsored noopener noreferrer" duplikat di 5 tempat.
 // Sekarang: satu konstanta, kalau policy berubah cukup edit di sini.
 export const AFFILIATE_LINK_REL = "nofollow sponsored noopener noreferrer";
+
+// ─── Currency ───
+// Sebelumnya: USD_TO_IDR = 15800 duplikat di aliexpress.ts & amazon-rss.ts.
+// Sekarang: satu definisi, kalau kurs berubah cukup edit di sini.
+export const USD_TO_IDR = 15800;

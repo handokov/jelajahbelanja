@@ -21,22 +21,9 @@ export function stripMarketplacePrefix(id: string): string {
 }
 
 /**
- * Strip "shopee-" prefix dari product ID.
- * Sebelumnya: 4 implementasi beda (slice(7) vs replace()) di 4 file.
- * Sekarang: satu fungsi, konsisten.
- * @deprecated Gunakan stripMarketplacePrefix() untuk multi-marketplace support.
+ * @deprecated Alias for stripMarketplacePrefix(). Will be removed in next cleanup.
  */
-export function stripShopeePrefix(id: string): string {
-  return id.startsWith("shopee-") ? id.slice(7) : id;
-}
-
-/**
- * Tambah "shopee-" prefix ke product ID.
- * Kebalikan dari stripShopeePrefix.
- */
-export function addShopeePrefix(id: string): string {
-  return id.startsWith("shopee-") ? id : `shopee-${id}`;
-}
+export const stripShopeePrefix = stripMarketplacePrefix;
 
 /**
  * Auto-detect marketplace dari URL produk.
