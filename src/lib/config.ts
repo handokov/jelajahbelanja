@@ -7,8 +7,19 @@ import type { Marketplace } from "@/lib/types";
 
 // ─── Site URL ───
 // Sebelumnya: layout.tsx pakai .vercel.app, sitemap.ts & robots.ts pakai .com → BUG!
-// Sekarang: satu sumber kebenaran.
-export const SITE_URL = "https://jelajahbelanja.com";
+// Sekarang: satu sumber kebenaran, otomatis dari env variable.
+//
+// Cara pakai:
+// 1. Testing di Vercel: set NEXT_PUBLIC_SITE_URL=https://nama-anda.vercel.app di Vercel env
+// 2. Production: set NEXT_PUBLIC_SITE_URL=https://jelajahbelanja.com
+// 3. Kalau gak diset: fallback ke jelajahbelanja.com
+//
+// Vercel otomatis sediain VERCEL_URL (tanpa https), tapi kita prefer
+// NEXT_PUBLIC_SITE_URL karena bisa diakses di client-side juga.
+const VERCEL_URL = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL;
+export const SITE_URL = VERCEL_URL
+  ? (VERCEL_URL.startsWith("http") ? VERCEL_URL : `https://${VERCEL_URL}`)
+  : "https://jelajahbelanja.com";
 export const SITE_NAME = "JelajahBelanja";
 export const SITE_DESCRIPTION =
   "JelajahBelanja adalah platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada. Temukan produk viral 24 jam, best seller mingguan, dan diskon terbesar hari ini.";
