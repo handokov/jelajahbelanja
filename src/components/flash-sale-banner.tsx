@@ -47,7 +47,7 @@ const banners: BannerSlide[] = [
     badge: "PRODUK VIRAL",
     badgeIcon: Flame,
     headline: "Lagi Trending? Pasti Ketemu Di Sini",
-    subline: "Ribuan produk viral yang lagi diburu netizen — update real-time, jangan sampai kehabisan!",
+    subline: "Ribuan produk viral yang lagi diburu netizen — update berkala, jangan sampai kehabisan!",
     cta: "Lacak Produk Viral",
     accent: "bg-emerald-100 text-emerald-800",
     icon: Eye,
