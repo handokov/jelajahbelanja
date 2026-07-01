@@ -100,3 +100,22 @@ Stage Summary:
 - 7 MEDIUM issues fixed (session tokens, Prisma logging, gitignore, categories, etc.)
 - Session security upgraded: HMAC-SHA256 signed tokens instead of raw secret in cookies
 - All API GET endpoints now properly filter data based on auth status
+
+---
+Task ID: 1
+Agent: main
+Task: Push produk lama ke atas — tambah filter Populer
+
+Work Log:
+- Analyzed product sorting: default "latest" filter sorts by createdAt DESC → old products sink
+- Added "populer" to ProductFilter type in types.ts
+- Created computePopularityScore() and sortByPopularity() in viral-score.ts with smart time decay (1/(1+age/30))
+- Updated /api/products route to handle "populer" filter and set it as default fallback
+- Updated page.tsx: changed default filter from "latest" to "populer", added 4th tab with Star icon
+- Featured card hidden for "populer" filter (all products shown in grid equally)
+- Build passes successfully
+
+Stage Summary:
+- New "Populer" filter uses smooth time decay instead of binary freshness → old but high-performing products get visibility
+- Default filter changed from "latest" to "populer" so users see best products first
+- 4 filter tabs: Populer (default), Terbaru, Viral 24 Jam, Top Mingguan

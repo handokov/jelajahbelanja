@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
+  Star,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
@@ -36,7 +37,7 @@ export default function Home() {
   React.useEffect(() => setMounted(true), []);
 
   const [activeCategory, setActiveCategory] = React.useState<string>("all");
-  const [filter, setFilter] = React.useState<ProductFilter>("latest");
+  const [filter, setFilter] = React.useState<ProductFilter>("populer");
   const [search, setSearch] = React.useState("");
   const [debouncedSearch, setDebouncedSearch] = React.useState("");
   const [heroVisible, setHeroVisible] = React.useState(true);
@@ -408,7 +409,11 @@ export default function Home() {
             value={filter}
             onValueChange={(v) => setFilter(v as ProductFilter)}
           >
-            <TabsList className="grid w-full max-w-md grid-cols-3 h-10">
+            <TabsList className="grid w-full max-w-lg grid-cols-4 h-10">
+              <TabsTrigger value="populer" className="text-xs md:text-sm">
+                <Star className="w-3.5 h-3.5 mr-1" />
+                Populer
+              </TabsTrigger>
               <TabsTrigger value="latest" className="text-xs md:text-sm">
                 <Clock className="w-3.5 h-3.5 mr-1" />
                 Terbaru
@@ -453,7 +458,7 @@ export default function Home() {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {/* Main grid */}
               <div className="lg:col-span-3 flex flex-col gap-6">
-                {featuredProduct && filter !== "latest" && (
+                {featuredProduct && filter !== "latest" && filter !== "populer" && (
                   <ProductCard
                     key={`featured-${featuredProduct.id}`}
                     product={featuredProduct}
@@ -462,7 +467,7 @@ export default function Home() {
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {products
-                    .filter((p) => p.id !== featuredProduct?.id || filter === "latest")
+                    .filter((p) => p.id !== featuredProduct?.id || filter === "latest" || filter === "populer")
                     .map((p) => (
                       <ProductCard
                         key={`default-${p.id}`}

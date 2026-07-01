@@ -104,3 +104,73 @@ export function topViralQuarter(products: Product[]): Product[] {
   const cutoff = Math.max(1, Math.ceil(sorted.length * 0.25));
   return sorted.slice(0, cutoff);
 }
+
+/**
+ * Hitung "popularitas score" untuk filter Populer.
+ *
+ * Berbeda dari viralScore yang sangat condong ke produk baru (freshness factor tinggi),
+ * popularitas score memakai time decay yang lebih halus supaya produk lama yang masih
+ * laku keras tetap bisa muncul di atas.
+ *
+ * Formula:
+ *   popScore = (soldPerDay * 0.30)
+ *            + (rating * log10(reviewCount + 1) * 2)
+ *            + (timeDecayFactor * 0.20)
+ *            + (discountDepth * 0.10)
+ *            + (viralKeywordBonus * 0.05)
+ *            + (soldCountBonus * 0.15)
+ *            + (ratingBonus * 0.10)
+ *            + (isViralBonus)
+ *
+ * Dimana:
+ *   timeDecayFactor = 1 / (1 + ageInDays / 30)   — decay halus, 50% setelah 30 hari
+ *   soldCountBonus  = log10(soldCount + 1)         — skala logaritmik
+ *   ratingBonus     = rating >= 4.8 ? 5 : 0        — produk rating tinggi
+ *   isViralBonus    = isViral ? 10 : 0             — produk viral dapat boost
+ */
+export function computePopularityScore(product: Product): number {
+  const ageInDays = Math.max(
+    1,
+    (Date.now() - new Date(product.timestamp).getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  // Time decay halus: 1/(1 + age/30) → produk 30 hari masih punya ~50% freshness
+  const timeDecayFactor = 1 / (1 + ageInDays / 30);
+
+  const soldPerDayTerm = product.soldPerDay * 0.30;
+  const ratingTerm =
+    Math.max(0, product.rating) * Math.log10(product.reviewCount + 1) * 2;
+  const freshTerm = timeDecayFactor * 0.20;
+  const discountTerm = discountDepth(product.price, product.originalPrice) * 0.10;
+  const keywordTerm = viralKeywordBonus(product.title) * 0.05;
+
+  // Sold count bonus (skala log — 10k sold = ~4, 100k sold = ~5, 1M sold = ~6)
+  const soldCountBonus = Math.log10(product.soldCount + 1) * 0.15;
+
+  // Rating bonus — produk dengan rating >= 4.8 dapat boost
+  const ratingBonus = product.rating >= 4.8 ? 0.10 : 0;
+
+  // Viral bonus
+  const isViralBonus = product.isViral ? 10 : 0;
+
+  return (
+    soldPerDayTerm +
+    ratingTerm +
+    freshTerm +
+    discountTerm +
+    keywordTerm +
+    soldCountBonus +
+    ratingBonus +
+    isViralBonus
+  );
+}
+
+/**
+ * Untuk filter "Populer": sort semua produk berdasarkan popularitas score.
+ * Produk lama yang masih laku keras bisa muncul di atas.
+ */
+export function sortByPopularity(products: Product[]): Product[] {
+  return [...products].sort(
+    (a, b) => computePopularityScore(b) - computePopularityScore(a)
+  );
+}

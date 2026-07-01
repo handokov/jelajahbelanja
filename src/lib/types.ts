@@ -33,7 +33,7 @@ export interface Product {
   location?: string;
 }
 
-export type ProductFilter = "latest" | "viral" | "weekly";
+export type ProductFilter = "latest" | "viral" | "weekly" | "populer";
 
 export interface ProductsResponse {
   products: Product[];

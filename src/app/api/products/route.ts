@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureCategoriesSeeded, ensureAffiliateTagsSeeded } from "@/lib/seed";
 import { injectAffiliateUrls } from "@/lib/affiliate";
-import { topViralQuarter } from "@/lib/viral-score";
+import { topViralQuarter, sortByPopularity } from "@/lib/viral-score";
 import { dbRowToProduct } from "@/lib/product-mapper";
 import type { Product, ProductsResponse, ProductFilter } from "@/lib/types";
 
@@ -21,9 +21,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const categoryId = searchParams.get("category") || "";
     const filterParam = (searchParams.get("filter") as ProductFilter) || "latest";
-    const filter: ProductFilter = ["latest", "viral", "weekly"].includes(filterParam)
+    const filter: ProductFilter = ["latest", "viral", "weekly", "populer"].includes(filterParam)
       ? filterParam
-      : "latest";
+      : "populer";
     const search = (searchParams.get("search") || "").trim().toLowerCase();
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.max(1, Math.min(100, parseInt(searchParams.get("limit") || String(PAGE_SIZE), 10)));
@@ -79,6 +79,8 @@ export async function GET(req: NextRequest) {
       finalProducts = (recent.length > 0 ? recent : filtered).sort(
         (a, b) => b.soldCount - a.soldCount
       );
+    } else if (filter === "populer") {
+      finalProducts = sortByPopularity(filtered);
     }
 
     // === Pagination ===
