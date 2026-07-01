@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureCategoriesSeeded, DEFAULT_CATEGORIES } from "@/lib/seed";
+import { checkAuth } from "@/lib/admin-auth";
 import type {
   CategoryDTO,
   CreateCategoryInput,
@@ -52,6 +53,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     await ensureCategoriesSeeded();
     const body = (await req.json()) as CreateCategoryInput;
@@ -94,6 +98,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     await ensureCategoriesSeeded();
     const body = await req.json();
@@ -158,6 +165,9 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     await ensureCategoriesSeeded();
     const { searchParams } = new URL(req.url);
@@ -176,7 +186,10 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
-export async function PUT() {
+export async function PUT(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     await db.category.deleteMany({});
     await db.category.createMany({

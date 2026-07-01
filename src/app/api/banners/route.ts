@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { checkAuth } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
         return now >= startPlus24h && b.endDate! >= now;
       });
 
-      return NextResponse.json({ banners, debug: { now: now.toISOString(), total: all.length, filtered: banners.length } });
+      return NextResponse.json({ banners });
     }
 
     // Admin: ambil semua
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     console.error("[api/banners GET] Error:", err?.message || err);
     return NextResponse.json(
-      { error: "Gagal memuat banner: " + (err?.message || "Unknown error") },
+      { error: "Gagal memuat banner" },
       { status: 500 }
     );
   }
@@ -51,6 +52,9 @@ export async function GET(req: NextRequest) {
 
 // POST /api/banners — buat banner baru
 export async function POST(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     const body = await req.json();
 
@@ -80,7 +84,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error("[api/banners POST] Error:", err?.message || err);
     return NextResponse.json(
-      { error: "Gagal membuat banner: " + (err?.message || "Unknown error") },
+      { error: "Gagal membuat banner" },
       { status: 500 }
     );
   }
@@ -88,6 +92,9 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/banners — update banner
 export async function PATCH(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     const body = await req.json();
 
@@ -138,6 +145,9 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/banners — hapus banner
 export async function DELETE(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");

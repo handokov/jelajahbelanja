@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { injectAffiliateUrls } from "@/lib/affiliate";
 import { dbRowToProduct } from "@/lib/product-mapper";
+import { checkAuth } from "@/lib/admin-auth";
 import type { Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,9 @@ export async function GET(req: NextRequest) {
 
 /** POST /api/shopee-products — tambah produk baru */
 export async function POST(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     const body = await req.json();
 
@@ -81,6 +85,9 @@ export async function POST(req: NextRequest) {
 
 /** PATCH /api/shopee-products — update produk */
 export async function PATCH(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     const body = await req.json();
     if (!body.id) {
@@ -121,19 +128,21 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ product: dbRowToProduct(updated) });
   } catch (err: any) {
     console.error("[api/shopee-products PATCH] Error:", err?.message || err);
-    console.error("[api/shopee-products PATCH] Stack:", err?.stack);
-    // Return specific error for debugging
+    // Map Prisma errors ke pesan generik — jangan leak internals ke client
     const errorMsg = err?.code === "P2025"
       ? "Produk tidak ditemukan"
       : err?.code === "P2002"
         ? "Data duplikat, cek field unik"
-        : `Gagal memperbarui produk: ${err?.message || "Unknown error"}`;
-    return NextResponse.json({ error: errorMsg, code: err?.code }, { status: 500 });
+        : "Gagal memperbarui produk";
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }
 
 /** DELETE /api/shopee-products?id=xxx */
 export async function DELETE(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");

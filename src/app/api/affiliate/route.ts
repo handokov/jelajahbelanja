@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ensureAffiliateTagsSeeded } from "@/lib/seed";
 import { invalidateAffiliateCache } from "@/lib/affiliate";
 import { VALID_MARKETPLACES } from "@/lib/config";
+import { checkAuth } from "@/lib/admin-auth";
 import type { AffiliateTagDTO, UpdateAffiliateTagInput, Marketplace } from "@/lib/types";
 
 function toDTO(row: {
@@ -42,6 +43,9 @@ export async function GET() {
  * Body: { marketplace, tag, enabled }
  */
 export async function PATCH(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     await ensureAffiliateTagsSeeded();
     const body = (await req.json()) as UpdateAffiliateTagInput;
@@ -81,6 +85,9 @@ export async function PATCH(req: NextRequest) {
  * POST /api/affiliate?reset=true -> reset semua tag (kosong + disabled)
  */
 export async function POST(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     const { searchParams } = new URL(req.url);
     const reset = searchParams.get("reset") === "true";

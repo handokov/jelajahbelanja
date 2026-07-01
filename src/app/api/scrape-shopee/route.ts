@@ -651,9 +651,49 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     let { url } = body;
 
-    if (!url || (!url.includes("shopee") && !url.includes("shope"))) {
+    if (!url) {
       return NextResponse.json(
         { error: "URL Shopee tidak valid" },
+        { status: 400 }
+      );
+    }
+
+    // SSRF Protection: Validate URL dengan proper parsing + domain allowlist
+    try {
+      const parsed = new URL(url);
+      const allowedHosts = [
+        "shopee.co.id",
+        "shope.ee",
+        "shopee.ph",
+        "shopee.sg",
+        "shopee.com.my",
+        "shopee.th",
+        "shopee.vn",
+        "shopee.com.br",
+        "shopee.com.mx",
+        "shopee.cl",
+        "shopee.pl",
+        "shopee.com.co",
+      ];
+      const isAllowed = allowedHosts.some(
+        (host) => parsed.hostname === host || parsed.hostname.endsWith("." + host)
+      );
+      if (!isAllowed) {
+        return NextResponse.json(
+          { error: "URL Shopee tidak valid — domain tidak diizinkan" },
+          { status: 400 }
+        );
+      }
+      // Only allow https: and http: schemes
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        return NextResponse.json(
+          { error: "URL Shopee tidak valid — scheme tidak diizinkan" },
+          { status: 400 }
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "URL Shopee tidak valid — format URL salah" },
         { status: 400 }
       );
     }

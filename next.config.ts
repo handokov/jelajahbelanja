@@ -2,11 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  /* config options here */
+  reactStrictMode: true,
   typescript: {
+    // Biar build ga gagal karena type errors, tapi flag ini
+    // sebaiknya di-set false kalau sudah production-ready
     ignoreBuildErrors: true,
   },
-  reactStrictMode: false,
+  // Security headers ditangani di middleware.ts untuk konsistensi
 };
 
 export default nextConfig;

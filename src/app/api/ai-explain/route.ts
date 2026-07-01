@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkAuth } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,9 @@ function parseAIResponse(fullResponse: string): { explanation: string; outfitTip
  * Response: { explanation: string, outfitTips: string }
  */
 export async function POST(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     const body = await req.json();
     const product = body.product;

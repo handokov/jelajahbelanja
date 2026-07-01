@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -158,6 +159,13 @@ const AFFILIATE_INFO: Array<{
 export default function AdminPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const router = useRouter();
+
+  // Logout function
+  const handleLogout = React.useCallback(async () => {
+    await fetch("/api/admin-login", { method: "DELETE" });
+    router.push("/jb-mgr-login");
+  }, [router]);
 
   // ─── Queries ───
 
@@ -559,8 +567,17 @@ export default function AdminPage() {
       toast({ title: "URL kosong", description: "Paste link produk Shopee dulu.", variant: "destructive" });
       return;
     }
-    if (!url.includes("shopee") && !url.includes("shope")) {
-      toast({ title: "URL tidak valid", description: "Masukkan link produk Shopee yang valid.", variant: "destructive" });
+    // Client-side URL validation (server juga validasi via domain allowlist)
+    try {
+      const parsed = new URL(url);
+      const allowedHosts = ["shopee.co.id", "shope.ee", "shopee.ph", "shopee.sg", "shopee.com.my", "shopee.th", "shopee.vn"];
+      const isAllowed = allowedHosts.some(h => parsed.hostname === h || parsed.hostname.endsWith("." + h));
+      if (!isAllowed || (parsed.protocol !== "https:" && parsed.protocol !== "http:")) {
+        toast({ title: "URL tidak valid", description: "Masukkan link produk Shopee yang valid.", variant: "destructive" });
+        return;
+      }
+    } catch {
+      toast({ title: "URL tidak valid", description: "Format URL salah.", variant: "destructive" });
       return;
     }
 
@@ -570,7 +587,6 @@ export default function AdminPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_ADMIN_SECRET || "jelajahbelanja2024"}`,
         },
         body: JSON.stringify({ url }),
       });
@@ -717,6 +733,16 @@ export default function AdminPage() {
           <h1 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
             Panel Admin
           </h1>
+          <button
+            onClick={handleLogout}
+            className="text-xs text-zinc-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 transition-colors flex items-center gap-1"
+            title="Logout"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout
+          </button>
         </div>
       </header>
 
