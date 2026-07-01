@@ -40,6 +40,8 @@ import {
   MapPin,
   Image as ImageLucide,
   Upload,
+  FileSpreadsheet,
+  Shield,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -50,6 +52,8 @@ import type {
   UpdateAffiliateTagInput,
   Marketplace,
 } from "@/lib/types";
+import { BulkUploadTab } from "@/components/bulk-upload-tab";
+import { SecurityTab } from "@/components/security-tab";
 
 // ─── Shared constants ───
 
@@ -647,10 +651,14 @@ export default function AdminPage() {
       {/* Main */}
       <main className="container mx-auto px-4 max-w-5xl py-6">
         <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="grid w-full max-w-xl grid-cols-4 h-11">
+          <TabsList className="grid w-full max-w-3xl grid-cols-6 h-11">
             <TabsTrigger value="products" className="text-sm">
               <Package className="w-4 h-4 mr-1.5" />
               Produk
+            </TabsTrigger>
+            <TabsTrigger value="bulk-upload" className="text-sm">
+              <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+              Upload Massal
             </TabsTrigger>
             <TabsTrigger value="banners" className="text-sm">
               <ImageLucide className="w-4 h-4 mr-1.5" />
@@ -664,7 +672,21 @@ export default function AdminPage() {
               <Link2 className="w-4 h-4 mr-1.5" />
               Affiliate
             </TabsTrigger>
+            <TabsTrigger value="security" className="text-sm">
+              <Shield className="w-4 h-4 mr-1.5" />
+              Keamanan
+            </TabsTrigger>
           </TabsList>
+
+          {/* ===== TAB UPLOAD MASSAL ===== */}
+          <TabsContent value="bulk-upload" className="space-y-4">
+            <BulkUploadTab adminFetch={adminFetch} />
+          </TabsContent>
+
+          {/* ===== TAB KEAMANAN ===== */}
+          <TabsContent value="security" className="space-y-4">
+            <SecurityTab adminFetch={adminFetch} />
+          </TabsContent>
 
           {/* ===== TAB PRODUK ===== */}
           <TabsContent value="products" className="space-y-4">
