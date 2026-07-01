@@ -3,7 +3,7 @@ import type { Marketplace } from "@/lib/types";
 
 /**
  * Mapping parameter affiliate per marketplace Indonesia:
- * - Shopee: ?aff_atk=<tag>  (lihat https://affiliate.shopee.co.id)
+ * - Shopee: ?utm_source=an_<id>&utm_medium=affiliates  (lihat https://affiliate.shopee.co.id)
  * - Tokopedia: ?aff_code=<tag>  (lihat https://affiliate.tokopedia.com)
  * - Lazada: ?aff_id=<id>&aff_sub=<sub>  (lihat https://www.lazada.co.id/wow)
  * - AliExpress: ?aff_fcid=<tag>  (lihat portals.aliexpress.com)
@@ -11,12 +11,29 @@ import type { Marketplace } from "@/lib/types";
  * - Blibli: ?affiliateCode=<tag>
  */
 const AFFILIATE_PARAM: Record<Marketplace, string> = {
-  shopee: "aff_atk",
+  shopee: "utm_source",
   tokopedia: "aff_code",
   lazada: "aff_id",
   aliexpress: "aff_fcid",
   amazon: "tag",
   mock: "",
+};
+
+/**
+ * Parameter tambahan per marketplace (selain parameter utama).
+ * Shopee butuh utm_medium, utm_campaign, dll.
+ */
+const AFFILIATE_EXTRA_PARAMS: Record<Marketplace, Record<string, string>> = {
+  shopee: {
+    utm_medium: "affiliates",
+    utm_campaign: "id_jelajahbelanja",
+    utm_content: "jelajahbelanja",
+  },
+  tokopedia: {},
+  lazada: {},
+  aliexpress: {},
+  amazon: {},
+  mock: {},
 };
 
 /**
@@ -65,8 +82,8 @@ export function invalidateAffiliateCache(): void {
  * Build URL affiliate dengan menambahkan parameter sesuai marketplace.
  *
  * Contoh:
- *   buildAffiliateUrl("https://shopee.co.id/product/123", "shopee", "abc123")
- *   -> "https://shopee.co.id/product/123?aff_atk=abc123"
+ *   buildAffiliateUrl("https://shopee.co.id/product/123", "shopee", "an_123456")
+ *   -> "https://shopee.co.id/product/123?utm_source=an_123456&utm_medium=affiliates&utm_campaign=id_jelajahbelanja"
  *
  *   buildAffiliateUrl("https://tokopedia.com/...?src=shop", "tokopedia", "xyz")
  *   -> "https://tokopedia.com/...?src=shop&aff_code=xyz"
@@ -88,11 +105,23 @@ export function buildAffiliateUrl(
     // Jangan append kalau sudah ada (idempotent)
     if (u.searchParams.has(param)) return url;
     u.searchParams.set(param, tag);
+    // Tambahkan parameter tambahan (utm_medium, utm_campaign, dll)
+    const extras = AFFILIATE_EXTRA_PARAMS[marketplace];
+    for (const [key, value] of Object.entries(extras)) {
+      if (!u.searchParams.has(key)) {
+        u.searchParams.set(key, value);
+      }
+    }
     return u.toString();
   } catch {
     // URL tidak valid, fallback ke string concat
     const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}${param}=${encodeURIComponent(tag)}`;
+    let result = `${url}${sep}${param}=${encodeURIComponent(tag)}`;
+    const extras = AFFILIATE_EXTRA_PARAMS[marketplace];
+    for (const [key, value] of Object.entries(extras)) {
+      result += `&${key}=${encodeURIComponent(value)}`;
+    }
+    return result;
   }
 }
 
