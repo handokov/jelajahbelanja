@@ -179,7 +179,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
               · Viral score: {product.viralScore.toFixed(1)}
             </span>
           </div>
-          <Button asChild size="sm" className="mt-auto w-fit" onClick={(e) => e.preventDefault()}>
+          <Button asChild size="sm" className="mt-auto w-fit" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
             <a
               href={buyUrl}
               target="_blank"
@@ -282,7 +282,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             {formatSoldCount(product.soldCount)}
           </span>
         </div>
-        <Button asChild size="sm" variant="outline" className="mt-auto w-full" onClick={(e) => e.preventDefault()}>
+        <Button asChild size="sm" variant="outline" className="mt-auto w-full" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
           <a
             href={buyUrl}
             target="_blank"
