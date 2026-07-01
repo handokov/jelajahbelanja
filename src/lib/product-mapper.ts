@@ -79,6 +79,7 @@ export function dbRowToProduct(row: ShopeeProductRow): Product {
     id: row.id,
     title: row.title,
     url: row.url,
+    affiliateUrl: row.affiliateUrl ?? undefined,
     image: row.image,
     price: row.price,
     originalPrice: row.originalPrice ?? undefined,

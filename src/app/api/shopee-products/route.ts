@@ -35,7 +35,14 @@ export async function GET(req: NextRequest) {
       products = products.filter((p) => p.title.toLowerCase().includes(search));
     }
 
-    // Inject affiliate URL
+    // Untuk admin: return raw DB data (affiliateUrl = shortlink asli dari DB)
+    // Ini PENTING supaya admin bisa lihat/edit affiliate URL yang asli (mis. shope.ee/xxx)
+    // Tanpa ini, affiliateUrl ketimpa sama URL yang sudah di-append affiliate parameter
+    if (isAdmin) {
+      return NextResponse.json({ products, total: products.length });
+    }
+
+    // Untuk public: inject affiliate URL supaya tombol "Beli" pakai affiliate link
     const withAffiliate = await injectAffiliateUrls(products);
 
     return NextResponse.json({ products: withAffiliate, total: withAffiliate.length });
