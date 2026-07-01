@@ -223,7 +223,7 @@ export default function Home() {
               Produk Viral & Best Seller Indonesia Hari Ini
             </h2>
             <p className="text-xs md:text-sm text-white/80 mb-3 max-w-2xl">
-              Lacak produk viral dari Shopee, Tokopedia, dan Lazada. Update real-time,
+              Lacak produk viral dari Shopee, Tokopedia, dan Lazada. Update berkala,
               filter berdasarkan viralitas, dan temukan diskon terbaik.
             </p>
             <div className="flex flex-wrap gap-1.5 md:gap-2 text-[11px] md:text-xs">
