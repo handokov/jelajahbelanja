@@ -199,12 +199,23 @@ export default function Home() {
       <div className="sticky top-0 z-50 bg-header-gradient">
         <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-14">
           <div className="flex items-center gap-2">
-            <Link href="/" className="flex items-center gap-2">
+            <a
+              href="/"
+              className="flex items-center gap-2"
+              onClick={(e) => {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+                // Reset filter & category ke default
+                setActiveCategory("all");
+                setFilter("populer");
+                setSearch("");
+              }}
+            >
               <img src="/logo.svg" alt="JB" className="w-7 h-7" />
               <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
                 JelajahBelanja
               </h1>
-            </Link>
+            </a>
             <Badge className="ml-1 bg-white/20 text-white border-white/30 hover:bg-white/20 text-[9px]">
               Beta
             </Badge>
