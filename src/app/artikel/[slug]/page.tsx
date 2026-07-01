@@ -62,16 +62,16 @@ export default async function ArtikelDetailPage({ params }: Props) {
     author: {
       "@type": "Organization",
       name: article.author,
-      url: "https://jelajahbelanja.vercel.app",
+      url: "https://jelajahbelanja.com",
     },
     publisher: {
       "@type": "Organization",
       name: "JelajahBelanja",
-      url: "https://jelajahbelanja.vercel.app",
+      url: "https://jelajahbelanja.com",
     },
     mainEntityOfPage: {
       "@type": "WebPage",
-      "@id": `https://jelajahbelanja.vercel.app/artikel/${article.slug}`,
+      "@id": `https://jelajahbelanja.com/artikel/${article.slug}`,
     },
   };
 
