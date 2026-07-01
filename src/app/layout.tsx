@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ReactQueryProvider } from "@/components/react-query-provider";
+import { Analytics } from "@vercel/analytics/react";
 
 const interSans = Inter({
   variable: "--font-inter",
@@ -159,6 +160,7 @@ export default function RootLayout({
         >
           <ReactQueryProvider>
             {children}
+            <Analytics />
             <Toaster />
           </ReactQueryProvider>
         </ThemeProvider>
