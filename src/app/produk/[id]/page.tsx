@@ -2,6 +2,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { stripMarketplacePrefix } from "@/lib/utils";
+import { SITE_URL } from "@/lib/config";
 import { dbRowToProduct, type ShopeeProductRow } from "@/lib/product-mapper";
 import ProductDetailClient, { type ShopeeProduct } from "./ProductDetailClient";
 
@@ -16,6 +17,33 @@ const getProduct = cache(async (id: string) => {
   return db.shopeeProduct.findUnique({ where: { id: dbId } });
 });
 
+/**
+ * ISR: Pre-generate halaman produk saat build, revalidate tiap 1 jam.
+ * Produk baru yang belum di-generate akan di-render on-demand (fallback).
+ * Ini mempercepat TTFB (Time To First Byte) dan membantu Google indexing.
+ */
+export const revalidate = 3600; // 1 jam
+
+export async function generateStaticParams() {
+  try {
+    const products = await db.shopeeProduct.findMany({
+      where: { enabled: true, isHidden: { not: true } },
+      select: { id: true, marketplace: true, url: true },
+      orderBy: { soldCount: "desc" },
+      // Batasi top 500 saat build — sisanya fallback SSR
+      take: 500,
+    });
+
+    return products.map((p) => {
+      const mp = p.marketplace || "shopee";
+      return { id: `${mp}-${p.id}` };
+    });
+  } catch {
+    // Kalau DB belum ada di build time, skip — fallback ke SSR
+    return [];
+  }
+}
+
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
   const product = await getProduct(id);
@@ -26,15 +54,27 @@ export async function generateMetadata({ params }: Props) {
 
   // Pakai dbRowToProduct supaya marketplace resolved dari URL
   const dto = dbRowToProduct(product as ShopeeProductRow);
+  const canonicalUrl = `${SITE_URL}/produk/${dto.marketplace}-${product.id}`;
 
   return {
     title: `${dto.title} - JelajahBelanja`,
     description: `Beli ${dto.title} dengan harga Rp ${dto.price.toLocaleString("id-ID")}${dto.discountPercent ? ` diskon ${dto.discountPercent}%` : ""}. Rating ${dto.rating}/5, ${dto.soldCount} terjual.`,
+    alternates: {
+      canonical: canonicalUrl,
+    },
     openGraph: {
       title: dto.title,
       description: `Rp ${dto.price.toLocaleString("id-ID")}${dto.discountPercent ? ` | Diskon ${dto.discountPercent}%` : ""}`,
+      url: canonicalUrl,
       images: dto.image ? [{ url: dto.image }] : [],
       type: "website",
+      siteName: "JelajahBelanja",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: dto.title,
+      description: `Rp ${dto.price.toLocaleString("id-ID")}${dto.discountPercent ? ` | Diskon ${dto.discountPercent}%` : ""}`,
+      images: dto.image ? [dto.image] : [],
     },
   };
 }

@@ -11,14 +11,23 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/"],
+        disallow: [
+          "/api/",
+          "/jb-mgr-admin",
+          "/jb-mgr-login",
+          "/beli/", // redirect-only, tidak perlu di-index
+        ],
       },
-      // Bot boleh crawl API products karena return-nya HTML-friendly JSON
-      // tapi kita block admin endpoint lain
       {
         userAgent: "Googlebot",
         allow: "/",
-        disallow: ["/api/categories", "/api/affiliate"],
+        disallow: [
+          "/api/categories",
+          "/api/affiliate",
+          "/jb-mgr-admin",
+          "/jb-mgr-login",
+          "/beli/",
+        ],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
