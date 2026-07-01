@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkAuth } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+
+// === Simple rate limiter (in-memory, per IP) ===
+const rateLimiter = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 30; // max requests
+const RATE_WINDOW = 60 * 1000; // per 1 menit
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimiter.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimiter.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_LIMIT;
+}
 
 /**
  * Parse AI response yang dipisahkan "---" jadi { explanation, outfitTips }.
@@ -31,8 +46,14 @@ function parseAIResponse(fullResponse: string): { explanation: string; outfitTip
  * Response: { explanation: string, outfitTips: string }
  */
 export async function POST(req: NextRequest) {
-  const authErr = await checkAuth(req);
-  if (authErr) return authErr;
+  // Rate limit check
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      { error: "Terlalu banyak request, coba lagi sebentar" },
+      { status: 429 }
+    );
+  }
 
   try {
     const body = await req.json();

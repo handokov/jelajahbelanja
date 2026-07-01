@@ -18,7 +18,7 @@ const PROTECTED_API_PATTERNS = [
   { path: "/api/banners", methods: ["POST", "PATCH", "DELETE"] },
   { path: "/api/categories", methods: ["POST", "PATCH", "DELETE", "PUT"] },
   { path: "/api/shopee-products", methods: ["POST", "PATCH", "DELETE"] },
-  { path: "/api/ai-explain", methods: ["POST"] },
+  // /api/ai-explain is PUBLIC — all users can see AI stylist recommendations
 ];
 
 function isAdminApiPath(pathname: string, method: string): boolean {
