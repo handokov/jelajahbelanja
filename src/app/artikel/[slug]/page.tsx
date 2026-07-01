@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { blogArticles, getArticleBySlug, getAllArticleSlugs } from "@/lib/blog-data";
-import { Clock, ArrowLeft, Tag, Share2 } from "lucide-react";
+import { Clock, ArrowLeft, Tag } from "lucide-react";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Tips Belanja": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
@@ -12,12 +12,17 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Affiliate Guide": "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
 };
 
+interface Props {
+  params: Promise<{ slug: string }>;
+}
+
 export function generateStaticParams() {
   return getAllArticleSlugs().map((slug) => ({ slug }));
 }
 
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
-  const article = getArticleBySlug(params.slug);
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const article = getArticleBySlug(slug);
   if (!article) return { title: "Artikel Tidak Ditemukan" };
 
   return {
@@ -36,8 +41,9 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   };
 }
 
-export default function ArtikelDetailPage({ params }: { params: { slug: string } }) {
-  const article = getArticleBySlug(params.slug);
+export default async function ArtikelDetailPage({ params }: Props) {
+  const { slug } = await params;
+  const article = getArticleBySlug(slug);
   if (!article) notFound();
 
   // Find related articles (same category, excluding current)
