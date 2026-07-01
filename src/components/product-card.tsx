@@ -127,59 +127,62 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
 
   if (variant === "featured") {
     return (
-      <Link href={detailUrl} className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
-      >
-        <div className="relative w-full md:w-2/5 aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
-          <img
-            src={product.image}
-            alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller`}
-            loading="lazy"
-            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
-          />
-          <div className="absolute top-2 left-2 flex flex-col gap-1">
-            {product.isViral && <ViralBadge />}
-            <Badge className="bg-fuchsia-600 text-white hover:bg-fuchsia-600 text-[10px] font-bold px-1.5 py-0 h-5">
-              #1 FEATURED
-            </Badge>
+      <div className="group relative flex flex-col md:flex-row gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
+        <Link href={detailUrl} className="contents">
+          <div className="relative w-full md:w-2/5 aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800 cursor-pointer">
+            <img
+              src={product.image}
+              alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller`}
+              loading="lazy"
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+            />
+            <div className="absolute top-2 left-2 flex flex-col gap-1">
+              {product.isViral && <ViralBadge />}
+              <Badge className="bg-fuchsia-600 text-white hover:bg-fuchsia-600 text-[10px] font-bold px-1.5 py-0 h-5">
+                #1 FEATURED
+              </Badge>
+            </div>
+            <div className="absolute top-2 right-2">
+              <MarketplaceBadge marketplace={product.marketplace} />
+            </div>
           </div>
-          <div className="absolute top-2 right-2">
-            <MarketplaceBadge marketplace={product.marketplace} />
+          <div className="flex-1 flex flex-col gap-3 p-4 md:p-6">
+            <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+              <span>{product.category}</span>
+              <span aria-hidden>·</span>
+              <span>{formatTimeAgo(product.timestamp)}</span>
+              {product.location && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span className="inline-flex items-center gap-0.5">
+                    <MapPin className="w-3 h-3" />
+                    {product.location}
+                  </span>
+                </>
+              )}
+            </div>
+            <h3 className="text-lg md:text-xl font-semibold text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug">
+              {product.title}
+            </h3>
+            <PriceBlock
+              price={product.price}
+              originalPrice={product.originalPrice}
+              discountPercent={product.discountPercent}
+              size="large"
+            />
+            <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
+            <div className="text-sm text-zinc-700 dark:text-zinc-300">
+              <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
+                {formatSoldCount(product.soldCount)}
+              </span>
+              <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
+                · Viral score: {product.viralScore.toFixed(1)}
+              </span>
+            </div>
           </div>
-        </div>
-        <div className="flex-1 flex flex-col gap-3 p-4 md:p-6">
-          <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-            <span>{product.category}</span>
-            <span aria-hidden>·</span>
-            <span>{formatTimeAgo(product.timestamp)}</span>
-            {product.location && (
-              <>
-                <span aria-hidden>·</span>
-                <span className="inline-flex items-center gap-0.5">
-                  <MapPin className="w-3 h-3" />
-                  {product.location}
-                </span>
-              </>
-            )}
-          </div>
-          <h3 className="text-lg md:text-xl font-semibold text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug">
-            {product.title}
-          </h3>
-          <PriceBlock
-            price={product.price}
-            originalPrice={product.originalPrice}
-            discountPercent={product.discountPercent}
-            size="large"
-          />
-          <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
-          <div className="text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
-              {formatSoldCount(product.soldCount)}
-            </span>
-            <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
-              · Viral score: {product.viralScore.toFixed(1)}
-            </span>
-          </div>
-          <Button asChild size="sm" className="mt-auto w-fit" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+        </Link>
+        <div className="px-4 md:px-6 pb-4 md:pb-6 md:self-end">
+          <Button asChild size="sm" className="w-fit">
             <a
               href={buyUrl}
               target="_blank"
@@ -191,7 +194,7 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             </a>
           </Button>
         </div>
-      </Link>
+      </div>
     );
   }
 
@@ -239,50 +242,51 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
     );
   }
 
-  // Default variant
+  // Default variant — NO nested <a> inside <a>
   return (
-    <Link
-      href={detailUrl}
-      className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
-    >
-      <div className="relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
-        <img
-          src={product.image}
-          alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller di Indonesia`}
-          loading="lazy"
-          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
-        />
-        <div className="absolute top-2 left-2 flex flex-col gap-1">
-          {product.isViral && <ViralBadge />}
-          <MarketplaceBadge marketplace={product.marketplace} />
-        </div>
-        {product.discountPercent && product.discountPercent > 0 && (
-          <Badge className="absolute top-2 right-2 bg-red-500 text-white hover:bg-red-500 text-[10px] font-bold px-1.5 py-0 h-5">
-            −{product.discountPercent}%
-          </Badge>
-        )}
-      </div>
-      <div className="flex-1 flex flex-col gap-2 p-3">
-        <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-500 dark:text-zinc-400">
-          <span>{formatTimeAgo(product.timestamp)}</span>
-          {product.location && (
-            <span className="inline-flex items-center gap-0.5">
-              <MapPin className="w-2.5 h-2.5" />
-              {product.location}
-            </span>
+    <div className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
+      <Link href={detailUrl} className="contents">
+        <div className="relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800 cursor-pointer">
+          <img
+            src={product.image}
+            alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller di Indonesia`}
+            loading="lazy"
+            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+          />
+          <div className="absolute top-2 left-2 flex flex-col gap-1">
+            {product.isViral && <ViralBadge />}
+            <MarketplaceBadge marketplace={product.marketplace} />
+          </div>
+          {product.discountPercent && product.discountPercent > 0 && (
+            <Badge className="absolute top-2 right-2 bg-red-500 text-white hover:bg-red-500 text-[10px] font-bold px-1.5 py-0 h-5">
+              −{product.discountPercent}%
+            </Badge>
           )}
         </div>
-        <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug min-h-[2.5rem]">
-          {product.title}
-        </h3>
-        <PriceBlock price={product.price} originalPrice={product.originalPrice} />
-        <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
-        <div className="text-xs text-zinc-600 dark:text-zinc-400">
-          <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
-            {formatSoldCount(product.soldCount)}
-          </span>
-        </div>
-        <Button asChild size="sm" variant="outline" className="mt-auto w-full" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+      </Link>
+      <div className="flex-1 flex flex-col gap-2 p-3">
+        <Link href={detailUrl} className="contents">
+          <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-500 dark:text-zinc-400">
+            <span>{formatTimeAgo(product.timestamp)}</span>
+            {product.location && (
+              <span className="inline-flex items-center gap-0.5">
+                <MapPin className="w-2.5 h-2.5" />
+                {product.location}
+              </span>
+            )}
+          </div>
+          <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug min-h-[2.5rem]">
+            {product.title}
+          </h3>
+          <PriceBlock price={product.price} originalPrice={product.originalPrice} />
+          <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
+          <div className="text-xs text-zinc-600 dark:text-zinc-400">
+            <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
+              {formatSoldCount(product.soldCount)}
+            </span>
+          </div>
+        </Link>
+        <Button asChild size="sm" variant="outline" className="mt-auto w-full">
           <a
             href={buyUrl}
             target="_blank"
@@ -294,6 +298,6 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
           </a>
         </Button>
       </div>
-    </Link>
+    </div>
   );
 }
