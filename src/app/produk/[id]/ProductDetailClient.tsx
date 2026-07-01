@@ -88,8 +88,14 @@ function RecCard({ product }: { product: ShopeeProduct }) {
           {formatRupiah(product.price)}
         </span>
         <div className="flex items-center gap-1 mt-0.5 text-[9px] text-zinc-500">
-          <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
-          <span>{product.rating.toFixed(1)}</span>
+          {product.reviewCount > 0 ? (
+            <>
+              <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+              <span>{product.rating.toFixed(1)}</span>
+            </>
+          ) : (
+            <Star className="w-2.5 h-2.5 text-zinc-300 dark:text-zinc-600" />
+          )}
           <span>·</span>
           <span>{formatSoldCount(product.soldCount)}</span>
         </div>
@@ -311,13 +317,22 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
             </div>
 
             <div className="flex items-center gap-4 text-sm text-zinc-600 dark:text-zinc-400 mb-5">
-              <div className="flex items-center gap-1.5">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                  {product.rating.toFixed(1)}
-                </span>
-              </div>
-              <span>{formatReviewCount(product.reviewCount)}</span>
+              {product.reviewCount > 0 ? (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      {product.rating.toFixed(1)}
+                    </span>
+                  </div>
+                  <span>{formatReviewCount(product.reviewCount)}</span>
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <Star className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
+                  <span className="text-zinc-400 dark:text-zinc-500">Belum ada rating</span>
+                </div>
+              )}
               <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
                 {formatSoldCount(product.soldCount)}
               </span>

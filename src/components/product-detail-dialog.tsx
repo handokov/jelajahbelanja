@@ -186,13 +186,22 @@ export function ProductDetailDialog({
 
             {/* Stats row */}
             <div className="flex items-center gap-3 text-xs text-zinc-600 dark:text-zinc-400">
-              <div className="flex items-center gap-1">
-                <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                  {product.rating.toFixed(1)}
-                </span>
-              </div>
-              <span>{formatReviewCount(product.reviewCount)} review</span>
+              {product.reviewCount > 0 ? (
+                <>
+                  <div className="flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      {product.rating.toFixed(1)}
+                    </span>
+                  </div>
+                  <span>{formatReviewCount(product.reviewCount)} review</span>
+                </>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Star className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600" />
+                  <span className="text-zinc-400 dark:text-zinc-500">Belum ada rating</span>
+                </div>
+              )}
               <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
                 {formatSoldCount(product.soldCount)} terjual
               </span>

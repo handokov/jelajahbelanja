@@ -119,3 +119,24 @@ Stage Summary:
 - New "Populer" filter uses smooth time decay instead of binary freshness → old but high-performing products get visibility
 - Default filter changed from "latest" to "populer" so users see best products first
 - 4 filter tabs: Populer (default), Terbaru, Viral 24 Jam, Top Mingguan
+
+---
+Task ID: fix-rating-no-review
+Agent: main
+Task: Fix AI dan UI untuk produk yang belum punya rating/review — jangan tampilkan rating palsu
+
+Work Log:
+- Fix /api/ai-explain: reviewCount=0 sekarang mengirim "Produk ini belum punya rating dan review (produk baru)" ke AI, bukan rating 0.0 atau 4.5 palsu
+- Fix ProductCard RatingStars: reviewCount=0 tampilkan "Belum ada rating" dengan star abu-abu
+- Fix ProductCard compact variant: reviewCount=0 hanya tampilkan star abu-abu tanpa angka
+- Fix ProductDetailClient: rating section conditional — tampilkan "Belum ada rating" kalau reviewCount=0
+- Fix ProductDetailClient RecCard: rekomendasi tanpa review hanya tampilkan star abu-abu
+- Fix ProductDetailDialog: rating display conditional — "Belum ada rating" untuk produk baru
+- Fix Admin page: produk tanpa review ditampilkan "★ baru" bukan "★ 0.0"
+- Fix JSON-LD structured data: aggregateRating hanya disertakan kalau reviewCount > 0 (baik untuk SEO)
+
+Stage Summary:
+- Semua komponen UI sekarang membedakan produk yang punya rating asli vs produk baru tanpa review
+- AI tidak lagi dikasih rating palsu untuk produk tanpa review
+- SEO tidak lagi menampilkan ratingValue: 0 di structured data
+- Build berhasil tanpa error

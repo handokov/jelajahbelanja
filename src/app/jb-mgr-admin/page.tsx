@@ -1099,7 +1099,7 @@ export default function AdminPage() {
                             <span className="line-through">{formatRupiah(p.originalPrice)}</span>
                           )}
                           {p.discountPercent && <span className="text-red-500">-{p.discountPercent}%</span>}
-                          <span>· ★ {p.rating?.toFixed(1)}</span>
+                          <span>· {p.reviewCount > 0 ? `★ ${p.rating?.toFixed(1)}` : '★ baru'}</span>
                           <span>· {p.soldCount?.toLocaleString()} terjual</span>
                         </div>
                         {p.affiliateUrl && (

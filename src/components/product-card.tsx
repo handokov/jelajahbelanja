@@ -34,6 +34,15 @@ function MarketplaceBadge({ marketplace }: { marketplace: Marketplace }) {
 }
 
 function RatingStars({ rating, reviewCount }: { rating: number; reviewCount: number }) {
+  // Kalau belum ada review, tampilkan "Belum ada rating"
+  if (!reviewCount || reviewCount <= 0) {
+    return (
+      <div className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
+        <Star className="w-3 h-3 text-zinc-300 dark:text-zinc-600" />
+        <span>Belum ada rating</span>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
       <div className="flex items-center gap-0.5">
@@ -193,9 +202,15 @@ export function ProductCard({ product, variant = "default", rank }: ProductCardP
             )}
           </div>
           <div className="flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
-            <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
-            <span>{product.rating.toFixed(1)}</span>
-            <span aria-hidden>·</span>
+            {product.reviewCount > 0 ? (
+              <>
+                <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+                <span>{product.rating.toFixed(1)}</span>
+                <span aria-hidden>·</span>
+              </>
+            ) : (
+              <Star className="w-2.5 h-2.5 text-zinc-300 dark:text-zinc-600" />
+            )}
             <span>{formatSoldCount(product.soldCount)}</span>
           </div>
         </div>

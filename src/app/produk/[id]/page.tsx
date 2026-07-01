@@ -143,11 +143,17 @@ export default async function ProductPage({ params }: Props) {
       price: dto.price,
       availability: "https://schema.org/InStock",
     },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: dto.rating,
-      reviewCount: dto.reviewCount,
-    },
+    // Hanya sertakan aggregateRating kalau ada review asli (reviewCount > 0)
+    // Rating 0 tanpa review itu tidak akurat dan jelek untuk SEO
+    ...(dto.reviewCount > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: dto.rating,
+            reviewCount: dto.reviewCount,
+          },
+        }
+      : {}),
   };
 
   return (

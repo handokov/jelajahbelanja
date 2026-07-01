@@ -104,7 +104,10 @@ PENTING:
 
     const viralInfo = product.isViral ? "Produk ini VIRAL (masuk top 25% viral score)." : "";
     const soldInfo = product.soldCount ? `Terjual: ${product.soldCount.toLocaleString("id-ID")} unit.` : "";
-    const ratingInfo = product.rating ? `Rating: ${product.rating}/5 dari ${product.reviewCount?.toLocaleString("id-ID") ?? "banyak"} review.` : "";
+    // Jika reviewCount = 0, produk belum punya rating asli — jangan kasih rating palsu ke AI
+    const ratingInfo = product.reviewCount > 0
+      ? `Rating: ${product.rating}/5 dari ${product.reviewCount?.toLocaleString("id-ID") ?? "banyak"} review.`
+      : "Produk ini belum punya rating dan review (produk baru).";
     const locationInfo = product.location ? `Lokasi seller: ${product.location}.` : "";
 
     const userMessage = `Jelaskan produk ini + kasih rekomendasi outfit pelengkap:
