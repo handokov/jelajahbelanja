@@ -104,3 +104,26 @@ Stage Summary:
 - Pull-to-refresh restored for PWA standalone mode via custom touch gesture
 - Error boundaries prevent white screen of death on product page errors
 - Cache version bumped to v2 for automatic cleanup of old SW caches
+
+---
+Task ID: rollback-pwa-safe
+Agent: main
+Task: Rollback PWA code yang bikin error di PC dan HP, keep yang aman
+
+Work Log:
+- User lapor error "Application error" pas klik produk, di PC DAN HP
+- Root cause: kombinasi SW lama yang masih aktif + splash screen progress bar yang complex
+- Rollback splash screen ke versi simple (tanpa progress bar, tanpa __jbSplashComplete)
+- Rollback SplashDismissal ke versi simple (tanpa window.__jbSplashComplete)
+- SWRegister sekarang UNREGISTER semua SW lama dulu, SW registration dimatikan sementara
+- Fix PWARefresh: bug stale closure (pullDistance di dependency array), ganti ke ref-based
+- Error boundaries tetap dipertahankan (error.tsx global + produk/[id]/error.tsx)
+- Page refactoring tetap dipertahankan (komponen home/ yang sudah bersih)
+- Build berhasil
+
+Stage Summary:
+- SW lama di-unregister otomatis, SW baru TIDAK didaftarkan dulu (dimatikan sementara)
+- Splash screen kembali ke versi simple yang proven working
+- PWARefresh fix stale closure, cuma aktif di standalone mode
+- Error boundaries tetap ada sebagai safety net
+- PWA manifest & maskable icons tetap ada (gak bikin error, cuma metadata)

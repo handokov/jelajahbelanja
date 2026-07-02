@@ -157,28 +157,7 @@ export default function RootLayout({
             __html: `
               (function(){
                 var s = document.getElementById('jb-splash');
-                if(s) {
-                  s.style.display='flex';
-                  // Progress bar animation — simulate loading for HP kentang
-                  var bar = document.getElementById('jb-splash-bar');
-                  if(bar) {
-                    var w = 0;
-                    var iv = setInterval(function(){
-                      w += Math.random() * 15;
-                      if(w > 85) { clearInterval(iv); w = 85; }
-                      bar.style.width = w + '%';
-                    }, 200);
-                    // Complete when React hydrate
-                    window.__jbSplashComplete = function(){
-                      clearInterval(iv);
-                      bar.style.width = '100%';
-                      setTimeout(function(){
-                        s.style.opacity = '0';
-                        setTimeout(function(){ s.remove(); }, 400);
-                      }, 200);
-                    };
-                  }
-                }
+                if(s) s.style.display='flex';
               })();
             `,
           }}
@@ -214,14 +193,7 @@ export default function RootLayout({
           <div style={{ marginTop: 4, color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 400 }}>
             Produk Viral &amp; Best Seller
           </div>
-
-          {/* Progress bar — biar user tahu app loading, bukan hang */}
-          <div style={{ marginTop: 32, width: 120, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.2)", overflow: "hidden" }}>
-            <div id="jb-splash-bar" style={{ width: "0%", height: "100%", borderRadius: 2, background: "white", transition: "width 0.3s ease-out" }} />
-          </div>
-
-          {/* Spinner fallback */}
-          <div style={{ marginTop: 16, width: 24, height: 24, border: "2px solid rgba(255,255,255,0.2)", borderTopColor: "white", borderRadius: "50%", animation: "jb-spin 0.8s linear infinite" }} />
+          <div style={{ marginTop: 24, width: 32, height: 32, border: "3px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "jb-spin 0.8s linear infinite" }} />
           <style>{`@keyframes jb-spin { to { transform: rotate(360deg); } }`}</style>
         </div>
         <ThemeProvider
