@@ -4,6 +4,8 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ReactQueryProvider } from "@/components/react-query-provider";
+import { Analytics } from "@vercel/analytics/react";
+import { PwaLoaderRemover } from "@/components/pwa-loader-remover";
 
 const interSans = Inter({
   variable: "--font-inter",
@@ -147,6 +149,25 @@ export default function RootLayout({
       <body
         className={`${interSans.variable} font-sans antialiased bg-background text-foreground`}
       >
+        {/* PWA Loading Screen — inline HTML/CSS, tampil sebelum React hydrate.
+            Penting untuk low-end Android biar WebView gak blank/crash.
+            Akan dihilangkan oleh React setelah hydrate. */}
+        <div id="pwa-loader" className="pwa-loader">
+          <div className="pwa-loader-inner">
+            <div className="pwa-loader-title">JelajahBelanja</div>
+            <div className="pwa-loader-sub">Produk Viral &amp; Best Seller Indonesia</div>
+            <div className="pwa-loader-spinner" />
+          </div>
+        </div>
+        <noscript>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'#7c3aed', color:'#fff', fontFamily:'system-ui', textAlign:'center', padding:'2rem' }}>
+            <div>
+              <div style={{ fontSize:'2rem', fontWeight:800, marginBottom:'0.5rem' }}>JelajahBelanja</div>
+              <div>Produk Viral &amp; Best Seller Indonesia</div>
+              <div style={{ marginTop:'1rem', fontSize:'0.875rem', opacity:0.7 }}>Aktifkan JavaScript untuk melanjutkan</div>
+            </div>
+          </div>
+        </noscript>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
@@ -155,6 +176,8 @@ export default function RootLayout({
         >
           <ReactQueryProvider>
             {children}
+            <PwaLoaderRemover />
+            <Analytics />
             <Toaster />
           </ReactQueryProvider>
         </ThemeProvider>
