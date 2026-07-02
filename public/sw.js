@@ -4,21 +4,25 @@
  * Service Worker JelajahBelanja — ringan untuk HP kentang!
  *
  * Strategi:
- * - App shell (HTML, CSS, JS): Cache First — load instan dari cache
- * - Gambar produk: Stale While Revalidate — tampilkan yang di cache, update di background
- * - API data: Network First — selalu fresh, fallback ke cache kalau offline
- * - Font & static assets: Cache First — gak berubah-ubah
+ * - Next.js internal requests (_next/, RSC): JANGAN intercept — biarin Next.js handle sendiri
+ * - Gambar produk (cross-origin CDN): Stale While Revalidate
+ * - API data (/api/): Network First — selalu fresh, fallback ke cache kalau offline
+ * - Font Google: Cache First
+ * - Static assets (js/css/fonts): Cache First
+ * - Full page reload (navigation): Network First
+ *
+ * PENTING: Jangan pernah intercept request yang buatan Next.js router!
+ * Next.js App Router pakai RSC (React Server Components) payload
+ * yang gak boleh di-cache oleh SW karena URL-nya dynamic.
  */
 
-const CACHE_NAME = "jb-v1";
-const STATIC_CACHE = "jb-static-v1";
-const IMG_CACHE = "jb-img-v1";
-const API_CACHE = "jb-api-v1";
+const CACHE_NAME = "jb-v2";
+const STATIC_CACHE = "jb-static-v2";
+const IMG_CACHE = "jb-img-v2";
+const API_CACHE = "jb-api-v2";
 
 // App shell files yang di-cache saat install
 const APP_SHELL = [
-  "/",
-  "/manifest.json",
   "/site.webmanifest",
   "/logo.svg",
   "/favicon.ico",
@@ -57,47 +61,65 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (event.request.method !== "GET") return;
 
-  // Skip cross-origin requests (kecuali fonts & CDN)
+  // ⚠️ PENTING: Skip Next.js internal requests!
+  // - /_next/ — bundled JS/CSS, chunk loading
+  // - RSC payload requests (biasanya punya header RSC)
+  // - Next.js prefetch requests
+  // Kalau ini di-intercept, navigasi antar halaman bisa crash!
+  if (url.pathname.startsWith("/_next/")) {
+    return; // Biarin browser handle sendiri
+  }
+
+  // Skip Next.js router requests (RSC, prefetch)
+  const rscHeader = event.request.headers.get("RSC");
+  const nextRouter = event.request.headers.get("Next-Router");
+  const nextUrl = event.request.headers.get("Next-Url");
+  if (rscHeader || nextRouter || nextUrl) {
+    return; // Next.js internal, jangan sentuh!
+  }
+
+  // Cross-origin requests
   if (url.origin !== self.location.origin) {
-    // Allow Google Fonts & CDN
+    // Google Fonts — Cache First
     if (url.hostname.includes("fonts.googleapis.com") || url.hostname.includes("fonts.gstatic.com")) {
       event.respondWith(cacheFirst(event.request, STATIC_CACHE));
       return;
     }
-    // Allow product images from CDN
+    // Product images from CDN — Stale While Revalidate
     if (url.pathname.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i)) {
       event.respondWith(staleWhileRevalidate(event.request, IMG_CACHE));
       return;
     }
-    return; // Skip other cross-origin
+    return; // Skip other cross-origin (analytics, etc)
   }
 
   // API requests — Network First
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(networkFirst(event.request, API_CACHE, 300)); // 5 min stale
+    event.respondWith(networkFirst(event.request, API_CACHE, 300));
     return;
   }
 
-  // Static assets — Cache First
+  // Static assets (JS, CSS, fonts) — Cache First
   if (url.pathname.match(/\.(js|css|woff2?|ttf|eot|ico|svg)$/i)) {
     event.respondWith(cacheFirst(event.request, STATIC_CACHE));
     return;
   }
 
-  // Images — Stale While Revalidate
+  // Same-origin images — Stale While Revalidate
   if (url.pathname.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
     event.respondWith(staleWhileRevalidate(event.request, IMG_CACHE));
     return;
   }
 
-  // HTML pages — Network First dengan cache fallback
-  if (event.request.headers.get("accept")?.includes("text/html")) {
-    event.respondWith(networkFirst(event.request, CACHE_NAME, 600)); // 10 min stale
+  // Full page navigation (hard reload / first load) — Network First
+  // Hanya intercept kalau ini navigation request (bukan fetch dari JS)
+  if (event.request.mode === "navigate") {
+    event.respondWith(networkFirst(event.request, CACHE_NAME, 600));
     return;
   }
 
-  // Default — Network with cache fallback
-  event.respondWith(networkFirst(event.request, CACHE_NAME, 300));
+  // Semua request lain — JANGAN intercept, biarin browser
+  // Ini termasuk RSC payload, prefetch, dll
 });
 
 /**
@@ -121,7 +143,6 @@ async function cacheFirst(request, cacheName) {
 
 /**
  * Network First — cocok untuk API & HTML yang harus fresh
- * maxAge = max age dalam detik sebelum cache dianggap stale
  */
 async function networkFirst(request, cacheName, maxAge = 300) {
   try {
@@ -134,7 +155,6 @@ async function networkFirst(request, cacheName, maxAge = 300) {
   } catch {
     const cached = await caches.match(request);
     if (cached) {
-      // Cek apakah cache masih valid
       const date = new Date(cached.headers.get("date") || 0);
       const age = (Date.now() - date.getTime()) / 1000;
       if (age < maxAge || maxAge === 0) {
@@ -153,7 +173,6 @@ async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
 
-  // Update di background
   const fetchPromise = fetch(request)
     .then((response) => {
       if (response.ok) {
@@ -161,8 +180,7 @@ async function staleWhileRevalidate(request, cacheName) {
       }
       return response;
     })
-    .catch(() => cached); // Fallback ke cached kalau gagal
+    .catch(() => cached);
 
-  // Return cached dulu kalau ada, kalau belum tunggu fetch
   return cached || fetchPromise;
 }

@@ -7,6 +7,7 @@ import { ReactQueryProvider } from "@/components/react-query-provider";
 import { Analytics } from "@vercel/analytics/react";
 import SplashDismissal from "@/components/splash-dismissal";
 import SWRegister from "@/components/sw-register";
+import { PWARefresh } from "@/components/pwa-refresh";
 
 const interSans = Inter({
   variable: "--font-inter",
@@ -232,6 +233,7 @@ export default function RootLayout({
           <ReactQueryProvider>
             <SplashDismissal />
             <SWRegister />
+            <PWARefresh />
             {children}
             <Analytics />
             <Toaster />
