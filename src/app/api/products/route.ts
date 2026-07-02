@@ -12,6 +12,16 @@ import type { Product, ProductsResponse, ProductFilter, Marketplace } from "@/li
 
 export const dynamic = "force-dynamic";
 
+/** Normalize marketplace value — handle case variations and "mock" fallback */
+function normalizeMarketplace(raw: string): string {
+  const lower = (raw || "").toLowerCase().trim();
+  if (lower === "shopee" || lower === "tokopedia" || lower === "lazada" || lower === "aliexpress" || lower === "amazon") {
+    return lower;
+  }
+  // "mock", empty, atau unknown → default ke "shopee"
+  return "shopee";
+}
+
 /** Convert DB ShopeeProduct row to Product DTO */
 function dbRowToProduct(row: {
   id: string;
@@ -60,7 +70,7 @@ function dbRowToProduct(row: {
     soldCount: row.soldCount,
     soldPerDay,
     timestamp: ts,
-    marketplace: (row.marketplace && row.marketplace !== "mock" ? row.marketplace : "shopee") as Marketplace,
+    marketplace: normalizeMarketplace(row.marketplace) as Marketplace,
     category: row.category,
     viralScore,
     isViral: row.isViral || viralScore >= VIRAL_SCORE_THRESHOLD,

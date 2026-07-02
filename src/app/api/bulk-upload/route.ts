@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
             soldCount: row.soldcount ? parseInt(row.soldcount, 10) || 0 : 0,
             location: row.location || null,
             category: row.category,
-            marketplace: row.marketplace || "shopee",
+            marketplace: (row.marketplace || "shopee").toLowerCase(),
             affiliateUrl: row.affiliateurl || null,
             notes: row.notes || null,
             isViral: false,
