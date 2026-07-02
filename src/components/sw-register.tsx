@@ -3,31 +3,25 @@
 import { useEffect } from "react";
 
 /**
- * SWRegister — cleanup service worker lama yang mungkin bikin error.
+ * SWCleanup — satu-satunya tugas: unregister Service Worker lama
+ * yang mungkin masih nyangkut di browser user dan bikin error.
  *
- * SEMENTARA DIMATIKAN: SW registration di-comment dulu sampai
- * dipastikan gak ada error. SW lama yang masih aktif di-unregister.
+ * Gak ada SW baru yang di-register. File ini cuma cleanup.
+ * Aman di-leave di sini buat jaga-jaga kalau ada SW lama
+ * yang belum sempat ke-unregister.
  */
-export default function SWRegister() {
+export default function SWCleanup() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    // UNREGISTER semua SW lama yang mungkin masih aktif dan bikin masalah
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       for (const registration of registrations) {
-        console.log("[SW] Unregistering old SW:", registration.scope);
+        console.log("[SW-Cleanup] Unregistering old SW:", registration.scope);
         registration.unregister();
       }
-    }).catch((err) => {
-      console.warn("[SW] Cleanup failed:", err);
+    }).catch(() => {
+      // Silent fail — gak penting
     });
-
-    // TODO: Aktifkan kembali setelah error fix, uncomment di bawah:
-    // if (process.env.NODE_ENV !== "production") return;
-    // navigator.serviceWorker
-    //   .register("/sw.js", { scope: "/" })
-    //   .then((reg) => console.log("[SW] Registered:", reg.scope))
-    //   .catch((err) => console.warn("[SW] Registration failed:", err));
   }, []);
 
   return null;
