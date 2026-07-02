@@ -60,7 +60,7 @@ function dbRowToProduct(row: {
     soldCount: row.soldCount,
     soldPerDay,
     timestamp: ts,
-    marketplace: (row.marketplace || "shopee") as Marketplace,
+    marketplace: (row.marketplace && row.marketplace !== "mock" ? row.marketplace : "shopee") as Marketplace,
     category: row.category,
     viralScore,
     isViral: row.isViral || viralScore >= VIRAL_SCORE_THRESHOLD,
@@ -90,13 +90,12 @@ export async function GET(req: NextRequest) {
       orderBy: { order: "asc" },
     });
 
-    // Tentukan kategori target
-    const targetCategories =
+    // Tentukan kategori target (hanya filter jika user pilih kategori tertentu)
+    // Jika "all" atau tidak dipilih, tampilkan SEMUA produk enabled tanpa filter kategori
+    const targetCategoryNames =
       categoryId && categoryId !== "all"
-        ? categories.filter((c) => c.id === categoryId)
-        : categories;
-
-    const targetCategoryNames = targetCategories.map((c) => c.name);
+        ? categories.filter((c) => c.id === categoryId).map((c) => c.name)
+        : []; // kosong = tidak filter berdasarkan kategori
 
     // Ambil produk yang enabled=true DAN isHidden bukan true (null juga ditampilkan)
     const manualRows = await db.shopeeProduct.findMany({
