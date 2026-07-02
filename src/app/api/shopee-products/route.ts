@@ -63,6 +63,7 @@ function toProduct(row: {
     viralScore,
     isViral: row.isViral || viralScore >= VIRAL_SCORE_THRESHOLD,
     location: row.location ?? undefined,
+    affiliateUrl: row.affiliateUrl ?? undefined,
   };
 }
 
