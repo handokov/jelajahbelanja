@@ -215,10 +215,41 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
     return () => clearInterval(interval);
   }, [aiExplanation]);
 
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
+  async function handleShare() {
+    const shareUrl = window.location.href;
+    const shareTitle = product.title;
+    const shareText = `Cek produk viral ini! ${shareTitle} — Rp ${product.price.toLocaleString("id-ID")}`;
+
+    // 1. Coba native Share API (mobile: buka share sheet WhatsApp/Telegram/dll)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+        return;
+      } catch (err: any) {
+        // User cancel share sheet — gak perlu error
+        if (err?.name === "AbortError") return;
+        // Kalau gagal, fallback ke clipboard
+      }
+    }
+
+    // 2. Fallback: copy link ke clipboard
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      // 3. Fallback terakhir: pakai execCommand
+      const textarea = document.createElement("textarea");
+      textarea.value = shareUrl;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }
   }
 
   // Combine related (from DB) + recommendations (from API)
