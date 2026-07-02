@@ -1,0 +1,683 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import * as React from "react";
+     4→     4→import { useQuery } from "@tanstack/react-query";
+     5→     5→import {
+     6→     6→  Search,
+     7→     7→  Moon,
+     8→     8→  Sun,
+     9→     9→  Flame,
+    10→    10→  Clock,
+    11→    11→  TrendingUp,
+    12→    12→  ShoppingBag,
+    13→    13→  ShieldCheck,
+    14→    14→  ChevronLeft,
+    15→    15→  ChevronRight,
+    16→    16→  BookOpen,
+    17→    17→} from "lucide-react";
+    18→    18→import { useTheme } from "next-themes";
+    19→    19→import Link from "next/link";
+    20→    20→
+    21→    21→import { Button } from "@/components/ui/button";
+    22→    22→import { Input } from "@/components/ui/input";
+    23→    23→import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    24→    24→import { Badge } from "@/components/ui/badge";
+    25→    25→import { Skeleton } from "@/components/ui/skeleton";
+    26→    26→
+    27→    27→import { ProductCard } from "@/components/product-card";
+    28→    28→// DemoBanner removed — only real products now
+    29→    29→
+    30→    30→import type { CategoryDTO, Product, ProductFilter, ProductsResponse } from "@/lib/types";
+    31→    31→import { cn } from "@/lib/utils";
+    32→    32→
+    33→    33→export default function Home() {
+    34→    34→  const { theme, setTheme } = useTheme();
+    35→    35→  const [mounted, setMounted] = React.useState(false);
+    36→    36→  React.useEffect(() => setMounted(true), []);
+    37→    37→
+    38→    38→  const [activeCategory, setActiveCategory] = React.useState<string>("all");
+    39→    39→  const [filter, setFilter] = React.useState<ProductFilter>("latest");
+    40→    40→  const [search, setSearch] = React.useState("");
+    41→    41→  const [debouncedSearch, setDebouncedSearch] = React.useState("");
+    42→    42→  const [heroVisible, setHeroVisible] = React.useState(true);
+    43→    43→
+    44→    44→  // Banner state
+    45→    45→  const [bannerIdx, setBannerIdx] = React.useState(0);
+    46→    46→  const bannerIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    47→    47→
+    48→    48→  // Ref for hero search bar to detect when it scrolls off screen
+    49→    49→  const heroSearchRef = React.useRef<HTMLDivElement>(null);
+    50→    50→
+    51→    51→  React.useEffect(() => {
+    52→    52→    const el = heroSearchRef.current;
+    53→    53→    if (!el) return;
+    54→    54→    const observer = new IntersectionObserver(
+    55→    55→      ([entry]) => setHeroVisible(entry.isIntersecting),
+    56→    56→      { rootMargin: "0px", threshold: 0 }
+    57→    57→    );
+    58→    58→    observer.observe(el);
+    59→    59→    return () => observer.disconnect();
+    60→    60→  }, []);
+    61→    61→
+    62→    62→  React.useEffect(() => {
+    63→    63→    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    64→    64→    return () => clearTimeout(t);
+    65→    65→  }, [search]);
+    66→    66→
+    67→    67→  const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
+    68→    68→    queryKey: ["categories"],
+    69→    69→    queryFn: async () => {
+    70→    70→      const res = await fetch("/api/categories");
+    71→    71→      if (!res.ok) throw new Error("Gagal memuat kategori");
+    72→    72→      const json = await res.json();
+    73→    73→      return json.categories as CategoryDTO[];
+    74→    74→    },
+    75→    75→    staleTime: 60 * 60 * 1000,
+    76→    76→  });
+    77→    77→
+    78→    78→  const categories = React.useMemo(() => categoriesData ?? [], [categoriesData]);
+    79→    79→
+    80→    80→  const { data: bannersData } = useQuery({
+    81→    81→    queryKey: ["active-banners"],
+    82→    82→    queryFn: async () => {
+    83→    83→      try {
+    84→    84→        const res = await fetch("/api/banners?active=true");
+    85→    85→        if (!res.ok) {
+    86→    86→          const errData = await res.json().catch(() => ({}));
+    87→    87→          console.error("[banners] API error:", res.status, errData);
+    88→    88→          return { banners: [] };
+    89→    89→        }
+    90→    90→        const json = await res.json();
+    91→    91→        console.log("[banners] loaded:", json.banners?.length ?? 0, "banners");
+    92→    92→        return json;
+    93→    93→      } catch (err) {
+    94→    94→        console.error("[banners] fetch error:", err);
+    95→    95→        return { banners: [] };
+    96→    96→      }
+    97→    97→    },
+    98→    98→    staleTime: 30 * 1000,
+    99→    99→  });
+   100→   100→
+   101→   101→  const activeBanners = React.useMemo(() => (bannersData?.banners ?? []).filter((b: any) => b.image && b.image.length > 5), [bannersData]);
+   102→   102→
+   103→   103→  // Auto-slide banners
+   104→   104→  React.useEffect(() => {
+   105→   105→    if (activeBanners.length <= 1) return;
+   106→   106→    bannerIntervalRef.current = setInterval(() => {
+   107→   107→      setBannerIdx((prev) => (prev + 1) % activeBanners.length);
+   108→   108→    }, 5000);
+   109→   109→    return () => { if (bannerIntervalRef.current) clearInterval(bannerIntervalRef.current); };
+   110→   110→  }, [activeBanners.length]);
+   111→   111→
+   112→   112→  const productsQuery = useQuery({
+   113→   113→    queryKey: ["products", activeCategory, filter, debouncedSearch],
+   114→   114→    queryFn: async () => {
+   115→   115→      const params = new URLSearchParams();
+   116→   116→      if (activeCategory && activeCategory !== "all") {
+   117→   117→        params.set("category", activeCategory);
+   118→   118→      }
+   119→   119→      params.set("filter", filter);
+   120→   120→      if (debouncedSearch) params.set("search", debouncedSearch);
+   121→   121→      const res = await fetch(`/api/products?${params.toString()}`);
+   122→   122→      if (!res.ok) throw new Error("Gagal memuat produk");
+   123→   123→      const json = (await res.json()) as ProductsResponse;
+   124→   124→      return json;
+   125→   125→    },
+   126→   126→    staleTime: 5 * 60 * 1000,
+   127→   127→  });
+   128→   128→
+   129→   129→  const products: Product[] = productsQuery.data?.products ?? [];
+   130→   130→  const source = productsQuery.data?.source ?? "live";
+   131→   131→  const totalSold = React.useMemo(
+   132→   132→    () => products.reduce((sum, p) => sum + p.soldCount, 0),
+   133→   133→    [products]
+   134→   134→  );
+   135→   135→
+   136→   136→  const trendingTop5 = React.useMemo(() => {
+   137→   137→    return [...products].sort((a, b) => b.viralScore - a.viralScore).slice(0, 5);
+   138→   138→  }, [products]);
+   139→   139→
+   140→   140→  const featuredProduct = React.useMemo(() => {
+   141→   141→    if (filter === "viral") return products[0];
+   142→   142→    return [...products].sort((a, b) => b.viralScore - a.viralScore)[0];
+   143→   143→  }, [products, filter]);
+   144→   144→
+   145→   145→  // JSON-LD structured data untuk SEO (ItemList)
+   146→   146→  const itemListJsonLd = React.useMemo(() => {
+   147→   147→    return {
+   148→   148→      "@context": "https://schema.org",
+   149→   149→      "@type": "ItemList",
+   150→   150→      name: "Produk Viral & Best Seller Indonesia",
+   151→   151→      description: `Kurasi ${products.length} produk viral dan best seller dari Shopee, Tokopedia, dan Lazada. Update terbaru, harga termurah, dan diskon terbesar hari ini.`,
+   152→   152→      numberOfItems: products.length,
+   153→   153→      itemListElement: products.slice(0, 10).map((p, i) => ({
+   154→   154→        "@type": "ListItem",
+   155→   155→        position: i + 1,
+   156→   156→        item: {
+   157→   157→          "@type": "Product",
+   158→   158→          name: p.title,
+   159→   159→          image: p.image,
+   160→   160→          url: p.affiliateUrl || p.url,
+   161→   161→          category: p.category,
+   162→   162→          offers: {
+   163→   163→            "@type": "Offer",
+   164→   164→            priceCurrency: "IDR",
+   165→   165→            price: p.price,
+   166→   166→            availability: "https://schema.org/InStock",
+   167→   167→          },
+   168→   168→          aggregateRating: {
+   169→   169→            "@type": "AggregateRating",
+   170→   170→            ratingValue: p.rating,
+   171→   171→            reviewCount: p.reviewCount,
+   172→   172→          },
+   173→   173→        },
+   174→   174→      })),
+   175→   175→    };
+   176→   176→  }, [products]);
+   177→   177→
+   178→   178→  return (
+   179→   179→    <div className="min-h-screen flex flex-col bg-background text-foreground">
+   180→   180→      {/* JSON-LD structured data untuk SEO */}
+   181→   181→      <script
+   182→   182→        type="application/ld+json"
+   183→   183→        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
+   184→   184→      />
+   185→   185→
+   186→   186→      {/* ===== Fixed Logo Bar ===== */}
+   187→   187→      <div className="sticky top-0 z-50 bg-header-gradient">
+   188→   188→        <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-14">
+   189→   189→          <div className="flex items-center gap-2">
+   190→   190→            <Link href="/" className="flex items-center gap-2">
+   191→   191→              <img src="/logo.svg" alt="JB" className="w-7 h-7" />
+   192→   192→              <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
+   193→   193→                JelajahBelanja
+   194→   194→              </h1>
+   195→   195→            </Link>
+   196→   196→            <Badge className="ml-1 bg-white/20 text-white border-white/30 hover:bg-white/20 text-[9px]">
+   197→   197→              Beta
+   198→   198→            </Badge>
+   199→   199→          </div>
+   200→   200→          <div className="flex items-center gap-1">
+   201→   201→            <Link href="/artikel">
+   202→   202→              <Button
+   203→   203→                variant="ghost"
+   204→   204→                className="text-white hover:bg-white/15 hover:text-white h-9 text-xs gap-1"
+   205→   205→              >
+   206→   206→                <BookOpen className="w-4 h-4" />
+   207→   207→                <span className="hidden sm:inline">Blog</span>
+   208→   208→              </Button>
+   209→   209→            </Link>
+   210→   210→            <Button
+   211→   211→              variant="ghost"
+   212→   212→              size="icon"
+   213→   213→              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+   214→   214→              className="text-white hover:bg-white/15 hover:text-white h-9 w-9"
+   215→   215→              aria-label="Ganti tema"
+   216→   216→            >
+   217→   217→              {mounted && theme === "dark" ? (
+   218→   218→                <Sun className="w-4 h-4" />
+   219→   219→              ) : (
+   220→   220→                <Moon className="w-4 h-4" />
+   221→   221→              )}
+   222→   222→            </Button>
+   223→   223→          </div>
+   224→   224→        </div>
+   225→   225→      </div>
+   226→   226→
+   227→   227→      {/* ===== Hero section (scrollable) ===== */}
+   228→   228→      <div className="bg-header-gradient text-white">
+   229→   229→        <div className="container mx-auto px-4 py-4 md:py-6 max-w-7xl">
+   230→   230→          {/* Hero tagline + stats */}
+   231→   231→          <div className="mb-4">
+   232→   232→            <h2 className="text-lg md:text-2xl font-bold mb-1 leading-tight">
+   233→   233→              Produk Viral & Best Seller Indonesia Hari Ini
+   234→   234→            </h2>
+   235→   235→            <p className="text-xs md:text-sm text-white/80 mb-3 max-w-2xl">
+   236→   236→              Lacak produk viral dari Shopee, Tokopedia, dan Lazada. Update berkala,
+   237→   237→              filter berdasarkan viralitas, dan temukan diskon terbaik.
+   238→   238→            </p>
+   239→   239→            <div className="flex flex-wrap gap-1.5 md:gap-2 text-[11px] md:text-xs">
+   240→   240→              <div className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-2.5 py-0.5">
+   241→   241→                <Flame className="w-3 h-3" />
+   242→   242→                <span>{products.length} produk viral</span>
+   243→   243→              </div>
+   244→   244→              <div className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-2.5 py-0.5">
+   245→   245→                <ShoppingBag className="w-3 h-3" />
+   246→   246→                <span>{totalSold > 1000 ? `${Math.round(totalSold / 1000)}k+` : totalSold} terjual</span>
+   247→   247→              </div>
+   248→   248→              <div className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-2.5 py-0.5">
+   249→   249→                <ShieldCheck className="w-3 h-3" />
+   250→   250→                <span>{categories.length} kategori</span>
+   251→   251→              </div>
+   252→   252→            </div>
+   253→   253→          </div>
+   254→   254→
+   255→   255→          {/* Search bar */}
+   256→   256→          <div ref={heroSearchRef} className="relative">
+   257→   257→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/70 pointer-events-none" />
+   258→   258→            <Input
+   259→   259→              type="search"
+   260→   260→              placeholder="Cari produk viral: earbuds, serum vitamin c, kaos oversize..."
+   261→   261→              value={search}
+   262→   262→              onChange={(e) => setSearch(e.target.value)}
+   263→   263→              aria-label="Cari produk viral"
+   264→   264→              className={cn(
+   265→   265→                "h-10 md:h-11 pl-10 pr-4 text-sm",
+   266→   266→                "bg-white/15 backdrop-blur-md border border-white/20",
+   267→   267→                "text-white placeholder-white/70",
+   268→   268→                "focus:bg-white/25 focus:border-white/40",
+   269→   269→                "rounded-xl"
+   270→   270→              )}
+   271→   271→            />
+   272→   272→          </div>
+   273→   273→        </div>
+   274→   274→      </div>
+   275→   275→
+   276→   276→      {/* ===== Sticky Search bar (only visible after hero scrolls away) ===== */}
+   277→   277→      {!heroVisible && (
+   278→   278→        <div className="sticky top-14 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-lg border-b border-zinc-200 dark:border-zinc-800">
+   279→   279→          <div className="container mx-auto px-4 max-w-7xl py-2">
+   280→   280→            <div className="relative">
+   281→   281→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+   282→   282→              <Input
+   283→   283→                type="search"
+   284→   284→                placeholder="Cari produk viral..."
+   285→   285→                value={search}
+   286→   286→                onChange={(e) => setSearch(e.target.value)}
+   287→   287→                aria-label="Cari produk viral"
+   288→   288→                className={cn(
+   289→   289→                  "h-9 pl-10 pr-4 text-sm",
+   290→   290→                  "bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700",
+   291→   291→                  "text-foreground placeholder-zinc-400",
+   292→   292→                  "focus:ring-1 focus:ring-primary/50",
+   293→   293→                  "rounded-lg"
+   294→   294→                )}
+   295→   295→              />
+   296→   296→            </div>
+   297→   297→          </div>
+   298→   298→        </div>
+   299→   299→      )}
+   300→   300→
+   301→   301→      {/* ===== Main content ===== */}
+   302→   302→      <main className="flex-1 container mx-auto px-4 max-w-7xl py-6">
+   303→   303→        {/* Banner promo slider */}
+   304→   304→        {activeBanners.length > 0 && (
+   305→   305→          <section aria-label="Banner promo" className="mb-6">
+   306→   306→            <div className="relative rounded-2xl overflow-hidden">
+   307→   307→              {/* Current banner */}
+   308→   308→              <a
+   309→   309→                href={activeBanners[bannerIdx]?.linkUrl || undefined}
+   310→   310→                target={activeBanners[bannerIdx]?.linkUrl ? "_blank" : undefined}
+   311→   311→                rel={activeBanners[bannerIdx]?.linkUrl ? "noopener noreferrer" : undefined}
+   312→   312→                className="block relative aspect-[3/1] md:aspect-[4/1] overflow-hidden rounded-2xl"
+   313→   313→                style={{ backgroundColor: activeBanners[bannerIdx]?.bgColor || "#7c3aed" }}
+   314→   314→              >
+   315→   315→                <img
+   316→   316→                  src={activeBanners[bannerIdx].image}
+   317→   317→                  alt={activeBanners[bannerIdx].title}
+   318→   318→                  className="w-full h-full object-cover"
+   319→   319→                />
+   320→   320→                {/* Text overlay */}
+   321→   321→                <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent flex flex-col justify-center px-6 md:px-10">
+   322→   322→                  <h3 className="text-white font-bold text-lg md:text-2xl drop-shadow-lg mb-1">
+   323→   323→                    {activeBanners[bannerIdx].title}
+   324→   324→                  </h3>
+   325→   325→                  {activeBanners[bannerIdx].subtitle && (
+   326→   326→                    <p className="text-white/90 text-sm md:text-base drop-shadow">
+   327→   327→                      {activeBanners[bannerIdx].subtitle}
+   328→   328→                    </p>
+   329→   329→                  )}
+   330→   330→                  {activeBanners[bannerIdx].linkLabel && (
+   331→   331→                    <span className="mt-2 inline-block bg-white text-zinc-900 text-xs md:text-sm font-semibold px-4 py-1.5 rounded-full shadow-lg">
+   332→   332→                      {activeBanners[bannerIdx].linkLabel}
+   333→   333→                    </span>
+   334→   334→                  )}
+   335→   335→                </div>
+   336→   336→              </a>
+   337→   337→              {/* Nav arrows */}
+   338→   338→              {activeBanners.length > 1 && (
+   339→   339→                <>
+   340→   340→                  <button
+   341→   341→                    onClick={() => setBannerIdx((bannerIdx - 1 + activeBanners.length) % activeBanners.length)}
+   342→   342→                    className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition"
+   343→   343→                    aria-label="Banner sebelumnya"
+   344→   344→                  >
+   345→   345→                    <ChevronLeft className="w-5 h-5" />
+   346→   346→                  </button>
+   347→   347→                  <button
+   348→   348→                    onClick={() => setBannerIdx((bannerIdx + 1) % activeBanners.length)}
+   349→   349→                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition"
+   350→   350→                    aria-label="Banner berikutnya"
+   351→   351→                  >
+   352→   352→                    <ChevronRight className="w-5 h-5" />
+   353→   353→                  </button>
+   354→   354→                  {/* Dots */}
+   355→   355→                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+   356→   356→                    {activeBanners.map((_: any, i: number) => (
+   357→   357→                      <button
+   358→   358→                        key={i}
+   359→   359→                        onClick={() => setBannerIdx(i)}
+   360→   360→                        className={cn(
+   361→   361→                          "w-2 h-2 rounded-full transition",
+   362→   362→                          i === bannerIdx ? "bg-white w-4" : "bg-white/50"
+   363→   363→                        )}
+   364→   364→                        aria-label={`Banner ${i + 1}`}
+   365→   365→                      />
+   366→   366→                    ))}
+   367→   367→                  </div>
+   368→   368→                </>
+   369→   369→              )}
+   370→   370→            </div>
+   371→   371→          </section>
+   372→   372→        )}
+   373→   373→
+   374→   374→        {/* Category chips */}
+   375→   375→        <section aria-label="Kategori produk viral" className="mb-6">
+   376→   376→          {categoriesLoading ? (
+   377→   377→            <div className="flex gap-2 overflow-hidden">
+   378→   378→              {[1, 2, 3, 4, 5].map((i) => (
+   379→   379→                <Skeleton key={i} className="h-9 w-24 rounded-full" />
+   380→   380→              ))}
+   381→   381→            </div>
+   382→   382→          ) : (
+   383→   383→            <nav className="flex md:grid md:grid-cols-8 gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+   384→   384→              <CategoryChip
+   385→   385→                active={activeCategory === "all"}
+   386→   386→                onClick={() => setActiveCategory("all")}
+   387→   387→                emoji="✨"
+   388→   388→                label="Semua"
+   389→   389→              />
+   390→   390→              {categories.map((c) => (
+   391→   391→                <CategoryChip
+   392→   392→                  key={c.id}
+   393→   393→                  active={activeCategory === c.id}
+   394→   394→                  onClick={() => setActiveCategory(c.id)}
+   395→   395→                  emoji={c.emoji}
+   396→   396→                  label={c.name}
+   397→   397→                />
+   398→   398→              ))}
+   399→   399→            </nav>
+   400→   400→          )}
+   401→   401→        </section>
+   402→   402→
+   403→   403→        {/* Filter tabs */}
+   404→   404→        <section aria-label="Filter produk viral" className="mb-6">
+   405→   405→          <Tabs
+   406→   406→            value={filter}
+   407→   407→            onValueChange={(v) => setFilter(v as ProductFilter)}
+   408→   408→          >
+   409→   409→            <TabsList className="grid w-full max-w-md grid-cols-3 h-10">
+   410→   410→              <TabsTrigger value="latest" className="text-xs md:text-sm">
+   411→   411→                <Clock className="w-3.5 h-3.5 mr-1" />
+   412→   412→                Terbaru
+   413→   413→              </TabsTrigger>
+   414→   414→              <TabsTrigger value="viral" className="text-xs md:text-sm">
+   415→   415→                <Flame className="w-3.5 h-3.5 mr-1" />
+   416→   416→                Viral 24 Jam
+   417→   417→              </TabsTrigger>
+   418→   418→              <TabsTrigger value="weekly" className="text-xs md:text-sm">
+   419→   419→                <TrendingUp className="w-3.5 h-3.5 mr-1" />
+   420→   420→                Top Mingguan
+   421→   421→              </TabsTrigger>
+   422→   422→            </TabsList>
+   423→   423→          </Tabs>
+   424→   424→        </section>
+   425→   425→
+   426→   426→        {/* Products grid */}
+   427→   427→        <section aria-label="Daftar produk viral Indonesia" className="mb-12">
+   428→   428→          {productsQuery.isLoading ? (
+   429→   429→            <ProductsGridSkeleton />
+   430→   430→          ) : productsQuery.isError ? (
+   431→   431→            <div className="text-center py-16 text-sm text-zinc-500 dark:text-zinc-400">
+   432→   432→              <p>Gagal memuat produk. Coba refresh halaman.</p>
+   433→   433→              <Button
+   434→   434→                variant="outline"
+   435→   435→                size="sm"
+   436→   436→                className="mt-3"
+   437→   437→                onClick={() => productsQuery.refetch()}
+   438→   438→              >
+   439→   439→                Coba lagi
+   440→   440→              </Button>
+   441→   441→            </div>
+   442→   442→          ) : products.length === 0 ? (
+   443→   443→            <div className="text-center py-16 text-sm text-zinc-500 dark:text-zinc-400">
+   444→   444→              <Search className="w-10 h-10 mx-auto mb-3 opacity-50" />
+   445→   445→              <p>Tidak ada produk yang cocok.</p>
+   446→   446→              <p className="text-xs mt-1">
+   447→   447→                Coba kata kunci lain atau pilih kategori berbeda.
+   448→   448→              </p>
+   449→   449→            </div>
+   450→   450→          ) : (
+   451→   451→            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+   452→   452→              {/* Main grid */}
+   453→   453→              <div className="lg:col-span-3 flex flex-col gap-6">
+   454→   454→                {featuredProduct && filter !== "latest" && (
+   455→   455→                  <ProductCard
+   456→   456→                    key={`featured-${featuredProduct.id}`}
+   457→   457→                    product={featuredProduct}
+   458→   458→                    variant="featured"
+   459→   459→                  />
+   460→   460→                )}
+   461→   461→                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+   462→   462→                  {products
+   463→   463→                    .filter((p) => p.id !== featuredProduct?.id || filter === "latest")
+   464→   464→                    .map((p) => (
+   465→   465→                      <ProductCard
+   466→   466→                        key={`default-${p.id}`}
+   467→   467→                        product={p}
+   468→   468→                        variant="default"
+   469→   469→                      />
+   470→   470→                    ))}
+   471→   471→                </div>
+   472→   472→              </div>
+   473→   473→
+   474→   474→              {/* Sidebar trending - desktop only */}
+   475→   475→              <aside className="hidden lg:block lg:col-span-1">
+   476→   476→                <div
+   477→   477→                  className={cn(
+   478→   478→                    "sticky rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900",
+   479→   479→                    heroVisible ? "top-20" : "top-[104px]"
+   480→   480→                  )}
+   481→   481→                >
+   482→   482→                  {/* Header — selalu visible, tidak ikut scroll */}
+   483→   483→                  <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 rounded-t-2xl bg-white dark:bg-zinc-900">
+   484→   484→                    <Flame className="w-4 h-4 text-fuchsia-500" />
+   485→   485→                    <h2 className="text-sm font-semibold">Trending Sekarang</h2>
+   486→   486→                  </div>
+   487→   487→                  {/* Produk — bisa scroll jika banyak */}
+   488→   488→                  <div className="p-4 pt-3">
+   489→   489→                    {trendingTop5.length === 0 ? (
+   490→   490→                      <p className="text-xs text-zinc-500">Belum ada data.</p>
+   491→   491→                    ) : (
+   492→   492→                      <div className="flex flex-col gap-1 max-h-[calc(100vh-180px)] overflow-y-auto custom-scrollbar">
+   493→   493→                        {trendingTop5.map((p, i) => (
+   494→   494→                          <ProductCard
+   495→   495→                            key={`compact-${p.id}`}
+   496→   496→                            product={p}
+   497→   497→                            variant="compact"
+   498→   498→                            rank={i + 1}
+   499→   499→                          />
+   500→   500→                        ))}
+   501→   501→                      </div>
+   502→   502→                    )}
+   503→   503→                  </div>
+   504→   504→                </div>
+   505→   505→              </aside>
+   506→   506→            </div>
+   507→   507→          )}
+   508→   508→        </section>
+   509→   509→
+   510→   510→        {/* SEO content section — bantu Google index */}
+   511→   511→        <section className="mb-8 prose prose-sm dark:prose-invert max-w-none">
+   512→   512→          <h2 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-2">
+   513→   513→            Produk Viral Shopee, Tokopedia & Lazada Terlengkap
+   514→   514→          </h2>
+   515→   515→          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+   516→   516→            JelajahBelanja adalah platform agregator produk viral Indonesia yang
+   517→   517→            mengumpulkan ribuan best seller dari marketplace lokal seperti Shopee,
+   518→   518→            Tokopedia, dan Lazada. Kami memantau produk yang sedang trending di
+   519→   519→            TikTok dan media sosial, lalu menampilkannya dengan filter viralitas
+   520→   520→            sehingga kamu bisa cepat menemukan{" "}
+   521→   521→            <strong>produk viral 24 jam terakhir</strong>,{" "}
+   522→   522→            <strong>best seller mingguan</strong>, atau produk{" "}
+   523→   523→            <strong>terbaru</strong> dari berbagai kategori. Setiap produk dilengkapi
+   524→   524→            info rating, jumlah terjual, lokasi seller, dan harga termurah dengan
+   525→   525→            diskon terbesar. Update setiap hari, jadi kamu tidak ketinggalan tren
+   526→   526→            belanja online terbaru.
+   527→   527→          </p>
+   528→   528→        </section>
+   529→   529→
+   530→   530→        {/* ===== Blog Section ===== */}
+   531→   531→        <section className="py-8 md:py-12">
+   532→   532→          <div className="flex items-center justify-between mb-6">
+   533→   533→            <div>
+   534→   534→              <h2 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+   535→   535→                <BookOpen className="w-5 h-5 text-fuchsia-500" />
+   536→   536→                Artikel & Panduan
+   537→   537→              </h2>
+   538→   538→              <p className="text-xs text-zinc-500 mt-1">Tips belanja, review produk, dan panduan affiliate</p>
+   539→   539→            </div>
+   540→   540→            <Link
+   541→   541→              href="/artikel"
+   542→   542→              className="text-xs font-semibold text-fuchsia-600 dark:text-fuchsia-400 hover:underline"
+   543→   543→            >
+   544→   544→              Lihat semua →
+   545→   545→            </Link>
+   546→   546→          </div>
+   547→   547→          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   548→   548→            {[
+   549→   549→              {
+   550→   550→                slug: "cara-aman-belanja-online-shopee",
+   551→   551→                title: "Cara Aman Belanja Online di Shopee",
+   552→   552→                excerpt: "Panduan lengkap belanja aman — cek rating toko, bedakan produk original vs kw, dan hindari penipuan.",
+   553→   553→                cat: "Tips Belanja",
+   554→   554→                color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+   555→   555→              },
+   556→   556→              {
+   557→   557→                slug: "produk-viral-tiktok-worth-it",
+   558→   558→                title: "10 Produk Viral TikTok yang Worth It",
+   559→   559→                excerpt: "Review jujur produk viral yang beneran bagus — mana yang worth it dan mana yang cuma hype.",
+   560→   560→                cat: "Review Produk",
+   561→   561→                color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+   562→   562→              },
+   563→   563→              {
+   564→   564→                slug: "rahasia-diskon-shopee-promo-cashback",
+   565→   565→                title: "Rahasia Dapat Diskon Shopee",
+   566→   566→                excerpt: "Voucher tersembunyi, jadwal flash sale, dan promo cashback yang sering terlewat pembeli.",
+   567→   567→                cat: "Tips Hemat",
+   568→   568→                color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+   569→   569→              },
+   570→   570→            ].map((a) => (
+   571→   571→              <Link
+   572→   572→                key={a.slug}
+   573→   573→                href={`/artikel/${a.slug}`}
+   574→   574→                className="group p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-fuchsia-300 dark:hover:border-fuchsia-700 hover:shadow-md transition-all"
+   575→   575→              >
+   576→   576→                <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2 ${a.color}`}>
+   577→   577→                  {a.cat}
+   578→   578→                </span>
+   579→   579→                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-1.5 group-hover:text-fuchsia-600 dark:group-hover:text-fuchsia-400 transition-colors line-clamp-2">
+   580→   580→                  {a.title}
+   581→   581→                </h3>
+   582→   582→                <p className="text-xs text-zinc-500 line-clamp-2">{a.excerpt}</p>
+   583→   583→              </Link>
+   584→   584→            ))}
+   585→   585→          </div>
+   586→   586→        </section>
+   587→   587→      </main>
+   588→   588→
+   589→   589→      {/* ===== Footer ===== */}
+   590→   590→      <footer className="bg-header-gradient text-white mt-auto">
+   591→   591→        <div className="container mx-auto px-4 max-w-7xl py-6">
+   592→   592→          {/* Top row: logo + description */}
+   593→   593→          <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-sm mb-4">
+   594→   594→            <div className="flex items-center gap-2">
+   595→   595→              <img src="/logo.svg" alt="JB" className="w-5 h-5" />
+   596→   596→              <span className="font-semibold">JelajahBelanja</span>
+   597→   597→              <span className="text-white/70">© 2025</span>
+   598→   598→            </div>
+   599→   599→            <p className="text-xs text-white/70 text-center md:text-right max-w-md">
+   600→   600→              Platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada.
+   601→   601→            </p>
+   602→   602→          </div>
+   603→   603→
+   604→   604→          {/* Navigation links */}
+   605→   605→          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-white/60 mb-4">
+   606→   606→            <Link href="/tentang" className="hover:text-white transition-colors">Tentang</Link>
+   607→   607→            <span aria-hidden>·</span>
+   608→   608→            <Link href="/kontak" className="hover:text-white transition-colors">Kontak</Link>
+   609→   609→            <span aria-hidden>·</span>
+   610→   610→            <Link href="/artikel" className="hover:text-white transition-colors">Blog</Link>
+   611→   611→            <span aria-hidden>·</span>
+   612→   612→            <Link href="/privasi" className="hover:text-white transition-colors">Kebijakan Privasi</Link>
+   613→   613→            <span aria-hidden>·</span>
+   614→   614→            <Link href="/syarat" className="hover:text-white transition-colors">Syarat & Ketentuan</Link>
+   615→   615→            <span aria-hidden>·</span>
+   616→   616→            <Link href="/disclaimer" className="hover:text-white transition-colors">Disclaimer</Link>
+   617→   617→          </div>
+   618→   618→
+   619→   619→          {/* Affiliate disclosure — wajib sesuai aturan FTC & marketplace */}
+   620→   620→          <p className="text-[11px] text-white/60 leading-relaxed border-t border-white/20 pt-3">
+   621→   621→            <strong className="text-white/80">Disclosure Affiliate:</strong> Beberapa
+   622→   622→            link di JelajahBelanja adalah link afiliasi. Jika kamu membeli produk
+   623→   623→            melalui link tersebut, kami mungkin menerima komisi kecil dari marketplace
+   624→   624→            tanpa biaya tambahan untuk kamu. Ini membantu kami terus menyediakan layanan
+   625→   625→            gratis. Terima kasih atas dukunganmu!
+   626→   626→          </p>
+   627→   627→        </div>
+   628→   628→      </footer>
+   629→   629→
+   630→   630→    </div>
+   631→   631→  );
+   632→   632→}
+   633→   633→
+   634→   634→function CategoryChip({
+   635→   635→  active,
+   636→   636→  onClick,
+   637→   637→  emoji,
+   638→   638→  label,
+   639→   639→}: {
+   640→   640→  active: boolean;
+   641→   641→  onClick: () => void;
+   642→   642→  emoji: string;
+   643→   643→  label: string;
+   644→   644→}) {
+   645→   645→  return (
+   646→   646→    <button
+   647→   647→      type="button"
+   648→   648→      onClick={onClick}
+   649→   649→      className={cn(
+   650→   650→        "flex-shrink-0 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium border transition",
+   651→   651→        active
+   652→   652→          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+   653→   653→          : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-primary/40 hover:text-primary"
+   654→   654→      )}
+   655→   655→    >
+   656→   656→      <span aria-hidden>{emoji}</span>
+   657→   657→      {label}
+   658→   658→    </button>
+   659→   659→  );
+   660→   660→}
+   661→   661→
+   662→   662→function ProductsGridSkeleton() {
+   663→   663→  return (
+   664→   664→    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+   665→   665→      {Array.from({ length: 9 }).map((_, i) => (
+   666→   666→        <div
+   667→   667→          key={i}
+   668→   668→          className="flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden"
+   669→   669→        >
+   670→   670→          <Skeleton className="w-full aspect-square" />
+   671→   671→          <div className="p-3 flex flex-col gap-2">
+   672→   672→            <Skeleton className="h-3 w-1/3" />
+   673→   673→            <Skeleton className="h-4 w-full" />
+   674→   674→            <Skeleton className="h-4 w-2/3" />
+   675→   675→            <Skeleton className="h-5 w-1/2" />
+   676→   676→            <Skeleton className="h-8 w-full" />
+   677→   677→          </div>
+   678→   678→        </div>
+   679→   679→      ))}
+   680→   680→    </div>
+   681→   681→  );
+   682→   682→}
+   683→   683→
