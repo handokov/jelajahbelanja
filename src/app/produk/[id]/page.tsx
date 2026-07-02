@@ -2,6 +2,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import ProductDetailClient from "./ProductDetailClient";
+import ProductError from "./error";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -10,8 +11,13 @@ interface Props {
 // React.cache() deduplikasi DB query dalam 1 request
 // Jadi generateMetadata + ProductPage share hasil yang sama, gak query 2x
 const getProduct = cache(async (id: string) => {
-  const dbId = id.startsWith("shopee-") ? id.replace("shopee-", "") : id;
-  return db.shopeeProduct.findUnique({ where: { id: dbId } });
+  try {
+    const dbId = id.startsWith("shopee-") ? id.replace("shopee-", "") : id;
+    return await db.shopeeProduct.findUnique({ where: { id: dbId } });
+  } catch (err) {
+    console.error("[ProductPage] DB error in getProduct:", err);
+    return null;
+  }
 });
 
 export async function generateMetadata({ params }: Props) {
@@ -23,7 +29,10 @@ export async function generateMetadata({ params }: Props) {
   }
 
   const productUrl = `/produk/${id}`;
-  const mpLabel = product.marketplace?.charAt(0).toUpperCase() + product.marketplace?.slice(1) || "Shopee";
+  const mpLabel =
+    product.marketplace
+      ? product.marketplace.charAt(0).toUpperCase() + product.marketplace.slice(1)
+      : "Shopee";
   const priceStr = `Rp ${product.price.toLocaleString("id-ID")}`;
   const description = `Beli ${product.title} dengan harga ${priceStr}${product.discountPercent ? ` diskon ${product.discountPercent}%` : ""} di ${mpLabel}. Rating ${product.rating}/5, ${product.soldCount} terjual.`;
 
@@ -62,22 +71,37 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function ProductPage({ params }: Props) {
   const { id } = await params;
-  const product = await getProduct(id);
+
+  let product;
+  try {
+    product = await getProduct(id);
+  } catch (err) {
+    console.error("[ProductPage] DB error fetching product:", err);
+    // DB error — tampilkan error boundary daripada crash
+    return <ProductError error={new Error("Gagal memuat data produk")} reset={() => {}} />;
+  }
 
   if (!product) {
     notFound();
   }
 
   // Get related products (same category, excluding current)
-  const related = await db.shopeeProduct.findMany({
-    where: {
-      category: product.category,
-      isHidden: false,
-      id: { not: product.id },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 6,
-  });
+  let related: Awaited<ReturnType<typeof db.shopeeProduct.findMany>> = [];
+  try {
+    related = await db.shopeeProduct.findMany({
+      where: {
+        category: product.category,
+        isHidden: false,
+        id: { not: product.id },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+    });
+  } catch (err) {
+    console.error("[ProductPage] DB error fetching related products:", err);
+    // Related products gagal? Gak masalah, tetap tampilkan produk utama
+    // related tetap empty array []
+  }
 
   // JSON-LD structured data for SEO
   const jsonLd = {
