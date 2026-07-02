@@ -5,9 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ReactQueryProvider } from "@/components/react-query-provider";
 import { Analytics } from "@vercel/analytics/react";
-import SplashDismissal from "@/components/splash-dismissal";
-import SWRegister from "@/components/sw-register";
-import { PWARefresh } from "@/components/pwa-refresh";
+import SWCleanup from "@/components/sw-register";
 
 const interSans = Inter({
   variable: "--font-inter",
@@ -151,51 +149,10 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />
-        {/* PWA Splash Screen — muncul sebelum React hydrate, dihapus oleh SplashDismissal */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function(){
-                var s = document.getElementById('jb-splash');
-                if(s) s.style.display='flex';
-              })();
-            `,
-          }}
-        />
       </head>
       <body
         className={`${interSans.variable} font-sans antialiased bg-background text-foreground`}
       >
-        {/* Splash screen overlay — pure HTML/CSS, muncul instan sebelum React */}
-        <div
-          id="jb-splash"
-          style={{
-            display: "none",
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            background: "linear-gradient(135deg, #7c3aed 0%, #c026d3 100%)",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "opacity 0.4s ease-out",
-          }}
-        >
-          {/* Logo */}
-          <svg width="72" height="72" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="64" height="64" rx="16" fill="white" fillOpacity="0.2"/>
-            <path d="M20 20h8v24h-8zM36 20h8v24h-8z" fill="white"/>
-            <path d="M16 28h32v8H16z" fill="white" fillOpacity="0.7"/>
-          </svg>
-          <div style={{ marginTop: 16, color: "white", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>
-            JelajahBelanja
-          </div>
-          <div style={{ marginTop: 4, color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 400 }}>
-            Produk Viral &amp; Best Seller
-          </div>
-          <div style={{ marginTop: 24, width: 32, height: 32, border: "3px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "jb-spin 0.8s linear infinite" }} />
-          <style>{`@keyframes jb-spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
@@ -203,9 +160,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <ReactQueryProvider>
-            <SplashDismissal />
-            <SWRegister />
-            <PWARefresh />
+            <SWCleanup />
             {children}
             <Analytics />
             <Toaster />
