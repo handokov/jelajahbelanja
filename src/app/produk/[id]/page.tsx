@@ -22,14 +22,40 @@ export async function generateMetadata({ params }: Props) {
     return { title: "Produk tidak ditemukan - JelajahBelanja" };
   }
 
+  const productUrl = `/produk/${id}`;
+  const mpLabel = product.marketplace?.charAt(0).toUpperCase() + product.marketplace?.slice(1) || "Shopee";
+  const priceStr = `Rp ${product.price.toLocaleString("id-ID")}`;
+  const description = `Beli ${product.title} dengan harga ${priceStr}${product.discountPercent ? ` diskon ${product.discountPercent}%` : ""} di ${mpLabel}. Rating ${product.rating}/5, ${product.soldCount} terjual.`;
+
   return {
     title: `${product.title} - JelajahBelanja`,
-    description: `Beli ${product.title} dengan harga Rp ${product.price.toLocaleString("id-ID")}${product.discountPercent ? ` diskon ${product.discountPercent}%` : ""}. Rating ${product.rating}/5, ${product.soldCount} terjual.`,
+    description,
+    alternates: {
+      canonical: productUrl,
+    },
     openGraph: {
       title: product.title,
-      description: `Rp ${product.price.toLocaleString("id-ID")}${product.discountPercent ? ` | Diskon ${product.discountPercent}%` : ""}`,
-      images: product.image ? [{ url: product.image }] : [],
+      description: `${priceStr}${product.discountPercent ? ` | Diskon ${product.discountPercent}%` : ""} di ${mpLabel}`,
+      url: productUrl,
+      images: product.image
+        ? [
+            {
+              url: product.image,
+              width: 800,
+              height: 800,
+              alt: product.title,
+            },
+          ]
+        : [],
       type: "website",
+      siteName: "JelajahBelanja",
+      locale: "id_ID",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: product.title,
+      description: `${priceStr}${product.discountPercent ? ` | Diskon ${product.discountPercent}%` : ""} di ${mpLabel}`,
+      images: product.image ? [product.image] : [],
     },
   };
 }

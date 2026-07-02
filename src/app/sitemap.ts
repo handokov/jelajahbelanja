@@ -1,99 +1,42 @@
+import { db } from "@/lib/db";
 import type { MetadataRoute } from "next";
-import { blogArticles } from "@/lib/blog-data";
 
 const SITE_URL = "https://jelajahbelanja.com";
 
-/**
- * Generate sitemap.xml dinamis untuk SEO.
- * Route: /sitemap.xml
- */
-export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
-
-  // Static routes
-  const staticRoutes: MetadataRoute.Sitemap = [
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Static pages
+  const staticPages: MetadataRoute.Sitemap = [
     {
       url: SITE_URL,
-      lastModified: now,
+      lastModified: new Date(),
       changeFrequency: "hourly",
-      priority: 1,
-    },
-    {
-      url: `${SITE_URL}/artikel`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.8,
-    },
-    {
-      url: `${SITE_URL}/tentang`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
-    {
-      url: `${SITE_URL}/kontak`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
-    {
-      url: `${SITE_URL}/privasi`,
-      lastModified: now,
-      changeFrequency: "yearly",
-      priority: 0.3,
-    },
-    {
-      url: `${SITE_URL}/syarat`,
-      lastModified: now,
-      changeFrequency: "yearly",
-      priority: 0.3,
-    },
-    {
-      url: `${SITE_URL}/disclaimer`,
-      lastModified: now,
-      changeFrequency: "yearly",
-      priority: 0.4,
+      priority: 1.0,
     },
   ];
 
-  // Dynamic routes per kategori (virtual, karena pakai query param ?category=)
-  // Google bisa index ini sebagai variasi URL
-  const categories = [
-    "elektronik",
-    "fashion",
-    "beauty",
-    "home",
-    "gaming",
-    "olahraga",
-    "mainan",
-    "otomotif",
-  ];
+  // Dynamic product pages
+  let productPages: MetadataRoute.Sitemap = [];
+  try {
+    const products = await db.shopeeProduct.findMany({
+      where: { enabled: true, isHidden: { not: true } },
+      select: {
+        id: true,
+        updatedAt: true,
+        isPinned: true,
+        isViral: true,
+      },
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+    });
 
-  const filters: Array<{ filter: string; priority: number; change: "hourly" | "daily" }> = [
-    { filter: "latest", priority: 0.9, change: "hourly" },
-    { filter: "viral", priority: 0.95, change: "hourly" },
-    { filter: "weekly", priority: 0.85, change: "daily" },
-  ];
-
-  const categoryRoutes: MetadataRoute.Sitemap = [];
-  for (const cat of categories) {
-    for (const f of filters) {
-      categoryRoutes.push({
-        url: `${SITE_URL}/?category=${cat}&filter=${f.filter}`,
-        lastModified: now,
-        changeFrequency: f.change,
-        priority: f.priority,
-      });
-    }
+    productPages = products.map((p) => ({
+      url: `${SITE_URL}/produk/shopee-${p.id}`,
+      lastModified: p.updatedAt,
+      changeFrequency: "daily" as const,
+      priority: p.isPinned || p.isViral ? 0.8 : 0.6,
+    }));
+  } catch (err) {
+    console.error("[sitemap] Failed to fetch products:", err);
   }
 
-  // Blog article routes
-  const blogRoutes: MetadataRoute.Sitemap = blogArticles.map((article) => ({
-    url: `${SITE_URL}/artikel/${article.slug}`,
-    lastModified: new Date(article.updatedAt),
-    changeFrequency: "monthly" as const,
-    priority: 0.7,
-  }));
-
-  return [...staticRoutes, ...categoryRoutes, ...blogRoutes];
+  return [...staticPages, ...productPages];
 }

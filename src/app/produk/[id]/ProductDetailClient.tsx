@@ -19,6 +19,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { Marketplace } from "@/lib/types";
 import {
   formatRupiah,
   formatSoldCount,
@@ -57,9 +58,43 @@ interface ShopeeProduct {
   isHidden: boolean;
   affiliateUrl: string | null;
   notes: string | null;
+  marketplace: string;
   createdAt: string;
   updatedAt: string;
 }
+
+/** Marketplace badge styling */
+const MARKETPLACE_META: Record<string, { label: string; className: string; buyLabel: string }> = {
+  shopee: {
+    label: "Shopee",
+    className: "bg-orange-100 text-orange-800",
+    buyLabel: "Beli di Shopee",
+  },
+  tokopedia: {
+    label: "Tokopedia",
+    className: "bg-green-100 text-green-800",
+    buyLabel: "Beli di Tokopedia",
+  },
+  lazada: {
+    label: "Lazada",
+    className: "bg-blue-100 text-blue-800",
+    buyLabel: "Beli di Lazada",
+  },
+  aliexpress: {
+    label: "AliExpress",
+    className: "bg-red-100 text-red-800",
+    buyLabel: "Beli di AliExpress",
+  },
+  amazon: {
+    label: "Amazon",
+    className: "bg-yellow-100 text-yellow-800",
+    buyLabel: "Beli di Amazon",
+  },
+};
+
+function getMarketplaceMeta(marketplace: string) {
+  return MARKETPLACE_META[marketplace] ?? MARKETPLACE_META.shopee;
+  }
 
 /* ─── Simple Recommendation Card ─── */
 function RecCard({ product }: { product: ShopeeProduct }) {
@@ -291,8 +326,8 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                     VIRAL
                   </Badge>
                 )}
-                <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold px-2.5 py-1 h-7 shadow-lg">
-                  Shopee
+                <Badge className={cn(getMarketplaceMeta(product.marketplace).className, "text-xs font-semibold px-2.5 py-1 h-7 shadow-lg")}>
+                  {getMarketplaceMeta(product.marketplace).label}
                 </Badge>
               </div>
               {product.discountPercent && product.discountPercent > 0 && (
@@ -458,7 +493,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               rel="nofollow sponsored noopener noreferrer"
             >
               <ShoppingBag className="w-5 h-5 mr-2" />
-              Beli di Shopee
+              {getMarketplaceMeta(product.marketplace).buyLabel}
               <ExternalLink className="w-4 h-4 ml-2" />
             </a>
           </Button>
