@@ -42,6 +42,7 @@ import {
   Upload,
   FileSpreadsheet,
   Shield,
+  LogOut,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -650,9 +651,24 @@ export default function AdminPage() {
               </Badge>
             </div>
           </div>
-          <h1 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Panel Admin
-          </h1>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              Panel Admin
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1.5"
+              onClick={async () => {
+                // Hapus cookie session dan redirect ke login
+                document.cookie = "jb-admin-session=; path=/; max-age=0";
+                window.location.href = "/jb-mgr-login";
+              }}
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
