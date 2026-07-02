@@ -43,3 +43,42 @@ Stage Summary:
 - "Beli di [Marketplace]" button always visible at bottom
 - AI advisor section scrolls naturally with content
 - Type check clean, all APIs verified
+
+---
+Task ID: pwa-loading-and-refactoring
+Agent: main
+Task: PWA Loading Screen improvement for low-end Android devices + Code Refactoring
+
+Work Log:
+- Added manual Service Worker (public/sw.js) with caching strategies: Cache First (static assets), Network First (API/HTML), Stale While Revalidate (images)
+- Created SWRegister component to register service worker in production
+- Improved splash screen with animated progress bar for better perceived loading on slow devices
+- Updated SplashDismissal to use __jbSplashComplete() for smooth progress-to-100% transition before fade
+- Generated maskable PWA icons (192x192 and 512x512) for proper homescreen icon on Android
+- Updated site.webmanifest with maskable icons, shortcuts, categories, orientation, and proper background_color
+- Added route-level loading.tsx for instant loading UI during navigation
+- Added turbopack: {} to next.config.ts for Next.js 16 compatibility
+- Removed @ducanh2912/next-pwa (webpack-based, conflicts with Turbopack)
+- Refactored page.tsx from 683 lines into 11 focused components in src/components/home/:
+  - use-home-data.ts (custom hook for all data queries and state)
+  - logo-bar.tsx (sticky header with logo, blog link, theme toggle)
+  - hero-section.tsx (tagline, stats, search bar)
+  - sticky-search-bar.tsx (appears after hero scrolls away)
+  - banner-slider.tsx (promo banner with auto-slide)
+  - category-chips.tsx (horizontal scrollable category selector)
+  - filter-tabs.tsx (Terbaru/Viral/Top Mingguan tabs)
+  - products-grid.tsx (products grid + trending sidebar + skeleton)
+  - seo-section.tsx (SEO content section)
+  - blog-section.tsx (3 article previews)
+  - footer.tsx (navigation + affiliate disclosure)
+  - index.ts (barrel exports)
+- page.tsx is now ~100 lines, clean and readable
+- Build successful, type check clean for all refactored files
+
+Stage Summary:
+- PWA now has offline support via Service Worker with smart caching strategies
+- Splash screen shows progress bar animation, smooth transition when React hydrates
+- Maskable icons provide proper PWA icon on Android homescreen
+- Manifest includes shortcuts for quick access to Viral/Mingguan filters
+- page.tsx refactored from 683 → ~100 lines with 11 well-defined components
+- All builds and type checks passing

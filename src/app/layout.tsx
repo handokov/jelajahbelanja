@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ReactQueryProvider } from "@/components/react-query-provider";
 import { Analytics } from "@vercel/analytics/react";
 import SplashDismissal from "@/components/splash-dismissal";
+import SWRegister from "@/components/sw-register";
 
 const interSans = Inter({
   variable: "--font-inter",
@@ -154,9 +155,29 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function(){
-                // Hanya tampilkan splash kalau display-mode standalone (PWA) atau first load
                 var s = document.getElementById('jb-splash');
-                if(s) s.style.display='flex';
+                if(s) {
+                  s.style.display='flex';
+                  // Progress bar animation — simulate loading for HP kentang
+                  var bar = document.getElementById('jb-splash-bar');
+                  if(bar) {
+                    var w = 0;
+                    var iv = setInterval(function(){
+                      w += Math.random() * 15;
+                      if(w > 85) { clearInterval(iv); w = 85; }
+                      bar.style.width = w + '%';
+                    }, 200);
+                    // Complete when React hydrate
+                    window.__jbSplashComplete = function(){
+                      clearInterval(iv);
+                      bar.style.width = '100%';
+                      setTimeout(function(){
+                        s.style.opacity = '0';
+                        setTimeout(function(){ s.remove(); }, 400);
+                      }, 200);
+                    };
+                  }
+                }
               })();
             `,
           }}
@@ -177,21 +198,29 @@ export default function RootLayout({
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            transition: "opacity 0.3s ease-out",
+            transition: "opacity 0.4s ease-out",
           }}
         >
-          <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Logo */}
+          <svg width="72" height="72" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect width="64" height="64" rx="16" fill="white" fillOpacity="0.2"/>
             <path d="M20 20h8v24h-8zM36 20h8v24h-8z" fill="white"/>
             <path d="M16 28h32v8H16z" fill="white" fillOpacity="0.7"/>
           </svg>
-          <div style={{ marginTop: 16, color: "white", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em" }}>
+          <div style={{ marginTop: 16, color: "white", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>
             JelajahBelanja
           </div>
           <div style={{ marginTop: 4, color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 400 }}>
             Produk Viral &amp; Best Seller
           </div>
-          <div style={{ marginTop: 24, width: 32, height: 32, border: "3px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "jb-spin 0.8s linear infinite" }} />
+
+          {/* Progress bar — biar user tahu app loading, bukan hang */}
+          <div style={{ marginTop: 32, width: 120, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.2)", overflow: "hidden" }}>
+            <div id="jb-splash-bar" style={{ width: "0%", height: "100%", borderRadius: 2, background: "white", transition: "width 0.3s ease-out" }} />
+          </div>
+
+          {/* Spinner fallback */}
+          <div style={{ marginTop: 16, width: 24, height: 24, border: "2px solid rgba(255,255,255,0.2)", borderTopColor: "white", borderRadius: "50%", animation: "jb-spin 0.8s linear infinite" }} />
           <style>{`@keyframes jb-spin { to { transform: rotate(360deg); } }`}</style>
         </div>
         <ThemeProvider
@@ -202,6 +231,7 @@ export default function RootLayout({
         >
           <ReactQueryProvider>
             <SplashDismissal />
+            <SWRegister />
             {children}
             <Analytics />
             <Toaster />

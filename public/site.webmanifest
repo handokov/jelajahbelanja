@@ -1,11 +1,16 @@
 {
-  "name": "JelajahBelanja",
+  "name": "JelajahBelanja — Produk Viral & Best Seller",
   "short_name": "JelajahBelanja",
   "description": "Produk Viral & Best Seller Shopee, Tokopedia, Lazada Hari Ini",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "background_color": "#7c3aed",
   "theme_color": "#7c3aed",
+  "categories": ["shopping", "lifestyle"],
+  "lang": "id",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
@@ -16,6 +21,32 @@
       "src": "/android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-192x192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/android-chrome-512x512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Produk Viral 24 Jam",
+      "short_name": "Viral",
+      "url": "/?filter=viral",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Top Mingguan",
+      "short_name": "Mingguan",
+      "url": "/?filter=weekly",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
     }
   ]
 }
