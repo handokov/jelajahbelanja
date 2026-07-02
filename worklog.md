@@ -82,3 +82,25 @@ Stage Summary:
 - Manifest includes shortcuts for quick access to Viral/Mingguan filters
 - page.tsx refactored from 683 → ~100 lines with 11 well-defined components
 - All builds and type checks passing
+
+---
+Task ID: fix-sw-and-refresh
+Agent: main
+Task: Fix client-side error when clicking product + fix pull-to-refresh in PWA standalone
+
+Work Log:
+- Root cause 1: Service Worker was intercepting ALL fetch requests including Next.js internal RSC payload requests, causing client-side navigation to crash
+- Root cause 2: PWA standalone mode removes browser chrome including pull-to-refresh
+- Rewrote sw.js: added explicit skip for /_next/ paths, RSC header detection, Next-Router header detection
+- Changed HTML page detection from accept-header check to event.request.mode === "navigate" (more reliable)
+- Bumped cache version to v2 so old SW caches are automatically cleaned on update
+- Added custom pull-to-refresh (PWARefresh component): touch-based gesture detection, only activates in standalone mode, threshold 60px pull, shows animated refresh icon
+- Added PWARefresh to layout.tsx
+- Added error.tsx for /produk/[id] route: friendly error page with "Coba Lagi" and "Kembali ke Beranda" buttons instead of brutal "Application error"
+- Added global error.tsx at app root level as catch-all
+
+Stage Summary:
+- Service Worker no longer interferes with Next.js client-side navigation
+- Pull-to-refresh restored for PWA standalone mode via custom touch gesture
+- Error boundaries prevent white screen of death on product page errors
+- Cache version bumped to v2 for automatic cleanup of old SW caches
