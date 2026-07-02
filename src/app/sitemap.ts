@@ -1,7 +1,13 @@
 import type { MetadataRoute } from "next";
+<<<<<<< HEAD
 import { SITE_URL } from "@/lib/config";
 import { db } from "@/lib/db";
 import { detectMarketplaceFromUrl } from "@/lib/utils";
+=======
+import { blogArticles } from "@/lib/blog-data";
+
+const SITE_URL = "https://jelajahbelanja.com";
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
 
 /**
  * Generate sitemap.xml dinamis untuk SEO.
@@ -22,6 +28,42 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "hourly",
       priority: 1,
+    },
+    {
+      url: `${SITE_URL}/artikel`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/tentang`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: `${SITE_URL}/kontak`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: `${SITE_URL}/privasi`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
+    {
+      url: `${SITE_URL}/syarat`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
+    {
+      url: `${SITE_URL}/disclaimer`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.4,
     },
   ];
 
@@ -56,6 +98,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
+<<<<<<< HEAD
   // === 3. Dynamic product pages (THE MOST IMPORTANT FOR GOOGLE INDEX) ===
   // Setiap produk punya URL: /produk/{marketplace}-{id}
   // Google butuh ini di sitemap supaya bisa discover semua produk
@@ -104,4 +147,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   return [...staticRoutes, ...categoryRoutes, ...productRoutes];
+=======
+  // Blog article routes
+  const blogRoutes: MetadataRoute.Sitemap = blogArticles.map((article) => ({
+    url: `${SITE_URL}/artikel/${article.slug}`,
+    lastModified: new Date(article.updatedAt),
+    changeFrequency: "monthly" as const,
+    priority: 0.7,
+  }));
+
+  return [...staticRoutes, ...categoryRoutes, ...blogRoutes];
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
 }

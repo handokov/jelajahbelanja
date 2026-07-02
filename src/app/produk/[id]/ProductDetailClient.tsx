@@ -55,8 +55,13 @@ export interface ShopeeProduct {
 
 /* ─── Simple Recommendation Card ─── */
 function RecCard({ product }: { product: ShopeeProduct }) {
+<<<<<<< HEAD
   // Gunakan marketplace prefix untuk link detail produk
   const linkId = `${product.marketplace}-${product.id}`;
+=======
+  // product.id bisa "shopee-xxx" atau "xxx" — pastikan link bener
+  const linkId = product.id.startsWith("shopee-") ? product.id : `shopee-${product.id}`;
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
   return (
     <Link
       href={`/produk/${linkId}`}

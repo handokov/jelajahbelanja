@@ -41,9 +41,14 @@ import {
   MapPin,
   Image as ImageLucide,
   Upload,
+<<<<<<< HEAD
   Wand2,
   Loader2,
   FileSpreadsheet,
+=======
+  FileSpreadsheet,
+  Shield,
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -54,11 +59,16 @@ import type {
   UpdateAffiliateTagInput,
   Marketplace,
 } from "@/lib/types";
+<<<<<<< HEAD
 import { formatRupiah } from "@/lib/format";
 import { VALID_MARKETPLACES, MARKETPLACE_META } from "@/lib/config";
 import { BulkUploadTab } from "@/components/bulk-upload-tab";
 import { detectMarketplaceFromUrl } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+=======
+import { BulkUploadTab } from "@/components/bulk-upload-tab";
+import { SecurityTab } from "@/components/security-tab";
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
 
 // ─── Shared constants ───
 
@@ -178,6 +188,14 @@ export default function AdminPage() {
     }
     return res;
   }, [router]);
+
+  // ─── Admin fetch with auth cookie ───
+  const adminFetch = React.useCallback(async (url: string, options?: RequestInit) => {
+    return fetch(url, {
+      ...options,
+      credentials: "include",
+    });
+  }, []);
 
   // ─── Queries ───
 
@@ -763,7 +781,11 @@ export default function AdminPage() {
       {/* Main */}
       <main className="container mx-auto px-4 max-w-5xl py-6">
         <Tabs defaultValue="products" className="space-y-6">
+<<<<<<< HEAD
           <TabsList className="grid w-full max-w-2xl grid-cols-5 h-11">
+=======
+          <TabsList className="grid w-full max-w-3xl grid-cols-6 h-11">
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
             <TabsTrigger value="products" className="text-sm">
               <Package className="w-4 h-4 mr-1.5" />
               Produk
@@ -784,6 +806,10 @@ export default function AdminPage() {
               <Link2 className="w-4 h-4 mr-1.5" />
               Affiliate
             </TabsTrigger>
+            <TabsTrigger value="security" className="text-sm">
+              <Shield className="w-4 h-4 mr-1.5" />
+              Keamanan
+            </TabsTrigger>
           </TabsList>
 
           {/* ===== TAB UPLOAD MASSAL ===== */}
@@ -791,6 +817,14 @@ export default function AdminPage() {
             <BulkUploadTab adminFetch={adminFetch} />
           </TabsContent>
 
+<<<<<<< HEAD
+=======
+          {/* ===== TAB KEAMANAN ===== */}
+          <TabsContent value="security" className="space-y-4">
+            <SecurityTab adminFetch={adminFetch} />
+          </TabsContent>
+
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
           {/* ===== TAB PRODUK ===== */}
           <TabsContent value="products" className="space-y-4">
             {/* Cara pakai */}

@@ -5,7 +5,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ReactQueryProvider } from "@/components/react-query-provider";
 import { Analytics } from "@vercel/analytics/react";
+<<<<<<< HEAD
 import { PwaLoaderRemover } from "@/components/pwa-loader-remover";
+=======
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
 
 const interSans = Inter({
   variable: "--font-inter",
@@ -13,7 +16,14 @@ const interSans = Inter({
   display: "swap",
 });
 
+<<<<<<< HEAD
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/lib/config";
+=======
+const SITE_URL = "https://jelajahbelanja.com";
+const SITE_NAME = "JelajahBelanja";
+const SITE_DESCRIPTION =
+  "JelajahBelanja adalah platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada. Temukan produk viral 24 jam, best seller mingguan, dan diskon terbesar hari ini.";
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -176,7 +186,10 @@ export default function RootLayout({
         >
           <ReactQueryProvider>
             {children}
+<<<<<<< HEAD
             <PwaLoaderRemover />
+=======
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
             <Analytics />
             <Toaster />
           </ReactQueryProvider>

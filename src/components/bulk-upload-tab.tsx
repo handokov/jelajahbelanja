@@ -35,7 +35,10 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
       return;
     }
 
+<<<<<<< HEAD
     // Simple CSV parse untuk preview (bukan production parser)
+=======
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
     const parseLine = (line: string): string[] => {
       const result: string[] = [];
       let current = "";
@@ -56,7 +59,11 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     };
 
     const headers = parseLine(lines[0]);
+<<<<<<< HEAD
     const previewRows = lines.slice(1, 6).map(parseLine); // Preview maks 5 baris
+=======
+    const previewRows = lines.slice(1, 6).map(parseLine);
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
 
     setCsvHeaders(headers);
     setCsvPreview(previewRows);

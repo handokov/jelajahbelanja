@@ -13,7 +13,11 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
+<<<<<<< HEAD
   Star,
+=======
+  BookOpen,
+>>>>>>> 708b746e9744a8c43d24b54b1818a255a7a7fd9e
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
@@ -221,6 +225,15 @@ export default function Home() {
             </Badge>
           </div>
           <div className="flex items-center gap-1">
+            <Link href="/artikel">
+              <Button
+                variant="ghost"
+                className="text-white hover:bg-white/15 hover:text-white h-9 text-xs gap-1"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span className="hidden sm:inline">Blog</span>
+              </Button>
+            </Link>
             <Button
               variant="ghost"
               size="icon"
@@ -247,7 +260,7 @@ export default function Home() {
               Produk Viral & Best Seller Indonesia Hari Ini
             </h2>
             <p className="text-xs md:text-sm text-white/80 mb-3 max-w-2xl">
-              Lacak produk viral dari Shopee, Tokopedia, dan Lazada. Update real-time,
+              Lacak produk viral dari Shopee, Tokopedia, dan Lazada. Update berkala,
               filter berdasarkan viralitas, dan temukan diskon terbaik.
             </p>
             <div className="flex flex-wrap gap-1.5 md:gap-2 text-[11px] md:text-xs">
@@ -583,21 +596,96 @@ export default function Home() {
             belanja online terbaru.
           </p>
         </section>
+
+        {/* ===== Blog Section ===== */}
+        <section className="py-8 md:py-12">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-fuchsia-500" />
+                Artikel & Panduan
+              </h2>
+              <p className="text-xs text-zinc-500 mt-1">Tips belanja, review produk, dan panduan affiliate</p>
+            </div>
+            <Link
+              href="/artikel"
+              className="text-xs font-semibold text-fuchsia-600 dark:text-fuchsia-400 hover:underline"
+            >
+              Lihat semua →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              {
+                slug: "cara-aman-belanja-online-shopee",
+                title: "Cara Aman Belanja Online di Shopee",
+                excerpt: "Panduan lengkap belanja aman — cek rating toko, bedakan produk original vs kw, dan hindari penipuan.",
+                cat: "Tips Belanja",
+                color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+              },
+              {
+                slug: "produk-viral-tiktok-worth-it",
+                title: "10 Produk Viral TikTok yang Worth It",
+                excerpt: "Review jujur produk viral yang beneran bagus — mana yang worth it dan mana yang cuma hype.",
+                cat: "Review Produk",
+                color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+              },
+              {
+                slug: "rahasia-diskon-shopee-promo-cashback",
+                title: "Rahasia Dapat Diskon Shopee",
+                excerpt: "Voucher tersembunyi, jadwal flash sale, dan promo cashback yang sering terlewat pembeli.",
+                cat: "Tips Hemat",
+                color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+              },
+            ].map((a) => (
+              <Link
+                key={a.slug}
+                href={`/artikel/${a.slug}`}
+                className="group p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-fuchsia-300 dark:hover:border-fuchsia-700 hover:shadow-md transition-all"
+              >
+                <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2 ${a.color}`}>
+                  {a.cat}
+                </span>
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-1.5 group-hover:text-fuchsia-600 dark:group-hover:text-fuchsia-400 transition-colors line-clamp-2">
+                  {a.title}
+                </h3>
+                <p className="text-xs text-zinc-500 line-clamp-2">{a.excerpt}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
       </main>
 
       {/* ===== Footer ===== */}
       <footer className="bg-header-gradient text-white mt-auto">
         <div className="container mx-auto px-4 max-w-7xl py-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-sm mb-3">
+          {/* Top row: logo + description */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-sm mb-4">
             <div className="flex items-center gap-2">
               <img src="/logo.svg" alt="JB" className="w-5 h-5" />
               <span className="font-semibold">JelajahBelanja</span>
-              <span className="text-white/70">© 2024</span>
+              <span className="text-white/70">© 2025</span>
             </div>
             <p className="text-xs text-white/70 text-center md:text-right max-w-md">
-              Data produk dikurasi dari Shopee, Tokopedia, Lazada, dan AliExpress.
+              Platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada.
             </p>
           </div>
+
+          {/* Navigation links */}
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-white/60 mb-4">
+            <Link href="/tentang" className="hover:text-white transition-colors">Tentang</Link>
+            <span aria-hidden>·</span>
+            <Link href="/kontak" className="hover:text-white transition-colors">Kontak</Link>
+            <span aria-hidden>·</span>
+            <Link href="/artikel" className="hover:text-white transition-colors">Blog</Link>
+            <span aria-hidden>·</span>
+            <Link href="/privasi" className="hover:text-white transition-colors">Kebijakan Privasi</Link>
+            <span aria-hidden>·</span>
+            <Link href="/syarat" className="hover:text-white transition-colors">Syarat & Ketentuan</Link>
+            <span aria-hidden>·</span>
+            <Link href="/disclaimer" className="hover:text-white transition-colors">Disclaimer</Link>
+          </div>
+
           {/* Affiliate disclosure — wajib sesuai aturan FTC & marketplace */}
           <p className="text-[11px] text-white/60 leading-relaxed border-t border-white/20 pt-3">
             <strong className="text-white/80">Disclosure Affiliate:</strong> Beberapa
