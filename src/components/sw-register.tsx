@@ -3,30 +3,31 @@
 import { useEffect } from "react";
 
 /**
- * SWRegister — daftarkan service worker di browser.
- * Dipasang di layout.tsx, cuma jalan di production (bukan dev).
+ * SWRegister — cleanup service worker lama yang mungkin bikin error.
+ *
+ * SEMENTARA DIMATIKAN: SW registration di-comment dulu sampai
+ * dipastikan gak ada error. SW lama yang masih aktif di-unregister.
  */
 export default function SWRegister() {
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
 
-    navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
-      .then((reg) => {
-        console.log("[SW] Registered:", reg.scope);
+    // UNREGISTER semua SW lama yang mungkin masih aktif dan bikin masalah
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        console.log("[SW] Unregistering old SW:", registration.scope);
+        registration.unregister();
+      }
+    }).catch((err) => {
+      console.warn("[SW] Cleanup failed:", err);
+    });
 
-        // Cek update berkala (setiap 30 menit)
-        setInterval(
-          () => {
-            reg.update();
-          },
-          30 * 60 * 1000
-        );
-      })
-      .catch((err) => {
-        console.warn("[SW] Registration failed:", err);
-      });
+    // TODO: Aktifkan kembali setelah error fix, uncomment di bawah:
+    // if (process.env.NODE_ENV !== "production") return;
+    // navigator.serviceWorker
+    //   .register("/sw.js", { scope: "/" })
+    //   .then((reg) => console.log("[SW] Registered:", reg.scope))
+    //   .catch((err) => console.warn("[SW] Registration failed:", err));
   }, []);
 
   return null;
