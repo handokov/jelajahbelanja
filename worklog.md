@@ -248,3 +248,23 @@ Stage Summary:
 - bulk-upload-tab.tsx updated with full AT Converter feature
 - /api/bulk-upload/route.ts updated (MAX_ROWS: 200 → 500)
 - Feature complete and ready for testing
+---
+Task ID: 2
+Agent: Main Agent
+Task: Batch upload + createMany + pagination optimization
+
+Work Log:
+- Rewrote /api/bulk-upload/route.ts: createMany() for bulk insert (1 query instead of 500)
+- Added fallback: if createMany fails, retry sequentially per row
+- Rewrote bulk-upload-tab.tsx: batch upload logic (500/batch) with progress bar
+- AT converter now supports unlimited rows (10k max), auto-batches on upload
+- Added ProgressBar component with batch count, success/fail stats, progress bar animation
+- Added /api/products pagination: limit (default 100, max 500) + page params
+- Added db.shopeeProduct.count() for total count (separate from loaded products)
+- Frontend homepage: requests limit=200 for backward compatibility
+- Build passed, committed and tagged as "stable-batch-optimization"
+
+Stage Summary:
+- 3 optimizations complete: createMany, batch upload, pagination
+- Previous tag: stable-before-batch-optimization (rollback point)
+- Current tag: stable-batch-optimization
