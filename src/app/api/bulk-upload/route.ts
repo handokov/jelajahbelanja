@@ -3,11 +3,13 @@ import { db } from "@/lib/db";
 
 /**
  * POST /api/bulk-upload
- * Upload massal produk dari file CSV.
+ * Upload massal produk dari file CSV (format JB).
  * 
  * Kolom wajib: title, url, image, price, category
  * Kolom opsional: originalPrice, discountPercent, rating, reviewCount, soldCount, location, marketplace, affiliateUrl, notes
- * Maks 200 produk per upload.
+ * Maks 500 produk per request.
+ * 
+ * Optimasi: Menggunakan createMany() untuk bulk insert (1 query vs 500 query).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "File CSV kosong atau tidak ada data" }, { status: 400 });
     }
 
-    // Parse header
+    // Parse CSV line (handle quoted fields)
     const parseLine = (line: string): string[] => {
       const result: string[] = [];
       let current = "";
@@ -56,11 +58,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse rows — max 500 (dari AT converter bisa lebih banyak)
+    // Parse rows — max 500 per request
     const MAX_ROWS = 500;
     const dataLines = lines.slice(1, MAX_ROWS + 1);
     const errors: string[] = [];
-    let success = 0;
+    const validData: any[] = []; // collect valid rows for createMany
     let failed = 0;
 
     for (let i = 0; i < dataLines.length; i++) {
@@ -84,33 +86,50 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      // Collect valid data for batch insert
+      validData.push({
+        title: row.title,
+        url: row.url,
+        image: row.image,
+        price,
+        originalPrice: row.originalprice ? parseInt(row.originalprice, 10) || null : null,
+        discountPercent: row.discountpercent ? parseInt(row.discountpercent, 10) || null : null,
+        rating: row.rating ? parseFloat(row.rating) || 4.5 : 4.5,
+        reviewCount: row.reviewcount ? parseInt(row.reviewcount, 10) || 0 : 0,
+        soldCount: row.soldcount ? parseInt(row.soldcount, 10) || 0 : 0,
+        location: row.location || null,
+        category: row.category,
+        marketplace: (row.marketplace || "shopee").toLowerCase(),
+        affiliateUrl: row.affiliateurl || null,
+        notes: row.notes || null,
+        isViral: false,
+        isPinned: false,
+        isHidden: false,
+        enabled: true,
+      });
+    }
+
+    // 🔥 BULK INSERT: 1 query untuk semua valid rows
+    let success = 0;
+    if (validData.length > 0) {
       try {
-        await db.shopeeProduct.create({
-          data: {
-            title: row.title,
-            url: row.url,
-            image: row.image,
-            price,
-            originalPrice: row.originalprice ? parseInt(row.originalprice, 10) || null : null,
-            discountPercent: row.discountpercent ? parseInt(row.discountpercent, 10) || null : null,
-            rating: row.rating ? parseFloat(row.rating) || 4.5 : 4.5,
-            reviewCount: row.reviewcount ? parseInt(row.reviewcount, 10) || 0 : 0,
-            soldCount: row.soldcount ? parseInt(row.soldcount, 10) || 0 : 0,
-            location: row.location || null,
-            category: row.category,
-            marketplace: (row.marketplace || "shopee").toLowerCase(),
-            affiliateUrl: row.affiliateurl || null,
-            notes: row.notes || null,
-            isViral: false,
-            isPinned: false,
-            isHidden: false,
-            enabled: true,
-          },
+        const result = await db.shopeeProduct.createMany({
+          data: validData,
+          skipDuplicates: true,
         });
-        success++;
+        success = result.count;
       } catch (err: any) {
-        errors.push(`Baris ${i + 2}: ${err?.message || "Gagal simpan ke database"}`);
-        failed++;
+        // Kalau createMany gagal total, coba insert satu-satu sebagai fallback
+        console.error("[api/bulk-upload] createMany failed, falling back to sequential:", err?.message);
+        for (const data of validData) {
+          try {
+            await db.shopeeProduct.create({ data });
+            success++;
+          } catch (innerErr: any) {
+            errors.push(`Product "${data.title.slice(0, 30)}": ${innerErr?.message || "Gagal simpan"}`);
+            failed++;
+          }
+        }
       }
     }
 

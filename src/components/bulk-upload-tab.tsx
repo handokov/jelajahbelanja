@@ -17,6 +17,9 @@ const JB_REQUIRED = ["title", "url", "image", "price", "category"];
 // Kolom header JB
 const JB_HEADERS = ["title", "url", "image", "price", "originalPrice", "discountPercent", "rating", "reviewCount", "soldCount", "location", "category", "marketplace", "affiliateUrl", "notes"];
 
+// Batch size per API request
+const BATCH_SIZE = 500;
+
 interface BulkUploadResult {
   success: number;
   failed: number;
@@ -28,7 +31,6 @@ interface BulkUploadResult {
 // AT CSV Converter Logic
 // ============================================================
 
-// Parse satu baris CSV (handle quoted fields)
 function parseCsvLine(line: string): string[] {
   const result: string[] = [];
   let current = "";
@@ -48,7 +50,6 @@ function parseCsvLine(line: string): string[] {
   return result;
 }
 
-// Parse seluruh CSV text jadi array of rows
 function parseCsvText(text: string): string[][] {
   return text
     .split("\n")
@@ -56,7 +57,6 @@ function parseCsvText(text: string): string[][] {
     .map(parseCsvLine);
 }
 
-// Strip HTML tags dari string
 function stripHtml(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, "\n")
@@ -70,49 +70,27 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-// Extract original Shopee URL dari affiliate link AT
 function extractShopeeUrl(affiliateUrl: string): string {
   if (!affiliateUrl) return "";
-
   try {
-    // Coba decode dulu kalau URL-encoded
     let decoded = affiliateUrl;
-    try {
-      decoded = decodeURIComponent(affiliateUrl);
-    } catch {
-      // sudah decoded
-    }
-
-    // Cari origin_link parameter di URL Shopee affiliate
+    try { decoded = decodeURIComponent(affiliateUrl); } catch {}
     const originMatch = decoded.match(/origin_link=([^&]+)/);
     if (originMatch) {
       let originUrl = originMatch[1];
-      try {
-        originUrl = decodeURIComponent(originUrl);
-      } catch {
-        // sudah decoded
-      }
+      try { originUrl = decodeURIComponent(originUrl); } catch {}
       return originUrl;
     }
-
-    // Cari pattern shopee.co.id/universal-link/product/... langsung
     const directMatch = decoded.match(/(https:\/\/shopee\.co\.id\/universal-link\/product\/\d+\/\d+)/);
     if (directMatch) return directMatch[1];
-
-    // Kalau link atid.me, coba cari URL shopee di dalamnya
     const shopeeMatch = decoded.match(/(https:\/\/shopee\.co\.id\/[^\s&]+)/);
     if (shopeeMatch) return shopeeMatch[1];
-
-    // Fallback: return affiliate URL itu sendiri
     return decoded;
-  } catch {
-    return affiliateUrl;
-  }
+  } catch { return affiliateUrl; }
 }
 
-// Convert satu baris AT ke format JB
 function convertAtRowToJb(row: string[]): Record<string, string> {
-  const productId = (row[0] || "").replace(/^\uFEFF/, "").replace("?", "").trim(); // Remove BOM & ?
+  const productId = (row[0] || "").replace(/^\uFEFF/, "").replace("?", "").trim();
   const title = (row[1] || "").trim();
   const imageUrl = (row[2] || "").trim();
   const affiliateLinkRaw = (row[4] || "").trim();
@@ -124,33 +102,24 @@ function convertAtRowToJb(row: string[]): Record<string, string> {
   const category2 = (row[15] || "").trim();
   const category3 = (row[17] || "").trim();
 
-  // Price logic — AT format: col7 bisa jadi harga asli, col8 harga diskon (atau sebaliknya)
   let price = parseInt(priceStr, 10) || 0;
   let originalPrice = parseInt(originalPriceStr, 10) || 0;
 
-  // Kalau col8 < col7 → col7 = harga asli, col8 = harga jual (diskon)
   if (originalPrice > 0 && originalPrice < price) {
     const temp = price;
     price = originalPrice;
     originalPrice = temp;
   }
 
-  // Affiliate URL — prefer the short atid.me link (col 5), fallback to col 4
   const affiliateUrl = affiliateLink2 || affiliateLinkRaw;
-
-  // Extract original Shopee URL dari affiliate link
   const url = extractShopeeUrl(affiliateLinkRaw) || `https://shopee.co.id/search?keyword=${encodeURIComponent(title.slice(0, 50))}`;
-
-  // Category — use most specific (category3 > category2 > category1)
   const category = category3 || category2 || category1 || "Lainnya";
 
-  // Discount percent
   let discountPercent = "";
   if (originalPrice > price && price > 0) {
     discountPercent = Math.round(((originalPrice - price) / originalPrice) * 100).toString();
   }
 
-  // Notes — strip HTML dari description, limit 200 chars
   const notes = stripHtml(description).slice(0, 200);
 
   return {
@@ -171,19 +140,16 @@ function convertAtRowToJb(row: string[]): Record<string, string> {
   };
 }
 
-// Convert seluruh AT CSV text ke JB format rows
-function convertAtCsvToJb(text: string, maxRows = 500): { rows: Record<string, string>[]; totalInput: number; errors: string[] } {
+function convertAtCsvToJb(text: string, maxRows = 10000): { rows: Record<string, string>[]; totalInput: number; errors: string[] } {
   const allRows = parseCsvText(text);
   const errors: string[] = [];
   const convertedRows: Record<string, string>[] = [];
 
-  // AT CSV tidak punya header — langsung data
-  // Tapi kalau baris pertama kelihatannya header (misal ada "product_id" dll), skip
   let startIndex = 0;
   if (allRows.length > 0) {
     const firstCell = (allRows[0][0] || "").toLowerCase();
     if (firstCell.includes("product") || firstCell.includes("id") || firstCell.includes("item")) {
-      startIndex = 1; // Skip header row
+      startIndex = 1;
     }
   }
 
@@ -191,39 +157,27 @@ function convertAtCsvToJb(text: string, maxRows = 500): { rows: Record<string, s
 
   for (let i = 0; i < dataRows.length; i++) {
     const row = dataRows[i];
-
-    // Minimal: harus ada title (col 1) dan image (col 2)
     if (!row[1] || !row[2]) {
       errors.push(`Baris ${startIndex + i + 1}: Title atau Image kosong, skip`);
       continue;
     }
-
-    // Minimal: harus ada price (col 7 atau col 8 setelah salah satunya valid)
     const col7 = parseInt(row[7] || "0", 10);
     const col8 = parseInt(row[8] || "0", 10);
     if (col7 <= 0 && col8 <= 0) {
-      errors.push(`Baris ${startIndex + i + 1}: Price tidak valid (col7=${row[7]}, col8=${row[8]}), skip`);
+      errors.push(`Baris ${startIndex + i + 1}: Price tidak valid, skip`);
       continue;
     }
-
-    const converted = convertAtRowToJb(row);
-    convertedRows.push(converted);
+    convertedRows.push(convertAtRowToJb(row));
   }
 
-  return {
-    rows: convertedRows,
-    totalInput: allRows.length - startIndex,
-    errors,
-  };
+  return { rows: convertedRows, totalInput: allRows.length - startIndex, errors };
 }
 
-// Generate JB CSV text dari converted rows
 function generateJbCsv(rows: Record<string, string>[]): string {
   const headerLine = JB_HEADERS.join(",");
   const dataLines = rows.map((row) =>
     JB_HEADERS.map((h) => {
       const val = row[h] || "";
-      // Escape: kalau ada koma, newline, atau quote → wrap dengan quotes
       if (val.includes(",") || val.includes("\n") || val.includes('"')) {
         return `"${val.replace(/"/g, '""')}"`;
       }
@@ -233,6 +187,14 @@ function generateJbCsv(rows: Record<string, string>[]): string {
   return [headerLine, ...dataLines].join("\n");
 }
 
+// Split array ke chunks
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
 
 // ============================================================
 // Component
@@ -240,18 +202,26 @@ function generateJbCsv(rows: Record<string, string>[]): string {
 
 type Mode = "jb-upload" | "at-converter";
 
+interface BatchProgress {
+  currentBatch: number;
+  totalBatches: number;
+  totalSuccess: number;
+  totalFailed: number;
+  totalProcessed: number;
+  errors: string[];
+}
+
 export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, options?: RequestInit) => Promise<Response> }) {
   const [mode, setMode] = React.useState<Mode>("jb-upload");
 
-  // State untuk mode JB Upload (existing)
+  // JB Upload state
   const [dragActive, setDragActive] = React.useState(false);
   const [csvFile, setCsvFile] = React.useState<File | null>(null);
   const [csvPreview, setCsvPreview] = React.useState<string[][]>([]);
   const [csvHeaders, setCsvHeaders] = React.useState<string[]>([]);
-  const [uploading, setUploading] = React.useState(false);
   const [result, setResult] = React.useState<BulkUploadResult | null>(null);
 
-  // State untuk mode AT Converter
+  // AT Converter state
   const [atFile, setAtFile] = React.useState<File | null>(null);
   const [atDragActive, setAtDragActive] = React.useState(false);
   const [converting, setConverting] = React.useState(false);
@@ -259,11 +229,14 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
   const [convertedPreview, setConvertedPreview] = React.useState<string[][]>([]);
   const [atTotalInput, setAtTotalInput] = React.useState(0);
   const [atErrors, setAtErrors] = React.useState<string[]>([]);
-  const [atUploading, setAtUploading] = React.useState(false);
   const [atResult, setAtResult] = React.useState<BulkUploadResult | null>(null);
 
+  // Batch progress state (shared for both modes)
+  const [batchProgress, setBatchProgress] = React.useState<BatchProgress | null>(null);
+  const [uploading, setUploading] = React.useState(false);
+
   // ============================================================
-  // JB Upload logic (existing)
+  // JB Upload logic
   // ============================================================
 
   const parseCsvForPreview = React.useCallback((text: string) => {
@@ -273,10 +246,8 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
       setCsvPreview([]);
       return;
     }
-
     const headers = parseCsvLine(lines[0]);
     const previewRows = lines.slice(1, 6).map(parseCsvLine);
-
     setCsvHeaders(headers);
     setCsvPreview(previewRows);
   }, []);
@@ -304,32 +275,71 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     if (file) handleFile(file);
   }, [handleFile]);
 
-  const handleUpload = React.useCallback(async () => {
+  // Batch upload for JB CSV
+  const handleJbUpload = React.useCallback(async () => {
     if (!csvFile) return;
     setUploading(true);
+    setBatchProgress(null);
     setResult(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", csvFile);
+      const text = await csvFile.text();
+      const lines = text.split("\n").filter((l) => l.trim());
 
-      const res = await adminFetch("/api/bulk-upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setResult({ success: 0, failed: 0, total: 0, errors: [data.error || "Gagal upload"] });
+      if (lines.length < 2) {
+        setResult({ success: 0, failed: 0, total: 0, errors: ["File kosong"] });
         return;
       }
 
-      setResult(data);
+      const headers = parseCsvLine(lines[0]);
+      const dataLines = lines.slice(1);
+      const chunks = chunkArray(dataLines, BATCH_SIZE);
+
+      let totalSuccess = 0;
+      let totalFailed = 0;
+      let totalProcessed = 0;
+      const allErrors: string[] = [];
+
+      for (let c = 0; c < chunks.length; c++) {
+        setBatchProgress({
+          currentBatch: c + 1,
+          totalBatches: chunks.length,
+          totalSuccess,
+          totalFailed,
+          totalProcessed,
+          errors: allErrors,
+        });
+
+        // Rebuild CSV untuk batch ini (dengan header)
+        const batchCsv = [lines[0], ...chunks[c]].join("\n");
+        const blob = new Blob([batchCsv], { type: "text/csv" });
+        const formData = new FormData();
+        formData.append("file", blob, `batch-${c + 1}.csv`);
+
+        const res = await adminFetch("/api/bulk-upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          allErrors.push(`Batch ${c + 1}: ${data.error || "Gagal upload"}`);
+          totalFailed += chunks[c].length;
+        } else {
+          totalSuccess += data.success || 0;
+          totalFailed += data.failed || 0;
+          if (data.errors?.length) allErrors.push(...data.errors);
+        }
+        totalProcessed += chunks[c].length;
+      }
+
+      setResult({ success: totalSuccess, failed: totalFailed, total: dataLines.length, errors: allErrors.slice(0, 30) });
     } catch (err: any) {
       setResult({ success: 0, failed: 0, total: 0, errors: [err?.message || "Error tidak diketahui"] });
     } finally {
       setUploading(false);
+      setBatchProgress(null);
     }
   }, [csvFile, adminFetch]);
 
@@ -348,6 +358,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     setCsvPreview([]);
     setCsvHeaders([]);
     setResult(null);
+    setBatchProgress(null);
   }, []);
 
   // ============================================================
@@ -381,13 +392,12 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
 
     try {
       const text = await atFile.text();
-      const { rows, totalInput, errors } = convertAtCsvToJb(text, 500);
+      const { rows, totalInput, errors } = convertAtCsvToJb(text, 10000);
 
       setConvertedRows(rows);
       setAtTotalInput(totalInput);
       setAtErrors(errors);
 
-      // Preview: first 5 rows
       const previewData = rows.slice(0, 5).map((row) =>
         JB_HEADERS.map((h) => row[h] || "")
       );
@@ -411,35 +421,60 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     URL.revokeObjectURL(url);
   }, [convertedRows]);
 
+  // Batch upload for AT converted data
   const handleAtUpload = React.useCallback(async () => {
     if (convertedRows.length === 0) return;
-    setAtUploading(true);
+    setUploading(true);
+    setBatchProgress(null);
     setAtResult(null);
 
     try {
-      // Generate CSV dari converted rows, lalu upload via bulk-upload API
-      const csv = generateJbCsv(convertedRows);
-      const blob = new Blob([csv], { type: "text/csv" });
-      const formData = new FormData();
-      formData.append("file", blob, "at-converted.csv");
+      const chunks = chunkArray(convertedRows, BATCH_SIZE);
 
-      const res = await adminFetch("/api/bulk-upload", {
-        method: "POST",
-        body: formData,
-      });
+      let totalSuccess = 0;
+      let totalFailed = 0;
+      let totalProcessed = 0;
+      const allErrors: string[] = [];
 
-      const data = await res.json();
+      for (let c = 0; c < chunks.length; c++) {
+        setBatchProgress({
+          currentBatch: c + 1,
+          totalBatches: chunks.length,
+          totalSuccess,
+          totalFailed,
+          totalProcessed,
+          errors: allErrors,
+        });
 
-      if (!res.ok) {
-        setAtResult({ success: 0, failed: 0, total: 0, errors: [data.error || "Gagal upload"] });
-        return;
+        const batchCsv = generateJbCsv(chunks[c]);
+        const blob = new Blob([batchCsv], { type: "text/csv" });
+        const formData = new FormData();
+        formData.append("file", blob, `at-batch-${c + 1}.csv`);
+
+        const res = await adminFetch("/api/bulk-upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          allErrors.push(`Batch ${c + 1}: ${data.error || "Gagal upload"}`);
+          totalFailed += chunks[c].length;
+        } else {
+          totalSuccess += data.success || 0;
+          totalFailed += data.failed || 0;
+          if (data.errors?.length) allErrors.push(...data.errors);
+        }
+        totalProcessed += chunks[c].length;
       }
 
-      setAtResult(data);
+      setAtResult({ success: totalSuccess, failed: totalFailed, total: convertedRows.length, errors: allErrors.slice(0, 30) });
     } catch (err: any) {
       setAtResult({ success: 0, failed: 0, total: 0, errors: [err?.message || "Error tidak diketahui"] });
     } finally {
-      setAtUploading(false);
+      setUploading(false);
+      setBatchProgress(null);
     }
   }, [convertedRows, adminFetch]);
 
@@ -450,7 +485,97 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     setAtErrors([]);
     setAtTotalInput(0);
     setAtResult(null);
+    setBatchProgress(null);
   }, []);
+
+  // ============================================================
+  // Shared: Progress Bar Component
+  // ============================================================
+
+  const ProgressBar = ({ progress }: { progress: BatchProgress }) => (
+    <div className="rounded-2xl border border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/20 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+          <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+            Batch {progress.currentBatch} dari {progress.totalBatches}
+          </span>
+        </div>
+        <span className="text-sm text-blue-700 dark:text-blue-300">
+          {progress.totalProcessed} diproses
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-3 overflow-hidden">
+        <div
+          className="bg-blue-500 h-full rounded-full transition-all duration-500 ease-out"
+          style={{ width: `${(progress.currentBatch / progress.totalBatches) * 100}%` }}
+        />
+      </div>
+
+      {/* Stats */}
+      <div className="flex gap-4 text-xs">
+        <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+          ✓ {progress.totalSuccess} berhasil
+        </span>
+        {progress.totalFailed > 0 && (
+          <span className="text-red-600 dark:text-red-400 font-medium">
+            ✗ {progress.totalFailed} gagal
+          </span>
+        )}
+        <span className="text-blue-600 dark:text-blue-400">
+          Total: {progress.totalProcessed}
+        </span>
+      </div>
+    </div>
+  );
+
+  // Shared: Result Card Component
+  const ResultCard = ({ result, onReset }: { result: BulkUploadResult; onReset: () => void }) => (
+    <div className="space-y-3">
+      <div className={cn(
+        "rounded-2xl border p-4",
+        result.failed === 0
+          ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20"
+          : "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/20"
+      )}>
+        <div className="flex items-center gap-3 mb-3">
+          {result.failed === 0 ? (
+            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+          ) : (
+            <AlertCircle className="w-6 h-6 text-amber-500" />
+          )}
+          <div>
+            <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+              Upload Selesai!
+            </p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              {result.success} berhasil, {result.failed} gagal dari {result.total} produk
+            </p>
+          </div>
+        </div>
+
+        {result.errors.length > 0 && (
+          <div className="mt-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 max-h-48 overflow-y-auto">
+            <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
+              <XCircle className="w-3.5 h-3.5 inline mr-1" />
+              Detail Error:
+            </p>
+            <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5">
+              {result.errors.map((err, i) => (
+                <li key={i}>• {err}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      <Button onClick={onReset} variant="outline">
+        Upload Lagi
+      </Button>
+    </div>
+  );
 
   // ============================================================
   // Render
@@ -481,7 +606,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
       </div>
 
       {/* ============================================================ */}
-      {/* MODE: JB Upload (existing) */}
+      {/* MODE: JB Upload */}
       {/* ============================================================ */}
       {mode === "jb-upload" && (
         <>
@@ -492,13 +617,13 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
             </p>
             <ol className="text-sm text-fuchsia-800 dark:text-fuchsia-200 space-y-1 list-decimal list-inside">
               <li>Download template CSV dulu (klik tombol di bawah)</li>
-              <li>Buka di Excel, isi data produk satu per satu — kolom wajib: <code className="bg-fuchsia-100 dark:bg-fuchsia-800 px-1 rounded text-xs">title, url, image, price, category</code></li>
+              <li>Buka di Excel, isi data produk — kolom wajib: <code className="bg-fuchsia-100 dark:bg-fuchsia-800 px-1 rounded text-xs">title, url, image, price, category</code></li>
               <li>Save As → CSV (Comma Separated Values)</li>
-              <li>Drag & drop file CSV ke area di bawah, atau klik untuk pilih file</li>
-              <li>Cek preview, lalu klik Upload</li>
+              <li>Upload file CSV — otomatis dibagi per {BATCH_SIZE} produk per batch</li>
+              <li>Cek progress bar, lalu lihat hasilnya</li>
             </ol>
             <p className="text-xs text-fuchsia-700 dark:text-fuchsia-300 mt-2">
-              Maks 200 produk per upload. Kolom opsional: originalPrice, discountPercent, rating, reviewCount, soldCount, location, marketplace, affiliateUrl, notes.
+              Tidak ada batas jumlah — 2000+ produk akan otomatis dibagi jadi beberapa batch.
             </p>
           </div>
 
@@ -508,8 +633,11 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
             Download Template CSV
           </Button>
 
+          {/* Batch Progress */}
+          {batchProgress && <ProgressBar progress={batchProgress} />}
+
           {/* Drop zone */}
-          {!result && (
+          {!result && !batchProgress && (
             <div
               onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
               onDragLeave={() => setDragActive(false)}
@@ -551,7 +679,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
           )}
 
           {/* Preview */}
-          {csvFile && csvHeaders.length > 0 && !result && (
+          {csvFile && csvHeaders.length > 0 && !result && !batchProgress && (
             <div className="space-y-3">
               <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
                 Preview ({csvPreview.length} baris pertama dari file)
@@ -585,7 +713,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
               </div>
 
               <div className="flex gap-2">
-                <Button onClick={handleUpload} disabled={uploading} className="gap-1.5">
+                <Button onClick={handleJbUpload} disabled={uploading} className="gap-1.5">
                   {uploading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -594,7 +722,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                   ) : (
                     <>
                       <Upload className="w-4 h-4" />
-                      Upload {csvPreview.length}+ Produk
+                      Upload Produk
                     </>
                   )}
                 </Button>
@@ -606,50 +734,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
           )}
 
           {/* Result */}
-          {result && (
-            <div className="space-y-3">
-              <div className={cn(
-                "rounded-2xl border p-4",
-                result.failed === 0
-                  ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20"
-                  : "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/20"
-              )}>
-                <div className="flex items-center gap-3 mb-3">
-                  {result.failed === 0 ? (
-                    <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                  ) : (
-                    <AlertCircle className="w-6 h-6 text-amber-500" />
-                  )}
-                  <div>
-                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">
-                      Upload Selesai!
-                    </p>
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                      {result.success} berhasil, {result.failed} gagal dari {result.total} produk
-                    </p>
-                  </div>
-                </div>
-
-                {result.errors.length > 0 && (
-                  <div className="mt-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3">
-                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
-                      <XCircle className="w-3.5 h-3.5 inline mr-1" />
-                      Detail Error:
-                    </p>
-                    <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5">
-                      {result.errors.map((err, i) => (
-                        <li key={i}>• {err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              <Button onClick={handleReset} variant="outline">
-                Upload Lagi
-              </Button>
-            </div>
-          )}
+          {result && <ResultCard result={result} onReset={handleReset} />}
         </>
       )}
 
@@ -668,14 +753,14 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
               <li>Upload file CSV AT ke area di bawah</li>
               <li>Klik <b>Konversi ke JB</b> — otomatis mapping kolom AT ke format JB</li>
               <li>Cek preview hasil konversi</li>
-              <li>Pilih: <b>Download CSV JB</b> atau <b>Upload ke Database</b></li>
+              <li>Pilih: <b>Download CSV JB</b> atau <b>Upload ke Database</b> (otomatis batch per {BATCH_SIZE})</li>
             </ol>
             <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-              Maks 500 produk per konversi. Affiliate link otomatis terisi dari data AT.
+              Tidak ada batas jumlah — 10.000+ produk bisa dikonversi, upload otomatis batch per {BATCH_SIZE}.
             </p>
           </div>
 
-          {/* AT Column → JB Mapping Info */}
+          {/* Mapping info */}
           <details className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
             <summary className="px-4 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-sm font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
               Mapping Kolom AT → JB
@@ -684,7 +769,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                    <th className="text-left py-1.5 pr-3 text-zinc-500 dark:text-zinc-400">Kolom AT (Accesstrade)</th>
+                    <th className="text-left py-1.5 pr-3 text-zinc-500 dark:text-zinc-400">Kolom AT</th>
                     <th className="text-left py-1.5 pr-3 text-zinc-500 dark:text-zinc-400">→</th>
                     <th className="text-left py-1.5 text-zinc-500 dark:text-zinc-400">Kolom JB</th>
                   </tr>
@@ -693,20 +778,23 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                   <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 1: Product Name</td><td className="pr-3">→</td><td>title *</td></tr>
                   <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 4: Affiliate Link (decoded)</td><td className="pr-3">→</td><td>url *</td></tr>
                   <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 2: Image URL</td><td className="pr-3">→</td><td>image *</td></tr>
-                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 7: Price</td><td className="pr-3">→</td><td>price *</td></tr>
-                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 8: Original Price</td><td className="pr-3">→</td><td>originalPrice</td></tr>
-                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Calculated: price vs originalPrice</td><td className="pr-3">→</td><td>discountPercent</td></tr>
-                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 17/15/13: Category (most specific)</td><td className="pr-3">→</td><td>category *</td></tr>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 7/8: Price (auto-swap)</td><td className="pr-3">→</td><td>price *</td></tr>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 7/8: Original Price</td><td className="pr-3">→</td><td>originalPrice</td></tr>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Calculated</td><td className="pr-3">→</td><td>discountPercent</td></tr>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 17/15/13: Category</td><td className="pr-3">→</td><td>category *</td></tr>
                   <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Default: shopee</td><td className="pr-3">→</td><td>marketplace</td></tr>
-                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 5: Affiliate Link (atid.me)</td><td className="pr-3">→</td><td>affiliateUrl</td></tr>
-                  <tr><td className="py-1 pr-3">Col 6: Description (HTML stripped)</td><td className="pr-3">→</td><td>notes</td></tr>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 5: Affiliate Link</td><td className="pr-3">→</td><td>affiliateUrl</td></tr>
+                  <tr><td className="py-1 pr-3">Col 6: Description (stripped)</td><td className="pr-3">→</td><td>notes</td></tr>
                 </tbody>
               </table>
             </div>
           </details>
 
+          {/* Batch Progress */}
+          {batchProgress && <ProgressBar progress={batchProgress} />}
+
           {/* Step 1: Upload AT CSV */}
-          {!atResult && convertedRows.length === 0 && (
+          {!atResult && convertedRows.length === 0 && !batchProgress && (
             <>
               <div
                 onDragOver={(e) => { e.preventDefault(); setAtDragActive(true); }}
@@ -747,7 +835,6 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                 )}
               </div>
 
-              {/* Convert Button */}
               {atFile && (
                 <div className="flex gap-2">
                   <Button onClick={handleConvert} disabled={converting} className="gap-1.5">
@@ -769,7 +856,6 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                 </div>
               )}
 
-              {/* Conversion errors */}
               {atErrors.length > 0 && convertedRows.length === 0 && (
                 <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 p-3">
                   <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
@@ -787,9 +873,8 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
           )}
 
           {/* Step 2: Preview Converted Data */}
-          {convertedRows.length > 0 && !atResult && (
+          {convertedRows.length > 0 && !atResult && !batchProgress && (
             <div className="space-y-3">
-              {/* Summary */}
               <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20 p-4">
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="w-6 h-6 text-emerald-500" />
@@ -811,7 +896,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
 
               {/* Preview Table */}
               <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                Preview Hasil Konversi ({convertedPreview.length} dari {convertedRows.length} produk)
+                Preview ({convertedPreview.length} dari {convertedRows.length} produk)
               </p>
               <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
                 <table className="w-full text-xs">
@@ -841,7 +926,6 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                 </table>
               </div>
 
-              {/* Skip errors detail */}
               {atErrors.length > 0 && (
                 <details className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
                   <summary className="px-4 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer">
@@ -857,10 +941,9 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                 </details>
               )}
 
-              {/* Action Buttons */}
               <div className="flex gap-2">
-                <Button onClick={handleAtUpload} disabled={atUploading} className="gap-1.5">
-                  {atUploading ? (
+                <Button onClick={handleAtUpload} disabled={uploading} className="gap-1.5">
+                  {uploading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Mengupload...
@@ -872,11 +955,11 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                     </>
                   )}
                 </Button>
-                <Button variant="outline" onClick={handleDownloadConverted} disabled={atUploading} className="gap-1.5">
+                <Button variant="outline" onClick={handleDownloadConverted} disabled={uploading} className="gap-1.5">
                   <Download className="w-4 h-4" />
                   Download CSV JB
                 </Button>
-                <Button variant="outline" onClick={handleAtReset} disabled={atUploading}>
+                <Button variant="outline" onClick={handleAtReset} disabled={uploading}>
                   Batal
                 </Button>
               </div>
@@ -884,50 +967,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
           )}
 
           {/* Upload Result */}
-          {atResult && (
-            <div className="space-y-3">
-              <div className={cn(
-                "rounded-2xl border p-4",
-                atResult.failed === 0
-                  ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20"
-                  : "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/20"
-              )}>
-                <div className="flex items-center gap-3 mb-3">
-                  {atResult.failed === 0 ? (
-                    <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                  ) : (
-                    <AlertCircle className="w-6 h-6 text-amber-500" />
-                  )}
-                  <div>
-                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">
-                      Upload Selesai!
-                    </p>
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                      {atResult.success} berhasil, {atResult.failed} gagal dari {atResult.total} produk
-                    </p>
-                  </div>
-                </div>
-
-                {atResult.errors.length > 0 && (
-                  <div className="mt-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3">
-                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
-                      <XCircle className="w-3.5 h-3.5 inline mr-1" />
-                      Detail Error:
-                    </p>
-                    <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5">
-                      {atResult.errors.map((err, i) => (
-                        <li key={i}>• {err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              <Button onClick={handleAtReset} variant="outline">
-                Konversi Lagi
-              </Button>
-            </div>
-          )}
+          {atResult && <ResultCard result={atResult} onReset={handleAtReset} />}
         </>
       )}
     </div>

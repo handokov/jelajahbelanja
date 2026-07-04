@@ -1,0 +1,936 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import { Upload, FileText, CheckCircle2, XCircle, Download, Loader2, AlertCircle, ArrowRightLeft, RefreshCw } from "lucide-react";
+     5→import { Button } from "@/components/ui/button";
+     6→import { cn } from "@/lib/utils";
+     7→
+     8→// CSV template untuk didownload user
+     9→const CSV_TEMPLATE = `title,url,image,price,originalPrice,discountPercent,rating,reviewCount,soldCount,location,category,marketplace,affiliateUrl,notes
+    10→Celana Jeans Pria Slim Fit,https://shopee.co.id/product-123,https://example.com/image1.jpg,150000,250000,40,4.8,1200,5000,Jakarta,Fashion,shopee,https://shope.ee/aff123,,
+    11→Kaos Oversize Unisex,https://shopee.co.id/product-456,https://example.com/image2.jpg,75000,120000,38,4.7,800,3000,Bandung,Fashion,shopee,,,
+    12→Sepatu Sneakers Pria,https://shopee.co.id/product-789,https://example.com/image3.jpg,250000,,,0,0,0,Surabaya,Fashion,shopee,,produk baru belum ada rating`;
+    13→
+    14→// Kolom wajib JB
+    15→const JB_REQUIRED = ["title", "url", "image", "price", "category"];
+    16→
+    17→// Kolom header JB
+    18→const JB_HEADERS = ["title", "url", "image", "price", "originalPrice", "discountPercent", "rating", "reviewCount", "soldCount", "location", "category", "marketplace", "affiliateUrl", "notes"];
+    19→
+    20→interface BulkUploadResult {
+    21→  success: number;
+    22→  failed: number;
+    23→  total: number;
+    24→  errors: string[];
+    25→}
+    26→
+    27→// ============================================================
+    28→// AT CSV Converter Logic
+    29→// ============================================================
+    30→
+    31→// Parse satu baris CSV (handle quoted fields)
+    32→function parseCsvLine(line: string): string[] {
+    33→  const result: string[] = [];
+    34→  let current = "";
+    35→  let inQuotes = false;
+    36→  for (let i = 0; i < line.length; i++) {
+    37→    const ch = line[i];
+    38→    if (ch === '"') {
+    39→      inQuotes = !inQuotes;
+    40→    } else if (ch === "," && !inQuotes) {
+    41→      result.push(current.trim());
+    42→      current = "";
+    43→    } else {
+    44→      current += ch;
+    45→    }
+    46→  }
+    47→  result.push(current.trim());
+    48→  return result;
+    49→}
+    50→
+    51→// Parse seluruh CSV text jadi array of rows
+    52→function parseCsvText(text: string): string[][] {
+    53→  return text
+    54→    .split("\n")
+    55→    .filter((l) => l.trim())
+    56→    .map(parseCsvLine);
+    57→}
+    58→
+    59→// Strip HTML tags dari string
+    60→function stripHtml(html: string): string {
+    61→  return html
+    62→    .replace(/<br\s*\/?>/gi, "\n")
+    63→    .replace(/<[^>]*>/g, "")
+    64→    .replace(/&amp;/g, "&")
+    65→    .replace(/&lt;/g, "<")
+    66→    .replace(/&gt;/g, ">")
+    67→    .replace(/&quot;/g, '"')
+    68→    .replace(/&#39;/g, "'")
+    69→    .replace(/\n{3,}/g, "\n\n")
+    70→    .trim();
+    71→}
+    72→
+    73→// Extract original Shopee URL dari affiliate link AT
+    74→function extractShopeeUrl(affiliateUrl: string): string {
+    75→  if (!affiliateUrl) return "";
+    76→
+    77→  try {
+    78→    // Coba decode dulu kalau URL-encoded
+    79→    let decoded = affiliateUrl;
+    80→    try {
+    81→      decoded = decodeURIComponent(affiliateUrl);
+    82→    } catch {
+    83→      // sudah decoded
+    84→    }
+    85→
+    86→    // Cari origin_link parameter di URL Shopee affiliate
+    87→    const originMatch = decoded.match(/origin_link=([^&]+)/);
+    88→    if (originMatch) {
+    89→      let originUrl = originMatch[1];
+    90→      try {
+    91→        originUrl = decodeURIComponent(originUrl);
+    92→      } catch {
+    93→        // sudah decoded
+    94→      }
+    95→      return originUrl;
+    96→    }
+    97→
+    98→    // Cari pattern shopee.co.id/universal-link/product/... langsung
+    99→    const directMatch = decoded.match(/(https:\/\/shopee\.co\.id\/universal-link\/product\/\d+\/\d+)/);
+   100→    if (directMatch) return directMatch[1];
+   101→
+   102→    // Kalau link atid.me, coba cari URL shopee di dalamnya
+   103→    const shopeeMatch = decoded.match(/(https:\/\/shopee\.co\.id\/[^\s&]+)/);
+   104→    if (shopeeMatch) return shopeeMatch[1];
+   105→
+   106→    // Fallback: return affiliate URL itu sendiri
+   107→    return decoded;
+   108→  } catch {
+   109→    return affiliateUrl;
+   110→  }
+   111→}
+   112→
+   113→// Convert satu baris AT ke format JB
+   114→function convertAtRowToJb(row: string[]): Record<string, string> {
+   115→  const productId = (row[0] || "").replace(/^\uFEFF/, "").replace("?", "").trim(); // Remove BOM & ?
+   116→  const title = (row[1] || "").trim();
+   117→  const imageUrl = (row[2] || "").trim();
+   118→  const affiliateLinkRaw = (row[4] || "").trim();
+   119→  const affiliateLink2 = (row[5] || "").trim();
+   120→  const description = (row[6] || "").trim();
+   121→  const priceStr = (row[7] || "0").trim();
+   122→  const originalPriceStr = (row[8] || "0").trim();
+   123→  const category1 = (row[13] || "").trim();
+   124→  const category2 = (row[15] || "").trim();
+   125→  const category3 = (row[17] || "").trim();
+   126→
+   127→  // Price logic — AT format: col7 bisa jadi harga asli, col8 harga diskon (atau sebaliknya)
+   128→  let price = parseInt(priceStr, 10) || 0;
+   129→  let originalPrice = parseInt(originalPriceStr, 10) || 0;
+   130→
+   131→  // Kalau col8 < col7 → col7 = harga asli, col8 = harga jual (diskon)
+   132→  if (originalPrice > 0 && originalPrice < price) {
+   133→    const temp = price;
+   134→    price = originalPrice;
+   135→    originalPrice = temp;
+   136→  }
+   137→
+   138→  // Affiliate URL — prefer the short atid.me link (col 5), fallback to col 4
+   139→  const affiliateUrl = affiliateLink2 || affiliateLinkRaw;
+   140→
+   141→  // Extract original Shopee URL dari affiliate link
+   142→  const url = extractShopeeUrl(affiliateLinkRaw) || `https://shopee.co.id/search?keyword=${encodeURIComponent(title.slice(0, 50))}`;
+   143→
+   144→  // Category — use most specific (category3 > category2 > category1)
+   145→  const category = category3 || category2 || category1 || "Lainnya";
+   146→
+   147→  // Discount percent
+   148→  let discountPercent = "";
+   149→  if (originalPrice > price && price > 0) {
+   150→    discountPercent = Math.round(((originalPrice - price) / originalPrice) * 100).toString();
+   151→  }
+   152→
+   153→  // Notes — strip HTML dari description, limit 200 chars
+   154→  const notes = stripHtml(description).slice(0, 200);
+   155→
+   156→  return {
+   157→    title,
+   158→    url,
+   159→    image: imageUrl,
+   160→    price: price > 0 ? price.toString() : "",
+   161→    originalPrice: originalPrice > 0 && originalPrice > price ? originalPrice.toString() : "",
+   162→    discountPercent,
+   163→    rating: "4.5",
+   164→    reviewCount: "0",
+   165→    soldCount: "0",
+   166→    location: "",
+   167→    category,
+   168→    marketplace: "shopee",
+   169→    affiliateUrl,
+   170→    notes,
+   171→  };
+   172→}
+   173→
+   174→// Convert seluruh AT CSV text ke JB format rows
+   175→function convertAtCsvToJb(text: string, maxRows = 500): { rows: Record<string, string>[]; totalInput: number; errors: string[] } {
+   176→  const allRows = parseCsvText(text);
+   177→  const errors: string[] = [];
+   178→  const convertedRows: Record<string, string>[] = [];
+   179→
+   180→  // AT CSV tidak punya header — langsung data
+   181→  // Tapi kalau baris pertama kelihatannya header (misal ada "product_id" dll), skip
+   182→  let startIndex = 0;
+   183→  if (allRows.length > 0) {
+   184→    const firstCell = (allRows[0][0] || "").toLowerCase();
+   185→    if (firstCell.includes("product") || firstCell.includes("id") || firstCell.includes("item")) {
+   186→      startIndex = 1; // Skip header row
+   187→    }
+   188→  }
+   189→
+   190→  const dataRows = allRows.slice(startIndex, startIndex + maxRows);
+   191→
+   192→  for (let i = 0; i < dataRows.length; i++) {
+   193→    const row = dataRows[i];
+   194→
+   195→    // Minimal: harus ada title (col 1) dan image (col 2)
+   196→    if (!row[1] || !row[2]) {
+   197→      errors.push(`Baris ${startIndex + i + 1}: Title atau Image kosong, skip`);
+   198→      continue;
+   199→    }
+   200→
+   201→    // Minimal: harus ada price (col 7 atau col 8 setelah salah satunya valid)
+   202→    const col7 = parseInt(row[7] || "0", 10);
+   203→    const col8 = parseInt(row[8] || "0", 10);
+   204→    if (col7 <= 0 && col8 <= 0) {
+   205→      errors.push(`Baris ${startIndex + i + 1}: Price tidak valid (col7=${row[7]}, col8=${row[8]}), skip`);
+   206→      continue;
+   207→    }
+   208→
+   209→    const converted = convertAtRowToJb(row);
+   210→    convertedRows.push(converted);
+   211→  }
+   212→
+   213→  return {
+   214→    rows: convertedRows,
+   215→    totalInput: allRows.length - startIndex,
+   216→    errors,
+   217→  };
+   218→}
+   219→
+   220→// Generate JB CSV text dari converted rows
+   221→function generateJbCsv(rows: Record<string, string>[]): string {
+   222→  const headerLine = JB_HEADERS.join(",");
+   223→  const dataLines = rows.map((row) =>
+   224→    JB_HEADERS.map((h) => {
+   225→      const val = row[h] || "";
+   226→      // Escape: kalau ada koma, newline, atau quote → wrap dengan quotes
+   227→      if (val.includes(",") || val.includes("\n") || val.includes('"')) {
+   228→        return `"${val.replace(/"/g, '""')}"`;
+   229→      }
+   230→      return val;
+   231→    }).join(",")
+   232→  );
+   233→  return [headerLine, ...dataLines].join("\n");
+   234→}
+   235→
+   236→
+   237→// ============================================================
+   238→// Component
+   239→// ============================================================
+   240→
+   241→type Mode = "jb-upload" | "at-converter";
+   242→
+   243→export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, options?: RequestInit) => Promise<Response> }) {
+   244→  const [mode, setMode] = React.useState<Mode>("jb-upload");
+   245→
+   246→  // State untuk mode JB Upload (existing)
+   247→  const [dragActive, setDragActive] = React.useState(false);
+   248→  const [csvFile, setCsvFile] = React.useState<File | null>(null);
+   249→  const [csvPreview, setCsvPreview] = React.useState<string[][]>([]);
+   250→  const [csvHeaders, setCsvHeaders] = React.useState<string[]>([]);
+   251→  const [uploading, setUploading] = React.useState(false);
+   252→  const [result, setResult] = React.useState<BulkUploadResult | null>(null);
+   253→
+   254→  // State untuk mode AT Converter
+   255→  const [atFile, setAtFile] = React.useState<File | null>(null);
+   256→  const [atDragActive, setAtDragActive] = React.useState(false);
+   257→  const [converting, setConverting] = React.useState(false);
+   258→  const [convertedRows, setConvertedRows] = React.useState<Record<string, string>[]>([]);
+   259→  const [convertedPreview, setConvertedPreview] = React.useState<string[][]>([]);
+   260→  const [atTotalInput, setAtTotalInput] = React.useState(0);
+   261→  const [atErrors, setAtErrors] = React.useState<string[]>([]);
+   262→  const [atUploading, setAtUploading] = React.useState(false);
+   263→  const [atResult, setAtResult] = React.useState<BulkUploadResult | null>(null);
+   264→
+   265→  // ============================================================
+   266→  // JB Upload logic (existing)
+   267→  // ============================================================
+   268→
+   269→  const parseCsvForPreview = React.useCallback((text: string) => {
+   270→    const lines = text.split("\n").filter((l) => l.trim());
+   271→    if (lines.length < 2) {
+   272→      setCsvHeaders([]);
+   273→      setCsvPreview([]);
+   274→      return;
+   275→    }
+   276→
+   277→    const headers = parseCsvLine(lines[0]);
+   278→    const previewRows = lines.slice(1, 6).map(parseCsvLine);
+   279→
+   280→    setCsvHeaders(headers);
+   281→    setCsvPreview(previewRows);
+   282→  }, []);
+   283→
+   284→  const handleFile = React.useCallback((file: File) => {
+   285→    if (!file.name.endsWith(".csv") && !file.name.endsWith(".txt")) {
+   286→      alert("Hanya file CSV yang diperbolehkan");
+   287→      return;
+   288→    }
+   289→    setCsvFile(file);
+   290→    setResult(null);
+   291→
+   292→    const reader = new FileReader();
+   293→    reader.onload = (e) => {
+   294→      const text = e.target?.result as string;
+   295→      parseCsvForPreview(text);
+   296→    };
+   297→    reader.readAsText(file);
+   298→  }, [parseCsvForPreview]);
+   299→
+   300→  const handleDrop = React.useCallback((e: React.DragEvent) => {
+   301→    e.preventDefault();
+   302→    setDragActive(false);
+   303→    const file = e.dataTransfer.files[0];
+   304→    if (file) handleFile(file);
+   305→  }, [handleFile]);
+   306→
+   307→  const handleUpload = React.useCallback(async () => {
+   308→    if (!csvFile) return;
+   309→    setUploading(true);
+   310→    setResult(null);
+   311→
+   312→    try {
+   313→      const formData = new FormData();
+   314→      formData.append("file", csvFile);
+   315→
+   316→      const res = await adminFetch("/api/bulk-upload", {
+   317→        method: "POST",
+   318→        body: formData,
+   319→      });
+   320→
+   321→      const data = await res.json();
+   322→
+   323→      if (!res.ok) {
+   324→        setResult({ success: 0, failed: 0, total: 0, errors: [data.error || "Gagal upload"] });
+   325→        return;
+   326→      }
+   327→
+   328→      setResult(data);
+   329→    } catch (err: any) {
+   330→      setResult({ success: 0, failed: 0, total: 0, errors: [err?.message || "Error tidak diketahui"] });
+   331→    } finally {
+   332→      setUploading(false);
+   333→    }
+   334→  }, [csvFile, adminFetch]);
+   335→
+   336→  const handleDownloadTemplate = React.useCallback(() => {
+   337→    const blob = new Blob([CSV_TEMPLATE], { type: "text/csv;charset=utf-8;" });
+   338→    const url = URL.createObjectURL(blob);
+   339→    const a = document.createElement("a");
+   340→    a.href = url;
+   341→    a.download = "template-upload-jelajahbelanja.csv";
+   342→    a.click();
+   343→    URL.revokeObjectURL(url);
+   344→  }, []);
+   345→
+   346→  const handleReset = React.useCallback(() => {
+   347→    setCsvFile(null);
+   348→    setCsvPreview([]);
+   349→    setCsvHeaders([]);
+   350→    setResult(null);
+   351→  }, []);
+   352→
+   353→  // ============================================================
+   354→  // AT Converter logic
+   355→  // ============================================================
+   356→
+   357→  const handleAtFile = React.useCallback((file: File) => {
+   358→    if (!file.name.endsWith(".csv") && !file.name.endsWith(".txt") && !file.name.endsWith(".xlsx")) {
+   359→      alert("Hanya file CSV/XLSX yang diperbolehkan");
+   360→      return;
+   361→    }
+   362→    setAtFile(file);
+   363→    setConvertedRows([]);
+   364→    setConvertedPreview([]);
+   365→    setAtErrors([]);
+   366→    setAtTotalInput(0);
+   367→    setAtResult(null);
+   368→  }, []);
+   369→
+   370→  const handleAtDrop = React.useCallback((e: React.DragEvent) => {
+   371→    e.preventDefault();
+   372→    setAtDragActive(false);
+   373→    const file = e.dataTransfer.files[0];
+   374→    if (file) handleAtFile(file);
+   375→  }, [handleAtFile]);
+   376→
+   377→  const handleConvert = React.useCallback(async () => {
+   378→    if (!atFile) return;
+   379→    setConverting(true);
+   380→    setAtResult(null);
+   381→
+   382→    try {
+   383→      const text = await atFile.text();
+   384→      const { rows, totalInput, errors } = convertAtCsvToJb(text, 500);
+   385→
+   386→      setConvertedRows(rows);
+   387→      setAtTotalInput(totalInput);
+   388→      setAtErrors(errors);
+   389→
+   390→      // Preview: first 5 rows
+   391→      const previewData = rows.slice(0, 5).map((row) =>
+   392→        JB_HEADERS.map((h) => row[h] || "")
+   393→      );
+   394→      setConvertedPreview(previewData);
+   395→    } catch (err: any) {
+   396→      setAtErrors([`Gagal parse file: ${err?.message || "Unknown error"}`]);
+   397→    } finally {
+   398→      setConverting(false);
+   399→    }
+   400→  }, [atFile]);
+   401→
+   402→  const handleDownloadConverted = React.useCallback(() => {
+   403→    if (convertedRows.length === 0) return;
+   404→    const csv = generateJbCsv(convertedRows);
+   405→    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+   406→    const url = URL.createObjectURL(blob);
+   407→    const a = document.createElement("a");
+   408→    a.href = url;
+   409→    a.download = `converted-at-to-jb-${Date.now()}.csv`;
+   410→    a.click();
+   411→    URL.revokeObjectURL(url);
+   412→  }, [convertedRows]);
+   413→
+   414→  const handleAtUpload = React.useCallback(async () => {
+   415→    if (convertedRows.length === 0) return;
+   416→    setAtUploading(true);
+   417→    setAtResult(null);
+   418→
+   419→    try {
+   420→      // Generate CSV dari converted rows, lalu upload via bulk-upload API
+   421→      const csv = generateJbCsv(convertedRows);
+   422→      const blob = new Blob([csv], { type: "text/csv" });
+   423→      const formData = new FormData();
+   424→      formData.append("file", blob, "at-converted.csv");
+   425→
+   426→      const res = await adminFetch("/api/bulk-upload", {
+   427→        method: "POST",
+   428→        body: formData,
+   429→      });
+   430→
+   431→      const data = await res.json();
+   432→
+   433→      if (!res.ok) {
+   434→        setAtResult({ success: 0, failed: 0, total: 0, errors: [data.error || "Gagal upload"] });
+   435→        return;
+   436→      }
+   437→
+   438→      setAtResult(data);
+   439→    } catch (err: any) {
+   440→      setAtResult({ success: 0, failed: 0, total: 0, errors: [err?.message || "Error tidak diketahui"] });
+   441→    } finally {
+   442→      setAtUploading(false);
+   443→    }
+   444→  }, [convertedRows, adminFetch]);
+   445→
+   446→  const handleAtReset = React.useCallback(() => {
+   447→    setAtFile(null);
+   448→    setConvertedRows([]);
+   449→    setConvertedPreview([]);
+   450→    setAtErrors([]);
+   451→    setAtTotalInput(0);
+   452→    setAtResult(null);
+   453→  }, []);
+   454→
+   455→  // ============================================================
+   456→  // Render
+   457→  // ============================================================
+   458→
+   459→  return (
+   460→    <div className="space-y-4">
+   461→      {/* Mode Toggle */}
+   462→      <div className="flex gap-2">
+   463→        <Button
+   464→          variant={mode === "jb-upload" ? "default" : "outline"}
+   465→          size="sm"
+   466→          onClick={() => setMode("jb-upload")}
+   467→          className="gap-1.5"
+   468→        >
+   469→          <Upload className="w-4 h-4" />
+   470→          Upload CSV JB
+   471→        </Button>
+   472→        <Button
+   473→          variant={mode === "at-converter" ? "default" : "outline"}
+   474→          size="sm"
+   475→          onClick={() => setMode("at-converter")}
+   476→          className="gap-1.5"
+   477→        >
+   478→          <ArrowRightLeft className="w-4 h-4" />
+   479→          Konverter AT CSV
+   480→        </Button>
+   481→      </div>
+   482→
+   483→      {/* ============================================================ */}
+   484→      {/* MODE: JB Upload (existing) */}
+   485→      {/* ============================================================ */}
+   486→      {mode === "jb-upload" && (
+   487→        <>
+   488→          {/* Cara pakai */}
+   489→          <div className="rounded-2xl border border-fuchsia-200 dark:border-fuchsia-900/50 bg-fuchsia-50 dark:bg-fuchsia-900/20 p-4">
+   490→            <p className="text-sm font-semibold text-fuchsia-900 dark:text-fuchsia-100 mb-2">
+   491→              Cara Upload Massal
+   492→            </p>
+   493→            <ol className="text-sm text-fuchsia-800 dark:text-fuchsia-200 space-y-1 list-decimal list-inside">
+   494→              <li>Download template CSV dulu (klik tombol di bawah)</li>
+   495→              <li>Buka di Excel, isi data produk satu per satu — kolom wajib: <code className="bg-fuchsia-100 dark:bg-fuchsia-800 px-1 rounded text-xs">title, url, image, price, category</code></li>
+   496→              <li>Save As → CSV (Comma Separated Values)</li>
+   497→              <li>Drag & drop file CSV ke area di bawah, atau klik untuk pilih file</li>
+   498→              <li>Cek preview, lalu klik Upload</li>
+   499→            </ol>
+   500→            <p className="text-xs text-fuchsia-700 dark:text-fuchsia-300 mt-2">
+   501→              Maks 200 produk per upload. Kolom opsional: originalPrice, discountPercent, rating, reviewCount, soldCount, location, marketplace, affiliateUrl, notes.
+   502→            </p>
+   503→          </div>
+   504→
+   505→          {/* Download template */}
+   506→          <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="gap-1.5">
+   507→            <Download className="w-4 h-4" />
+   508→            Download Template CSV
+   509→          </Button>
+   510→
+   511→          {/* Drop zone */}
+   512→          {!result && (
+   513→            <div
+   514→              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+   515→              onDragLeave={() => setDragActive(false)}
+   516→              onDrop={handleDrop}
+   517→              onClick={() => {
+   518→                const input = document.createElement("input");
+   519→                input.type = "file";
+   520→                input.accept = ".csv,.txt";
+   521→                input.onchange = (e: any) => {
+   522→                  const file = e.target?.files?.[0];
+   523→                  if (file) handleFile(file);
+   524→                };
+   525→                input.click();
+   526→              }}
+   527→              className={cn(
+   528→                "relative rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors",
+   529→                dragActive
+   530→                  ? "border-fuchsia-500 bg-fuchsia-50 dark:bg-fuchsia-900/20"
+   531→                  : "border-zinc-300 dark:border-zinc-700 hover:border-fuchsia-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
+   532→                csvFile && "border-emerald-400 bg-emerald-50 dark:bg-emerald-900/10"
+   533→              )}
+   534→            >
+   535→              {csvFile ? (
+   536→                <div className="flex flex-col items-center gap-2">
+   537→                  <FileText className="w-10 h-10 text-emerald-500" />
+   538→                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{csvFile.name}</p>
+   539→                  <p className="text-xs text-zinc-500">{(csvFile.size / 1024).toFixed(1)} KB</p>
+   540→                </div>
+   541→              ) : (
+   542→                <div className="flex flex-col items-center gap-2">
+   543→                  <Upload className="w-10 h-10 text-zinc-400" />
+   544→                  <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+   545→                    Drag & drop file CSV di sini
+   546→                  </p>
+   547→                  <p className="text-xs text-zinc-400">atau klik untuk pilih file</p>
+   548→                </div>
+   549→              )}
+   550→            </div>
+   551→          )}
+   552→
+   553→          {/* Preview */}
+   554→          {csvFile && csvHeaders.length > 0 && !result && (
+   555→            <div className="space-y-3">
+   556→              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+   557→                Preview ({csvPreview.length} baris pertama dari file)
+   558→              </p>
+   559→              <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+   560→                <table className="w-full text-xs">
+   561→                  <thead>
+   562→                    <tr className="bg-zinc-100 dark:bg-zinc-800">
+   563→                      {csvHeaders.map((h, i) => (
+   564→                        <th key={i} className="px-3 py-2 text-left font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+   565→                          {h}
+   566→                          {JB_REQUIRED.includes(h.toLowerCase()) && (
+   567→                            <span className="text-red-500 ml-0.5">*</span>
+   568→                          )}
+   569→                        </th>
+   570→                      ))}
+   571→                    </tr>
+   572→                  </thead>
+   573→                  <tbody>
+   574→                    {csvPreview.map((row, ri) => (
+   575→                      <tr key={ri} className="border-t border-zinc-100 dark:border-zinc-800">
+   576→                        {csvHeaders.map((_, ci) => (
+   577→                          <td key={ci} className="px-3 py-1.5 text-zinc-600 dark:text-zinc-400 whitespace-nowrap max-w-[200px] truncate">
+   578→                            {row[ci] || <span className="text-zinc-300">—</span>}
+   579→                          </td>
+   580→                        ))}
+   581→                      </tr>
+   582→                    ))}
+   583→                  </tbody>
+   584→                </table>
+   585→              </div>
+   586→
+   587→              <div className="flex gap-2">
+   588→                <Button onClick={handleUpload} disabled={uploading} className="gap-1.5">
+   589→                  {uploading ? (
+   590→                    <>
+   591→                      <Loader2 className="w-4 h-4 animate-spin" />
+   592→                      Mengupload...
+   593→                    </>
+   594→                  ) : (
+   595→                    <>
+   596→                      <Upload className="w-4 h-4" />
+   597→                      Upload {csvPreview.length}+ Produk
+   598→                    </>
+   599→                  )}
+   600→                </Button>
+   601→                <Button variant="outline" onClick={handleReset} disabled={uploading}>
+   602→                  Batal
+   603→                </Button>
+   604→              </div>
+   605→            </div>
+   606→          )}
+   607→
+   608→          {/* Result */}
+   609→          {result && (
+   610→            <div className="space-y-3">
+   611→              <div className={cn(
+   612→                "rounded-2xl border p-4",
+   613→                result.failed === 0
+   614→                  ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20"
+   615→                  : "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/20"
+   616→              )}>
+   617→                <div className="flex items-center gap-3 mb-3">
+   618→                  {result.failed === 0 ? (
+   619→                    <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+   620→                  ) : (
+   621→                    <AlertCircle className="w-6 h-6 text-amber-500" />
+   622→                  )}
+   623→                  <div>
+   624→                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+   625→                      Upload Selesai!
+   626→                    </p>
+   627→                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+   628→                      {result.success} berhasil, {result.failed} gagal dari {result.total} produk
+   629→                    </p>
+   630→                  </div>
+   631→                </div>
+   632→
+   633→                {result.errors.length > 0 && (
+   634→                  <div className="mt-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3">
+   635→                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
+   636→                      <XCircle className="w-3.5 h-3.5 inline mr-1" />
+   637→                      Detail Error:
+   638→                    </p>
+   639→                    <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5">
+   640→                      {result.errors.map((err, i) => (
+   641→                        <li key={i}>• {err}</li>
+   642→                      ))}
+   643→                    </ul>
+   644→                  </div>
+   645→                )}
+   646→              </div>
+   647→
+   648→              <Button onClick={handleReset} variant="outline">
+   649→                Upload Lagi
+   650→              </Button>
+   651→            </div>
+   652→          )}
+   653→        </>
+   654→      )}
+   655→
+   656→      {/* ============================================================ */}
+   657→      {/* MODE: AT Converter */}
+   658→      {/* ============================================================ */}
+   659→      {mode === "at-converter" && (
+   660→        <>
+   661→          {/* Cara pakai */}
+   662→          <div className="rounded-2xl border border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/20 p-4">
+   663→            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+   664→              Cara Konverter CSV Accesstrade
+   665→            </p>
+   666→            <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
+   667→              <li>Download CSV dari dashboard <b>Accesstrade</b> (Product Feed / Offer)</li>
+   668→              <li>Upload file CSV AT ke area di bawah</li>
+   669→              <li>Klik <b>Konversi ke JB</b> — otomatis mapping kolom AT ke format JB</li>
+   670→              <li>Cek preview hasil konversi</li>
+   671→              <li>Pilih: <b>Download CSV JB</b> atau <b>Upload ke Database</b></li>
+   672→            </ol>
+   673→            <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+   674→              Maks 500 produk per konversi. Affiliate link otomatis terisi dari data AT.
+   675→            </p>
+   676→          </div>
+   677→
+   678→          {/* AT Column → JB Mapping Info */}
+   679→          <details className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+   680→            <summary className="px-4 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-sm font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+   681→              Mapping Kolom AT → JB
+   682→            </summary>
+   683→            <div className="p-4 text-xs">
+   684→              <table className="w-full">
+   685→                <thead>
+   686→                  <tr className="border-b border-zinc-200 dark:border-zinc-700">
+   687→                    <th className="text-left py-1.5 pr-3 text-zinc-500 dark:text-zinc-400">Kolom AT (Accesstrade)</th>
+   688→                    <th className="text-left py-1.5 pr-3 text-zinc-500 dark:text-zinc-400">→</th>
+   689→                    <th className="text-left py-1.5 text-zinc-500 dark:text-zinc-400">Kolom JB</th>
+   690→                  </tr>
+   691→                </thead>
+   692→                <tbody className="text-zinc-600 dark:text-zinc-400">
+   693→                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 1: Product Name</td><td className="pr-3">→</td><td>title *</td></tr>
+   694→                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 4: Affiliate Link (decoded)</td><td className="pr-3">→</td><td>url *</td></tr>
+   695→                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 2: Image URL</td><td className="pr-3">→</td><td>image *</td></tr>
+   696→                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 7: Price</td><td className="pr-3">→</td><td>price *</td></tr>
+   697→                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 8: Original Price</td><td className="pr-3">→</td><td>originalPrice</td></tr>
+   698→                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Calculated: price vs originalPrice</td><td className="pr-3">→</td><td>discountPercent</td></tr>
+   699→                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 17/15/13: Category (most specific)</td><td className="pr-3">→</td><td>category *</td></tr>
+   700→                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Default: shopee</td><td className="pr-3">→</td><td>marketplace</td></tr>
+   701→                  <tr className="border-b border-zinc-100 dark:border-zinc-800"><td className="py-1 pr-3">Col 5: Affiliate Link (atid.me)</td><td className="pr-3">→</td><td>affiliateUrl</td></tr>
+   702→                  <tr><td className="py-1 pr-3">Col 6: Description (HTML stripped)</td><td className="pr-3">→</td><td>notes</td></tr>
+   703→                </tbody>
+   704→              </table>
+   705→            </div>
+   706→          </details>
+   707→
+   708→          {/* Step 1: Upload AT CSV */}
+   709→          {!atResult && convertedRows.length === 0 && (
+   710→            <>
+   711→              <div
+   712→                onDragOver={(e) => { e.preventDefault(); setAtDragActive(true); }}
+   713→                onDragLeave={() => setAtDragActive(false)}
+   714→                onDrop={handleAtDrop}
+   715→                onClick={() => {
+   716→                  const input = document.createElement("input");
+   717→                  input.type = "file";
+   718→                  input.accept = ".csv,.txt";
+   719→                  input.onchange = (e: any) => {
+   720→                    const file = e.target?.files?.[0];
+   721→                    if (file) handleAtFile(file);
+   722→                  };
+   723→                  input.click();
+   724→                }}
+   725→                className={cn(
+   726→                  "relative rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors",
+   727→                  atDragActive
+   728→                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+   729→                    : "border-zinc-300 dark:border-zinc-700 hover:border-blue-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
+   730→                  atFile && "border-blue-400 bg-blue-50 dark:bg-blue-900/10"
+   731→                )}
+   732→              >
+   733→                {atFile ? (
+   734→                  <div className="flex flex-col items-center gap-2">
+   735→                    <FileText className="w-10 h-10 text-blue-500" />
+   736→                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{atFile.name}</p>
+   737→                    <p className="text-xs text-zinc-500">{(atFile.size / 1024).toFixed(1)} KB</p>
+   738→                  </div>
+   739→                ) : (
+   740→                  <div className="flex flex-col items-center gap-2">
+   741→                    <Upload className="w-10 h-10 text-zinc-400" />
+   742→                    <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+   743→                      Drag & drop file CSV Accesstrade di sini
+   744→                    </p>
+   745→                    <p className="text-xs text-zinc-400">atau klik untuk pilih file</p>
+   746→                  </div>
+   747→                )}
+   748→              </div>
+   749→
+   750→              {/* Convert Button */}
+   751→              {atFile && (
+   752→                <div className="flex gap-2">
+   753→                  <Button onClick={handleConvert} disabled={converting} className="gap-1.5">
+   754→                    {converting ? (
+   755→                      <>
+   756→                        <Loader2 className="w-4 h-4 animate-spin" />
+   757→                        Mengkonversi...
+   758→                      </>
+   759→                    ) : (
+   760→                      <>
+   761→                        <RefreshCw className="w-4 h-4" />
+   762→                        Konversi ke JB
+   763→                      </>
+   764→                    )}
+   765→                  </Button>
+   766→                  <Button variant="outline" onClick={handleAtReset} disabled={converting}>
+   767→                    Batal
+   768→                  </Button>
+   769→                </div>
+   770→              )}
+   771→
+   772→              {/* Conversion errors */}
+   773→              {atErrors.length > 0 && convertedRows.length === 0 && (
+   774→                <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 p-3">
+   775→                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
+   776→                    <XCircle className="w-3.5 h-3.5 inline mr-1" />
+   777→                    Error Konversi:
+   778→                  </p>
+   779→                  <ul className="text-xs text-red-600 dark:text-red-400 space-y-0.5">
+   780→                    {atErrors.slice(0, 10).map((err, i) => (
+   781→                      <li key={i}>• {err}</li>
+   782→                    ))}
+   783→                  </ul>
+   784→                </div>
+   785→              )}
+   786→            </>
+   787→          )}
+   788→
+   789→          {/* Step 2: Preview Converted Data */}
+   790→          {convertedRows.length > 0 && !atResult && (
+   791→            <div className="space-y-3">
+   792→              {/* Summary */}
+   793→              <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+   794→                <div className="flex items-center gap-3">
+   795→                  <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+   796→                  <div>
+   797→                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+   798→                      Konversi Berhasil!
+   799→                    </p>
+   800→                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+   801→                      {convertedRows.length} produk dikonversi dari {atTotalInput} baris data AT
+   802→                    </p>
+   803→                    {atErrors.length > 0 && (
+   804→                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+   805→                        {atErrors.length} baris diskip karena error
+   806→                      </p>
+   807→                    )}
+   808→                  </div>
+   809→                </div>
+   810→              </div>
+   811→
+   812→              {/* Preview Table */}
+   813→              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+   814→                Preview Hasil Konversi ({convertedPreview.length} dari {convertedRows.length} produk)
+   815→              </p>
+   816→              <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+   817→                <table className="w-full text-xs">
+   818→                  <thead>
+   819→                    <tr className="bg-zinc-100 dark:bg-zinc-800">
+   820→                      {JB_HEADERS.map((h, i) => (
+   821→                        <th key={i} className="px-3 py-2 text-left font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+   822→                          {h}
+   823→                          {JB_REQUIRED.includes(h) && (
+   824→                            <span className="text-red-500 ml-0.5">*</span>
+   825→                          )}
+   826→                        </th>
+   827→                      ))}
+   828→                    </tr>
+   829→                  </thead>
+   830→                  <tbody>
+   831→                    {convertedPreview.map((row, ri) => (
+   832→                      <tr key={ri} className="border-t border-zinc-100 dark:border-zinc-800">
+   833→                        {JB_HEADERS.map((h, ci) => (
+   834→                          <td key={ci} className="px-3 py-1.5 text-zinc-600 dark:text-zinc-400 whitespace-nowrap max-w-[180px] truncate">
+   835→                            {row[ci] || <span className="text-zinc-300">—</span>}
+   836→                          </td>
+   837→                        ))}
+   838→                      </tr>
+   839→                    ))}
+   840→                  </tbody>
+   841→                </table>
+   842→              </div>
+   843→
+   844→              {/* Skip errors detail */}
+   845→              {atErrors.length > 0 && (
+   846→                <details className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+   847→                  <summary className="px-4 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer">
+   848→                    Lihat {atErrors.length} error konversi
+   849→                  </summary>
+   850→                  <div className="p-3 max-h-40 overflow-y-auto">
+   851→                    <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5">
+   852→                      {atErrors.map((err, i) => (
+   853→                        <li key={i}>• {err}</li>
+   854→                      ))}
+   855→                    </ul>
+   856→                  </div>
+   857→                </details>
+   858→              )}
+   859→
+   860→              {/* Action Buttons */}
+   861→              <div className="flex gap-2">
+   862→                <Button onClick={handleAtUpload} disabled={atUploading} className="gap-1.5">
+   863→                  {atUploading ? (
+   864→                    <>
+   865→                      <Loader2 className="w-4 h-4 animate-spin" />
+   866→                      Mengupload...
+   867→                    </>
+   868→                  ) : (
+   869→                    <>
+   870→                      <Upload className="w-4 h-4" />
+   871→                      Upload {convertedRows.length} Produk ke Database
+   872→                    </>
+   873→                  )}
+   874→                </Button>
+   875→                <Button variant="outline" onClick={handleDownloadConverted} disabled={atUploading} className="gap-1.5">
+   876→                  <Download className="w-4 h-4" />
+   877→                  Download CSV JB
+   878→                </Button>
+   879→                <Button variant="outline" onClick={handleAtReset} disabled={atUploading}>
+   880→                  Batal
+   881→                </Button>
+   882→              </div>
+   883→            </div>
+   884→          )}
+   885→
+   886→          {/* Upload Result */}
+   887→          {atResult && (
+   888→            <div className="space-y-3">
+   889→              <div className={cn(
+   890→                "rounded-2xl border p-4",
+   891→                atResult.failed === 0
+   892→                  ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20"
+   893→                  : "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/20"
+   894→              )}>
+   895→                <div className="flex items-center gap-3 mb-3">
+   896→                  {atResult.failed === 0 ? (
+   897→                    <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+   898→                  ) : (
+   899→                    <AlertCircle className="w-6 h-6 text-amber-500" />
+   900→                  )}
+   901→                  <div>
+   902→                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+   903→                      Upload Selesai!
+   904→                    </p>
+   905→                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+   906→                      {atResult.success} berhasil, {atResult.failed} gagal dari {atResult.total} produk
+   907→                    </p>
+   908→                  </div>
+   909→                </div>
+   910→
+   911→                {atResult.errors.length > 0 && (
+   912→                  <div className="mt-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3">
+   913→                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
+   914→                      <XCircle className="w-3.5 h-3.5 inline mr-1" />
+   915→                      Detail Error:
+   916→                    </p>
+   917→                    <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5">
+   918→                      {atResult.errors.map((err, i) => (
+   919→                        <li key={i}>• {err}</li>
+   920→                      ))}
+   921→                    </ul>
+   922→                  </div>
+   923→                )}
+   924→              </div>
+   925→
+   926→              <Button onClick={handleAtReset} variant="outline">
+   927→                Konversi Lagi
+   928→              </Button>
+   929→            </div>
+   930→          )}
+   931→        </>
+   932→      )}
+   933→    </div>
+   934→  );
+   935→}
+   936→

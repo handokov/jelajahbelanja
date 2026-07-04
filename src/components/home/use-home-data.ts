@@ -69,6 +69,7 @@ export function useHomeData() {
         params.set("category", activeCategory);
       }
       params.set("filter", filter);
+      params.set("limit", "200"); // Load up to 200 produk per page
       if (debouncedSearch) params.set("search", debouncedSearch);
       const res = await fetch(`/api/products?${params.toString()}`);
       if (!res.ok) throw new Error("Gagal memuat produk");
