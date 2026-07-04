@@ -223,3 +223,28 @@ Stage Summary:
 - Package: /home/z/my-project/download/jb-telegram-bot.zip
 - Total .bat files: 9 (bot, discover x3, scrape x2, watch, report, stop)
 - Multi-AI system now: AI-1 (discover+scrape) → AI-2 (watch+bot) → DB → Web JB
+---
+Task ID: 1
+Agent: Main Agent
+Task: Tambahkan fitur Konverter AT CSV di admin JB (Upload Massal tab)
+
+Work Log:
+- Analyzed existing bulk-upload-tab.tsx and /api/bulk-upload/route.ts
+- Analyzed AT CSV format (no headers, 22 columns) vs JB CSV format (14 columns with headers)
+- Added mode toggle to BulkUploadTab: "Upload CSV JB" vs "Konverter AT CSV"
+- Implemented AT → JB column mapping with smart logic:
+  - Price swap: if col8 < col7, treat col7 as originalPrice and col8 as selling price
+  - URL extraction: decode affiliate links to get original Shopee product URLs
+  - Category: use most specific (category3 > category2 > category1)
+  - Affiliate URL: prefer atid.me short link (col 5) over raw link (col 4)
+  - Notes: strip HTML from description, limit 200 chars
+- Added preview table with JB column headers
+- Added "Download CSV JB" and "Upload ke Database" actions
+- Added mapping info expandable section for user reference
+- Updated /api/bulk-upload max rows from 200 to 500
+- Build verified: no errors
+
+Stage Summary:
+- bulk-upload-tab.tsx updated with full AT Converter feature
+- /api/bulk-upload/route.ts updated (MAX_ROWS: 200 → 500)
+- Feature complete and ready for testing
