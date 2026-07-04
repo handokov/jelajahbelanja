@@ -31,6 +31,13 @@ import {
   EyeOff,
   Pin,
   Package,
+  CheckboxCheck,
+  Checkbox,
+  Square,
+  CheckSquare,
+  AlertTriangle,
+  Filter,
+  Zap,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -51,6 +58,16 @@ export function ProductsTab() {
   const [editingProductId, setEditingProductId] = React.useState<string | null>(null);
   const [deleteProductTarget, setDeleteProductTarget] = React.useState<any>(null);
   const [showAdvanced, setShowAdvanced] = React.useState(false);
+
+  // ─── Bulk Delete State ───
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = React.useState(false);
+  const [showFilterDeleteDialog, setShowFilterDeleteDialog] = React.useState(false);
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = React.useState(false);
+  const [filterDeleteCategory, setFilterDeleteCategory] = React.useState("");
+  const [filterDeleteMarketplace, setFilterDeleteMarketplace] = React.useState("");
+  const [filterDeleteOlderDays, setFilterDeleteOlderDays] = React.useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = React.useState("");
 
   // ─── Queries ───
   const { data: categoriesData } = useQuery({
@@ -127,6 +144,58 @@ export function ProductsTab() {
     onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
   });
 
+  // ─── Bulk Delete Mutation ───
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (payload: { ids?: string[]; category?: string; marketplace?: string; deleteAll?: boolean; olderThanDays?: number }) => {
+      const res = await fetch("/api/bulk-delete-products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal menghapus produk"); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      setSelectedIds(new Set());
+      setShowBulkDeleteDialog(false);
+      setShowFilterDeleteDialog(false);
+      setShowDeleteAllDialog(false);
+      setDeleteConfirmText("");
+      setFilterDeleteCategory("");
+      setFilterDeleteMarketplace("");
+      setFilterDeleteOlderDays("");
+      toast({ title: "Produk dihapus", description: `${data.deleted} produk berhasil dihapus.` });
+    },
+    onError: (err: Error) => { toast({ title: "Gagal Hapus", description: err.message, variant: "destructive" }); },
+  });
+
+  // ─── Selection Handlers ───
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    const products = productsData ?? [];
+    if (selectedIds.size === products.length && products.length > 0) {
+      // Deselect all
+      setSelectedIds(new Set());
+    } else {
+      // Select all
+      setSelectedIds(new Set(products.map((p: any) => p.id)));
+    }
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
   // ─── Handlers ───
   function handleSubmitProduct() {
     if (!productForm.title.trim() || !productForm.price || !productForm.category) {
@@ -187,6 +256,7 @@ export function ProductsTab() {
 
   const products = productsData ?? [];
   const categories = categoriesData ?? [];
+  const allSelected = products.length > 0 && selectedIds.size === products.length;
 
   return (
     <>
@@ -354,9 +424,82 @@ export function ProductsTab() {
 
       {/* Product list */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
-        <h2 className="font-semibold text-sm mb-4">
-          Daftar Produk ({products.length})
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-sm">
+            Daftar Produk ({products.length})
+          </h2>
+          <div className="flex items-center gap-2">
+            {/* Filter Delete Button */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/20"
+              onClick={() => setShowFilterDeleteDialog(true)}
+            >
+              <Filter className="w-3.5 h-3.5 mr-1" />
+              Hapus by Filter
+            </Button>
+            {/* Delete All Button */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+              onClick={() => setShowDeleteAllDialog(true)}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 mr-1" />
+              Hapus Semua
+            </Button>
+          </div>
+        </div>
+
+        {/* Bulk Action Bar */}
+        {selectedIds.size > 0 && (
+          <div className="mb-3 flex items-center gap-3 p-3 rounded-xl bg-fuchsia-50 dark:bg-fuchsia-900/20 border border-fuchsia-200 dark:border-fuchsia-800">
+            <div className="flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-fuchsia-600" />
+              <span className="text-sm font-medium text-fuchsia-900 dark:text-fuchsia-100">
+                {selectedIds.size} produk dipilih
+              </span>
+            </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-xs"
+                onClick={clearSelection}
+              >
+                Batal Pilih
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="text-xs"
+                onClick={() => setShowBulkDeleteDialog(true)}
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                Hapus {selectedIds.size} Produk
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Select All checkbox */}
+        {products.length > 0 && (
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-400 transition-colors"
+            >
+              {allSelected ? (
+                <CheckSquare className="w-4 h-4 text-fuchsia-600" />
+              ) : (
+                <Square className="w-4 h-4" />
+              )}
+              {allSelected ? "Batal Pilih Semua" : "Pilih Semua"}
+            </button>
+          </div>
+        )}
+
         {productsLoading ? (
           <div className="text-center py-8 text-sm text-zinc-500">Memuat...</div>
         ) : products.length === 0 ? (
@@ -370,14 +513,33 @@ export function ProductsTab() {
               <div
                 key={p.id}
                 className={`flex gap-3 p-3 rounded-xl border ${
-                  p.isHidden ? "border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-900/10" :
-                  !p.enabled ? "border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 opacity-60" :
-                  "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
+                  selectedIds.has(p.id)
+                    ? "border-fuchsia-300 dark:border-fuchsia-700 bg-fuchsia-50/50 dark:bg-fuchsia-900/10"
+                    : p.isHidden ? "border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-900/10" :
+                    !p.enabled ? "border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 opacity-60" :
+                    "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
                 }`}
               >
+                {/* Checkbox */}
+                <div className="flex items-center flex-shrink-0 pt-5">
+                  <button
+                    onClick={() => toggleSelect(p.id)}
+                    className="text-zinc-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-400 transition-colors"
+                  >
+                    {selectedIds.has(p.id) ? (
+                      <CheckSquare className="w-4.5 h-4.5 text-fuchsia-600" />
+                    ) : (
+                      <Square className="w-4.5 h-4.5" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Image */}
                 <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                   {p.image && <img src={p.image} alt={p.title} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
                 </div>
+
+                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-sm font-medium truncate max-w-[200px]">{p.title}</span>
@@ -390,6 +552,8 @@ export function ProductsTab() {
                     <span className="font-semibold text-fuchsia-600">{formatRp(p.price)}</span>
                     {p.originalPrice && <span className="line-through">{formatRp(p.originalPrice)}</span>}
                     <span>{p.category}</span>
+                    <span className="text-zinc-400">•</span>
+                    <span className="text-zinc-400 capitalize">{p.marketplace || "shopee"}</span>
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
                     <span className="inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" /> {p.rating?.toFixed(1)}</span>
@@ -399,6 +563,8 @@ export function ProductsTab() {
                     )}
                   </div>
                 </div>
+
+                {/* Actions */}
                 <div className="flex flex-col gap-1">
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEditProduct(p)}><Pencil className="w-3 h-3" /></Button>
                   <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDeleteProductTarget(p)}><Trash2 className="w-3 h-3" /></Button>
@@ -409,7 +575,7 @@ export function ProductsTab() {
         )}
       </div>
 
-      {/* Delete product dialog */}
+      {/* ── Delete single product dialog ── */}
       <AlertDialog open={!!deleteProductTarget} onOpenChange={(o) => !o && setDeleteProductTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -421,6 +587,156 @@ export function ProductsTab() {
           <AlertDialogFooter>
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction onClick={() => deleteProductTarget && deleteProductMutation.mutate(deleteProductTarget.id)} className="bg-red-600 hover:bg-red-700">Hapus</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Bulk Delete dialog (selected products) ── */}
+      <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-500" />
+              Hapus {selectedIds.size} Produk?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{selectedIds.size} produk</strong> yang kamu pilih akan dihapus permanen.
+              Tindakan ini tidak bisa dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => bulkDeleteMutation.mutate({ ids: Array.from(selectedIds) })}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? "Menghapus..." : `Hapus ${selectedIds.size} Produk`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Filter Delete dialog ── */}
+      <AlertDialog open={showFilterDeleteDialog} onOpenChange={(open) => { setShowFilterDeleteDialog(open); if (!open) { setDeleteConfirmText(""); } }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-orange-500" />
+              Hapus Produk by Filter
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Pilih filter untuk menghapus produk secara massal. Bisa kombinasi lebih dari satu filter.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3 py-2">
+            {/* Category filter */}
+            <div>
+              <Label className="text-xs font-medium">Kategori</Label>
+              <select
+                className="w-full h-9 mt-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={filterDeleteCategory}
+                onChange={(e) => setFilterDeleteCategory(e.target.value)}
+              >
+                <option value="">— Semua Kategori —</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.name}>{c.emoji} {c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Marketplace filter */}
+            <div>
+              <Label className="text-xs font-medium">Marketplace</Label>
+              <select
+                className="w-full h-9 mt-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={filterDeleteMarketplace}
+                onChange={(e) => setFilterDeleteMarketplace(e.target.value)}
+              >
+                <option value="">— Semua Marketplace —</option>
+                {MARKETPLACE_OPTIONS.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Age filter */}
+            <div>
+              <Label className="text-xs font-medium">Lebih lama dari (hari)</Label>
+              <Input
+                type="number"
+                placeholder="Contoh: 30 (hapus produk > 30 hari)"
+                value={filterDeleteOlderDays}
+                onChange={(e) => setFilterDeleteOlderDays(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+
+            {/* Preview */}
+            <div className="rounded-lg bg-orange-50 dark:bg-orange-900/20 p-3 text-xs text-orange-800 dark:text-orange-200">
+              <Zap className="w-3.5 h-3.5 inline mr-1" />
+              <strong>Tips:</strong> Kalau file AT kebanyakan produk sample, pilih kategori atau marketplace yang salah, lalu hapus sekaligus. Misalnya hapus semua produk kategori &quot;Fashion wanita&quot; yang lebih lama dari 7 hari.
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const payload: any = {};
+                if (filterDeleteCategory) payload.category = filterDeleteCategory;
+                if (filterDeleteMarketplace) payload.marketplace = filterDeleteMarketplace;
+                if (filterDeleteOlderDays) payload.olderThanDays = Number(filterDeleteOlderDays);
+                bulkDeleteMutation.mutate(payload);
+              }}
+              className="bg-orange-600 hover:bg-orange-700"
+              disabled={
+                bulkDeleteMutation.isPending ||
+                (!filterDeleteCategory && !filterDeleteMarketplace && !filterDeleteOlderDays)
+              }
+            >
+              {bulkDeleteMutation.isPending ? "Menghapus..." : "Hapus Produk"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Delete All dialog ── */}
+      <AlertDialog open={showDeleteAllDialog} onOpenChange={(open) => { setShowDeleteAllDialog(open); if (!open) setDeleteConfirmText(""); }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              HAPUS SEMUA PRODUK?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong className="text-red-600">PERINGATAN:</strong> Semua {products.length} produk akan dihapus permanen.
+              Tindakan ini <strong>tidak bisa dibatalkan</strong>!
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="py-2">
+            <Label className="text-xs font-medium">
+              Ketik <strong>HAPUS SEMUA</strong> untuk konfirmasi:
+            </Label>
+            <Input
+              placeholder="HAPUS SEMUA"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => bulkDeleteMutation.mutate({ deleteAll: true })}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteConfirmText !== "HAPUS SEMUA" || bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? "Menghapus..." : "HAPUS SEMUA PRODUK"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
