@@ -529,8 +529,23 @@ function scrapeSearchPage(category) {
         if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
       }
 
-      const ratingMatch = text.match(/(\d+[,.]\d+)/);
-      if (ratingMatch) product.rating = parseFloat(ratingMatch[1].replace(',', '.'));
+      // Rating: cari angka desimal di dekat simbol bintang, atau fallback ke angka <= 5.0
+      let rating = null;
+      const starRatingMatch = text.match(/([★⭐☆\s])(\d+[,.]\d+)/);
+      if (starRatingMatch) {
+        rating = parseFloat(starRatingMatch[2].replace(',', '.'));
+      } else {
+        // Fallback: cari semua angka desimal, ambil yang <= 5.0
+        const allDecimals = [...text.matchAll(/(\d+[,.]\d+)/g)];
+        for (const m of allDecimals) {
+          const val = parseFloat(m[1].replace(',', '.'));
+          if (val >= 0 && val <= 5.0) {
+            rating = val;
+            break;
+          }
+        }
+      }
+      if (rating !== null) product.rating = rating;
 
       const img = link.querySelector('img');
       if (img) {
@@ -588,8 +603,22 @@ function scrapeProductDetail(category) {
     if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
   }
 
-  const ratingMatch = bodyText.match(/(\d+[,.]\d+)/);
-  if (ratingMatch) product.rating = parseFloat(ratingMatch[1].replace(',', '.'));
+  // Rating: cari angka desimal di dekat simbol bintang, atau fallback ke angka <= 5.0
+  let rating = null;
+  const starRatingMatch = bodyText.match(/([★⭐☆\s])(\d+[,.]\d+)/);
+  if (starRatingMatch) {
+    rating = parseFloat(starRatingMatch[2].replace(',', '.'));
+  } else {
+    const allDecimals = [...bodyText.matchAll(/(\d+[,.]\d+)/g)];
+    for (const m of allDecimals) {
+      const val = parseFloat(m[1].replace(',', '.'));
+      if (val >= 0 && val <= 5.0) {
+        rating = val;
+        break;
+      }
+    }
+  }
+  if (rating !== null) product.rating = rating;
 
   const locMatch = bodyText.match(/Dikirim dari\s*([^\n,]+)/i);
   if (locMatch) product.location = locMatch[1].trim();
