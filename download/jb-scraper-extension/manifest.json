@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "JB Shopee Scraper",
-  "version": "1.0.0",
-  "description": "Klik produk Shopee → copy CSV → paste ke JB upload massal",
+  "version": "5.0.0",
+  "description": "Klik produk Shopee → copy CSV → paste ke JB upload massal (v5: fix gambar, rating, terjual)",
   "permissions": ["activeTab", "scripting", "clipboardWrite"],
   "action": {
     "default_popup": "popup.html",

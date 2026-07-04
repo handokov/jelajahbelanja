@@ -1,5 +1,10 @@
 /**
- * JB Shopee Scraper + Accesstrade Converter — v4
+ * JB Shopee Scraper + Accesstrade Converter — v5
+ *
+ * FIX v5:
+ * - Fix: gambar ambil dari meta og:image (paling reliable)
+ * - Fix: rating/reviewCount/soldCount diambil dari Shopee API v4 langsung
+ * - Fix: selector gambar diperbaiki supaya nggak ambil logo Shopee
  *
  * 2 Tab:
  * 1. Scrape Shopee — ambil produk langsung dari halaman Shopee
@@ -236,7 +241,7 @@ function updateUI() {
       collectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
     } else {
       collectedList.innerHTML = collected.map((p, i) =>
-        `<div>${i + 1}. ${esc(p.title.substring(0, 45))}${p.title.length > 45 ? '...' : ''}</div>`
+        `<div>${i + 1}. ${esc(p.title.substring(0, 45))}${p.title.length > 45 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
       ).join('');
     }
   }
@@ -334,7 +339,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Scrape detail
+  // Scrape detail — v5: pakai Shopee API + meta tags
   if (scrapeDetailBtn) {
     scrapeDetailBtn.addEventListener('click', async () => {
       scrapeDetailBtn.disabled = true;
@@ -343,25 +348,63 @@ document.addEventListener('DOMContentLoaded', async () => {
       const category = categorySelect.value;
 
       try {
-        const results = await chrome.scripting.executeScript({
+        // Step 1: Scrape basic data dari DOM
+        const domResults = await chrome.scripting.executeScript({
           target: { tabId: currentTab.id },
           func: scrapeProductDetail,
           args: [category],
         });
 
-        if (results?.[0]?.result) {
-          const product = results[0].result;
-          const existingUrls = new Set(collected.map(p => p.url));
+        const product = domResults?.[0]?.result;
 
-          if (existingUrls.has(product.url)) {
-            scrapeDetailBtn.textContent = '⚠️ Udah ada!';
-          } else {
-            collected.push(product);
-            saveCollected();
-            scrapeDetailBtn.textContent = `✅ Ditambah! (total ${collected.length})`;
-          }
-        } else {
+        if (!product || !product.title) {
           scrapeDetailBtn.textContent = '❌ Gak bisa baca';
+          setTimeout(() => {
+            scrapeDetailBtn.textContent = '🔍 Ambil 1 Produk (Halaman Detail)';
+            scrapeDetailBtn.disabled = !(isShopee && isDetail);
+          }, 2000);
+          return;
+        }
+
+        // Step 2: Ambil data lengkap dari Shopee API v4
+        const url = currentTab.url;
+        const idMatch = url.match(/-i\.(\d+)\.(\d+)/);
+        if (idMatch) {
+          const shopId = idMatch[1];
+          const itemId = idMatch[2];
+
+          try {
+            const apiResults = await chrome.scripting.executeScript({
+              target: { tabId: currentTab.id },
+              func: fetchShopeeApiInPage,
+              args: [shopId, itemId],
+            });
+
+            const apiData = apiResults?.[0]?.result;
+            if (apiData) {
+              // Override dengan data API (lebih akurat)
+              if (apiData.image) product.image = apiData.image;
+              if (apiData.rating) product.rating = apiData.rating;
+              if (apiData.reviewCount) product.reviewCount = apiData.reviewCount;
+              if (apiData.soldCount) product.soldCount = apiData.soldCount;
+              if (apiData.price && apiData.price > 0) product.price = apiData.price;
+              if (apiData.originalPrice && apiData.originalPrice > 0) product.originalPrice = apiData.originalPrice;
+              if (apiData.location) product.location = apiData.location;
+              if (apiData.title) product.title = apiData.title;
+              if (apiData.discountPercent) product.discountPercent = apiData.discountPercent;
+            }
+          } catch (e) {
+            console.log('Shopee API fallback to DOM data:', e);
+          }
+        }
+
+        const existingUrls = new Set(collected.map(p => p.url));
+        if (existingUrls.has(product.url)) {
+          scrapeDetailBtn.textContent = '⚠️ Udah ada!';
+        } else {
+          collected.push(product);
+          saveCollected();
+          scrapeDetailBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} 📦${product.soldCount || 0} (total ${collected.length})`;
         }
       } catch {
         scrapeDetailBtn.textContent = '❌ Error';
@@ -529,13 +572,28 @@ function scrapeSearchPage(category) {
         if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
       }
 
-      const ratingMatch = text.match(/(\d+[,.]\d+)/);
-      if (ratingMatch) product.rating = parseFloat(ratingMatch[1].replace(',', '.'));
+      // Rating: cari pola "4.9" atau "4,9" yang dekat dengan bintang atau setelah terjual
+      const ratingPatterns = [
+        /(\d+[.,]\d+)\s*(?:bintang|⭐|🌟)/i,
+        /terjual[\s\S]*?(\d+[.,]\d+)/i,
+        /(\d+[.,]\d+)\s*\((\d[\d.]*)\s*(?:rating|review|evaluasi)/i,
+      ];
+      for (const pat of ratingPatterns) {
+        const m = text.match(pat);
+        if (m) {
+          product.rating = parseFloat(m[1].replace(',', '.'));
+          break;
+        }
+      }
 
+      // Gambar: prioritas yang pasti produk, bukan logo
       const img = link.querySelector('img');
       if (img) {
         const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-        if (src && !src.startsWith('data:')) product.image = src;
+        // Skip logo/icon kecil dan data URI
+        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo') && src.includes('susercontent')) {
+          product.image = src;
+        }
       }
 
       if (product.title && product.price) {
@@ -552,12 +610,20 @@ function scrapeSearchPage(category) {
   });
 }
 
+// v5: Scrape detail — diperbaiki supaya gambar, rating, review, terjual benar
 function scrapeProductDetail(category) {
-  const bodyText = document.body.innerText;
   const url = window.location.href;
   const product = { category, marketplace: 'shopee', url };
 
-  const titleSelectors = ['h1', '[class*="qaNIZv"]', '[class*="WBVL_7"]', '[class*="_44qnta"]', 'span[class*="title"]'];
+  // ── Title ──
+  const titleSelectors = [
+    'h1',
+    '[class*="qaNIZv"]',
+    '[class*="WBVL_7"]',
+    '[class*="_44qnta"]',
+    'span[class*="title"]',
+    '[data-testid="product-name"]',
+  ];
   for (const sel of titleSelectors) {
     const el = document.querySelector(sel);
     if (el && el.textContent.trim().length > 3) {
@@ -566,6 +632,41 @@ function scrapeProductDetail(category) {
     }
   }
 
+  // ── Gambar: prioritaskan og:image dari meta tag ──
+  // og:image paling reliable, bukan logo Shopee
+  const ogImage = document.querySelector('meta[property="og:image"]');
+  if (ogImage) {
+    const imgContent = ogImage.getAttribute('content');
+    if (imgContent && imgContent.includes('susercontent')) {
+      product.image = imgContent;
+    }
+  }
+
+  // Fallback: cari gambar produk yang benar
+  if (!product.image) {
+    const imgSelectors = [
+      'img[src*="down-id.img.susercontent.com"]',
+      'img[src*="susercontent.com/file/sg-"]',
+      'img[class*="product-image"]',
+      '[class*="product-img"] img',
+      '[class*="MIVED"] img',
+      '[class*="ZPN9su"] img',
+    ];
+    for (const sel of imgSelectors) {
+      const el = document.querySelector(sel);
+      if (el) {
+        const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
+        // Pastikan bukan logo dan bukan data URI
+        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo')) {
+          product.image = src;
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Harga ──
+  const bodyText = document.body.innerText;
   const priceMatch = bodyText.match(/Rp([\d.]+)/);
   if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
 
@@ -580,6 +681,7 @@ function scrapeProductDetail(category) {
     }
   }
 
+  // ── Terjual ──
   const soldMatch = bodyText.match(/([\d.]+)\s*terjual/i);
   if (soldMatch) {
     product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
@@ -588,20 +690,104 @@ function scrapeProductDetail(category) {
     if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
   }
 
-  const ratingMatch = bodyText.match(/(\d+[,.]\d+)/);
-  if (ratingMatch) product.rating = parseFloat(ratingMatch[1].replace(',', '.'));
-
-  const locMatch = bodyText.match(/Dikirim dari\s*([^\n,]+)/i);
-  if (locMatch) product.location = locMatch[1].trim();
-
-  const imgSelectors = ['img[class*="product"]', 'img[src*="susercontent"]', 'img[src*="down-id"]'];
-  for (const sel of imgSelectors) {
-    const el = document.querySelector(sel);
-    if (el) {
-      product.image = el.getAttribute('src') || null;
-      break;
+  // ── Rating & Review Count ──
+  // Cari pola "4.9 (1.2rb rating)" atau "4.9 • 1.2rb rating"
+  const ratingReviewMatch = bodyText.match(/(\d+[.,]\d+)\s*(?:\(([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review)\)|[•|]\s*([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review))/i);
+  if (ratingReviewMatch) {
+    product.rating = parseFloat(ratingReviewMatch[1].replace(',', '.'));
+    const reviewStr = ratingReviewMatch[2] || ratingReviewMatch[3] || '';
+    if (reviewStr.includes('rb') || reviewStr.includes('ribu')) {
+      product.reviewCount = Math.round(parseFloat(reviewStr.replace(/[rbibu\s,]/g, '').replace(',', '.')) * 1000);
+    } else {
+      product.reviewCount = parseInt(reviewStr.replace(/\./g, '').replace(',', ''), 10);
     }
   }
 
+  // Fallback: cari rating saja
+  if (!product.rating) {
+    // Cari di area rating — biasa di dekat bintang
+    const ratingEl = document.querySelector('[class*="rating"], [class*="Rating"]');
+    if (ratingEl) {
+      const rText = ratingEl.textContent;
+      const rMatch = rText.match(/(\d+[.,]\d+)/);
+      if (rMatch) product.rating = parseFloat(rMatch[1].replace(',', '.'));
+    }
+  }
+
+  // ── Lokasi ──
+  const locMatch = bodyText.match(/Dikirim dari\s*([^\n,]+)/i);
+  if (locMatch) product.location = locMatch[1].trim();
+
   return product;
+}
+
+// v5: Fetch Shopee API v4 dari dalam halaman (paling akurat!)
+function fetchShopeeApiInPage(shopId, itemId) {
+  const apiUrl = `https://shopee.co.id/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`;
+
+  return fetch(apiUrl, {
+    credentials: 'include', // Pakai cookies dari halaman Shopee yang sedang dibuka
+    headers: {
+      'Accept': 'application/json',
+      'X-Shopee-Language': 'id',
+      'X-API-SOURCE': 'pc',
+    },
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.data) return null;
+      const item = data.data;
+      const result = {};
+
+      if (item.name) result.title = item.name;
+
+      // Gambar — paling reliable dari API
+      if (item.image) {
+        result.image = `https://down-id.img.susercontent.com/file/${item.image}`;
+      } else if (item.images && item.images.length > 0) {
+        result.image = `https://down-id.img.susercontent.com/file/${item.images[0]}`;
+      }
+
+      // Harga
+      const priceMin = item.price_min || item.price;
+      if (priceMin) {
+        const priceVal = Array.isArray(priceMin) ? priceMin[0] : priceMin;
+        result.price = typeof priceVal === 'number' ? priceVal : parseInt(String(priceVal), 10);
+      }
+
+      const priceBeforeDiscount = item.price_min_before_discount || item.price_before_discount;
+      if (priceBeforeDiscount) {
+        const origVal = Array.isArray(priceBeforeDiscount) ? priceBeforeDiscount[0] : priceBeforeDiscount;
+        const origPrice = typeof origVal === 'number' ? origVal : parseInt(String(origVal), 10);
+        if (origPrice > 0) {
+          result.originalPrice = origPrice;
+          const p = result.price || 0;
+          if (origPrice > p) {
+            result.discountPercent = Math.round(((origPrice - p) / origPrice) * 100);
+          }
+        }
+      }
+
+      // Rating & Review
+      if (item.item_rating) {
+        result.rating = item.item_rating.rating_star || 0;
+        const ratingCount = item.item_rating.rating_count || [];
+        result.reviewCount = Array.isArray(ratingCount)
+          ? ratingCount.reduce((sum, c) => sum + (c || 0), 0)
+          : 0;
+      }
+
+      // Terjual
+      if (item.historical_sold !== undefined && item.historical_sold !== null) {
+        result.soldCount = item.historical_sold;
+      } else if (item.sold !== undefined && item.sold !== null) {
+        result.soldCount = item.sold;
+      }
+
+      // Lokasi
+      if (item.shop_location) result.location = item.shop_location;
+
+      return result;
+    })
+    .catch(() => null);
 }
