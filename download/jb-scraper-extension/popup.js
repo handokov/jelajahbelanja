@@ -536,6 +536,250 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   updateUI();
+
+  // ===== TAB 2: PASTE LINK =====
+  const linkInput = document.getElementById('linkInput');
+  const fetchLinkBtn = document.getElementById('fetchLinkBtn');
+  const linkStatus = document.getElementById('linkStatus');
+  const linkCategorySelect = document.getElementById('linkCategorySelect');
+  const linkDownloadBtn = document.getElementById('linkDownloadBtn');
+  const linkClearBtn = document.getElementById('linkClearBtn');
+  const linkCountBadge = document.getElementById('linkCountBadge');
+  const linkCollectedList = document.getElementById('linkCollectedList');
+
+  // Shared collected array — same as scrape tab
+  function updateLinkUI() {
+    if (linkCountBadge) linkCountBadge.textContent = collected.length;
+    if (linkCollectedList) {
+      if (collected.length === 0) {
+        linkCollectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
+      } else {
+        linkCollectedList.innerHTML = collected.map((p, i) =>
+          `<div>${i + 1}. ${esc(p.title.substring(0, 45))}${p.title.length > 45 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
+        ).join('');
+      }
+    }
+    if (linkDownloadBtn) linkDownloadBtn.disabled = collected.length === 0;
+  }
+
+  // Parse shopId & itemId from various Shopee URL formats
+  function parseShopeeUrl(url) {
+    // Format 1: https://shopee.co.id/nama-produk-i.1291923399.28837840128
+    let m = url.match(/-i\.(\d+)\.(\d+)/);
+    if (m) return { shopId: m[1], itemId: m[2] };
+
+    // Format 2: https://shopee.co.id/product/1291923399/28837840128
+    m = url.match(/\/product\/(\d+)\/(\d+)/);
+    if (m) return { shopId: m[1], itemId: m[2] };
+
+    return null;
+  }
+
+  // Fetch product data via Shopee API v4 (runs in background script context)
+  async function fetchProductFromLink(shopId, itemId, category, affiliateUrl) {
+    try {
+      // We need to fetch from Shopee API — use background fetch
+      const apiUrl = `https://shopee.co.id/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`;
+
+      const resp = await fetch(apiUrl, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'X-Shopee-Language': 'id',
+          'X-API-SOURCE': 'pc',
+        },
+      });
+
+      const data = await resp.json();
+      if (!data.data) return null;
+
+      const item = data.data;
+      const product = {
+        category,
+        marketplace: 'shopee',
+        url: `https://shopee.co.id/product/${shopId}/${itemId}`,
+        affiliateUrl: affiliateUrl || '',
+      };
+
+      if (item.name) product.title = item.name;
+
+      // Gambar
+      if (item.image) {
+        product.image = `https://down-id.img.susercontent.com/file/${item.image}`;
+      } else if (item.images && item.images.length > 0) {
+        product.image = `https://down-id.img.susercontent.com/file/${item.images[0]}`;
+      }
+
+      // Harga
+      const priceMin = item.price_min || item.price;
+      if (priceMin) {
+        const priceVal = Array.isArray(priceMin) ? priceMin[0] : priceMin;
+        product.price = typeof priceVal === 'number' ? priceVal : parseInt(String(priceVal), 10);
+      }
+
+      const priceBeforeDiscount = item.price_min_before_discount || item.price_before_discount;
+      if (priceBeforeDiscount) {
+        const origVal = Array.isArray(priceBeforeDiscount) ? priceBeforeDiscount[0] : priceBeforeDiscount;
+        const origPrice = typeof origVal === 'number' ? origVal : parseInt(String(origVal), 10);
+        if (origPrice > 0) {
+          product.originalPrice = origPrice;
+          const p = product.price || 0;
+          if (origPrice > p) {
+            product.discountPercent = Math.round(((origPrice - p) / origPrice) * 100);
+          }
+        }
+      }
+
+      // Rating & Review
+      if (item.item_rating) {
+        product.rating = item.item_rating.rating_star || 0;
+        const ratingCount = item.item_rating.rating_count || [];
+        product.reviewCount = Array.isArray(ratingCount)
+          ? ratingCount.reduce((sum, c) => sum + (c || 0), 0)
+          : 0;
+      }
+
+      // Terjual
+      if (item.historical_sold !== undefined && item.historical_sold !== null) {
+        product.soldCount = item.historical_sold;
+      } else if (item.sold !== undefined && item.sold !== null) {
+        product.soldCount = item.sold;
+      }
+
+      // Lokasi
+      if (item.shop_location) product.location = item.shop_location;
+
+      return product;
+    } catch (e) {
+      console.error('fetchProductFromLink error:', e);
+      return null;
+    }
+  }
+
+  // Resolve short link (s.shopee.co.id) to get the real URL
+  async function resolveShortLink(shortUrl) {
+    try {
+      const resp = await fetch(shortUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        credentials: 'include',
+      });
+      // The final URL after redirects
+      return resp.url || shortUrl;
+    } catch {
+      // Fallback: try HEAD request
+      try {
+        const resp = await fetch(shortUrl, { method: 'HEAD', redirect: 'follow' });
+        return resp.url || shortUrl;
+      } catch {
+        return shortUrl;
+      }
+    }
+  }
+
+  if (fetchLinkBtn) {
+    fetchLinkBtn.addEventListener('click', async () => {
+      const rawText = (linkInput?.value || '').trim();
+      if (!rawText) {
+        linkStatus.style.display = 'block';
+        linkStatus.textContent = '❌ Paste link dulu!';
+        linkStatus.className = 'page-status no';
+        return;
+      }
+
+      const category = linkCategorySelect?.value || 'Fashion';
+      const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+
+      fetchLinkBtn.disabled = true;
+      fetchLinkBtn.textContent = '⏳ Memproses...';
+      linkStatus.style.display = 'block';
+      linkStatus.textContent = `⏳ Memproses ${lines.length} link...`;
+      linkStatus.className = 'page-status info';
+
+      let addedCount = 0;
+      let errorCount = 0;
+      const existingUrls = new Set(collected.map(p => p.url));
+
+      for (let i = 0; i < lines.length; i++) {
+        let url = lines[i];
+        let affiliateUrl = '';
+
+        // Check if it's a short link (s.shopee.co.id, shope.ee, etc.)
+        if (url.match(/s\.shopee\.co\.id|shope\.ee|shp\.ee/i)) {
+          affiliateUrl = url; // Simpan affiliate URL asli
+          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
+          const resolved = await resolveShortLink(url);
+          url = resolved;
+        }
+
+        // Also check for atid.me links (Accesstrade)
+        if (url.match(/atid\.me/i)) {
+          affiliateUrl = url;
+          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
+          const resolved = await resolveShortLink(url);
+          url = resolved;
+        }
+
+        // Extract shopId & itemId
+        const ids = parseShopeeUrl(url);
+        if (!ids) {
+          errorCount++;
+          continue;
+        }
+
+        linkStatus.textContent = `⏳ Ambil data produk ${i + 1}/${lines.length}...`;
+
+        const product = await fetchProductFromLink(ids.shopId, ids.itemId, category, affiliateUrl);
+        if (product && product.title) {
+          if (!existingUrls.has(product.url)) {
+            collected.push(product);
+            existingUrls.add(product.url);
+            addedCount++;
+          }
+        } else {
+          errorCount++;
+        }
+      }
+
+      saveCollected();
+      updateLinkUI();
+
+      if (addedCount > 0) {
+        linkStatus.textContent = `✅ +${addedCount} produk ditambah!${errorCount > 0 ? ` (${errorCount} gagal)` : ''} — Total: ${collected.length}`;
+        linkStatus.className = 'page-status ok';
+        fetchLinkBtn.textContent = `✅ +${addedCount} ditambah!`;
+      } else {
+        linkStatus.textContent = `❌ Gak ada produk yang berhasil diambil.${errorCount > 0 ? ` ${errorCount} link gagal.` : ''} Coba cek format link.`;
+        linkStatus.className = 'page-status no';
+        fetchLinkBtn.textContent = '❌ Gagal';
+      }
+
+      setTimeout(() => {
+        fetchLinkBtn.disabled = false;
+        fetchLinkBtn.textContent = '🔗 Ambil Data dari Link';
+      }, 2500);
+    });
+  }
+
+  if (linkDownloadBtn) {
+    linkDownloadBtn.addEventListener('click', () => {
+      const csv = buildCSV(collected);
+      downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
+      linkDownloadBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
+      setTimeout(() => { linkDownloadBtn.textContent = '💾 Download File CSV (Format JB)'; }, 3000);
+    });
+  }
+
+  if (linkClearBtn) {
+    linkClearBtn.addEventListener('click', () => {
+      if (collected.length === 0) return;
+      collected = [];
+      saveCollected();
+      updateLinkUI();
+    });
+  }
+
+  updateLinkUI();
 });
 
 
