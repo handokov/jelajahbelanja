@@ -122,27 +122,12 @@
       padding: 4px 6px;
       font-size: 11px;
     }
-
-    .copy-area {
-      display: none;
-      width: 100%;
-      height: 80px;
-      font-size: 9px;
-      background: #0f0f23;
-      color: #a5d6a7;
-      border: 1px solid #2e7d32;
-      border-radius: 4px;
-      padding: 4px;
-      margin-top: 6px;
-      resize: none;
-      font-family: monospace;
-    }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>JB Shopee Scraper</h1>
-    <small>Klik → Copy CSV → Paste ke JB</small>
+    <small>Klik → Download CSV → Upload ke JB</small>
   </div>
 
   <div id="pageStatus" class="page-status no">Buka halaman Shopee dulu</div>
@@ -173,7 +158,7 @@
 
   <div class="divider"></div>
 
-  <p class="tip">💡 Buka beberapa halaman Shopee, klik "Ambil" di tiap halaman,<br>data nyimpel otomatis. Lalu copy semua sekaligus!</p>
+  <p class="tip">💡 Buka beberapa halaman Shopee, klik "Ambil" di tiap halaman,<br>data nyimpel otomatis. Lalu download file CSV!</p>
 
   <div class="collected">
     <div class="collected-title">
@@ -185,11 +170,9 @@
     </div>
   </div>
 
-  <button id="copyCsvBtn" class="btn btn-green" disabled>
-    📋 Copy CSV — Paste ke JB Upload Massal
+  <button id="downloadCsvBtn" class="btn btn-green" disabled>
+    💾 Download File CSV
   </button>
-
-  <textarea id="copyArea" class="copy-area" readonly></textarea>
 
   <button id="clearBtn" class="btn btn-dark">
     🗑️ Hapus Semua
