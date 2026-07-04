@@ -1,5 +1,10 @@
 /**
- * JB Shopee Scraper + Accesstrade Converter — v5
+ * JB Shopee Scraper + Accesstrade Converter — v6
+ *
+ * FIX v6:
+ * - Fix: deteksi URL format /product/shopId/itemId (bukan cuma -i.shopId.itemId)
+ * - Fix: tombol "Ambil 1 Produk" aktif di kedua format URL
+ * - Fix: shopId/itemId di-extract dari kedua format URL
  *
  * FIX v5:
  * - Fix: gambar ambil dari meta og:image (paling reliable)
@@ -283,7 +288,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentTab = tab;
     if (tab.url && tab.url.includes('shopee.co.id')) {
       isShopee = true;
-      isDetail = !!tab.url.match(/-i\.\d+\.\d+/);
+      // Deteksi halaman detail — 2 format URL:
+      // 1. https://shopee.co.id/nama-produk-i.123.456  (format lama)
+      // 2. https://shopee.co.id/product/123/456        (format baru)
+      const urlMatch1 = tab.url.match(/-i\.(\d+)\.(\d+)/);
+      const urlMatch2 = tab.url.match(/\/product\/(\d+)\/(\d+)/);
+      isDetail = !!(urlMatch1 || urlMatch2);
       if (isDetail) {
         pageStatus.textContent = '📄 Halaman produk detail';
         pageStatus.className = 'page-status ok';
@@ -368,7 +378,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Step 2: Ambil data lengkap dari Shopee API v4
         const url = currentTab.url;
-        const idMatch = url.match(/-i\.(\d+)\.(\d+)/);
+        // Support 2 format URL:
+        // 1. -i.shopId.itemId  (format lama)
+        // 2. /product/shopId/itemId  (format baru)
+        const idMatch = url.match(/-i\.(\d+)\.(\d+)/) || url.match(/\/product\/(\d+)\/(\d+)/);
         if (idMatch) {
           const shopId = idMatch[1];
           const itemId = idMatch[2];
