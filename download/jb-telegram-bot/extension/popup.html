@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 380px;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 14px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .header h1 {
+      font-size: 14px;
+      color: #ee4d2d;
+      margin-bottom: 2px;
+    }
+    .header small { font-size: 10px; color: #666; }
+
+    .page-status {
+      font-size: 11px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .page-status.ok { background: #1b5e20; color: #a5d6a7; }
+    .page-status.no { background: #7f1d1d; color: #fca5a5; }
+
+    .btn {
+      width: 100%;
+      padding: 11px;
+      margin-bottom: 6px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-orange { background: #ee4d2d; color: white; }
+    .btn-blue { background: #1565c0; color: white; }
+    .btn-green { background: #2e7d32; color: white; }
+    .btn-dark { background: #16213e; color: #eee; border: 1px solid #333; }
+
+    .tip {
+      font-size: 10px;
+      color: #888;
+      text-align: center;
+      margin: 6px 0;
+      line-height: 1.4;
+    }
+
+    .divider { height: 1px; background: #2a2a4a; margin: 8px 0; }
+
+    .collected {
+      margin-top: 6px;
+      padding: 8px;
+      background: #0f0f23;
+      border-radius: 6px;
+      border: 1px solid #2a2a4a;
+    }
+    .collected-title {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .collected-count {
+      background: #ee4d2d;
+      color: white;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .collected-list {
+      font-size: 10px;
+      color: #aaa;
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+    .collected-list div {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .category-row {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .category-row label {
+      font-size: 11px;
+      color: #aaa;
+      white-space: nowrap;
+      line-height: 28px;
+    }
+    .category-row select {
+      flex: 1;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+
+    .copy-area {
+      display: none;
+      width: 100%;
+      height: 80px;
+      font-size: 9px;
+      background: #0f0f23;
+      color: #a5d6a7;
+      border: 1px solid #2e7d32;
+      border-radius: 4px;
+      padding: 4px;
+      margin-top: 6px;
+      resize: none;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>JB Shopee Scraper</h1>
+    <small>Klik → Copy CSV → Paste ke JB</small>
+  </div>
+
+  <div id="pageStatus" class="page-status no">Buka halaman Shopee dulu</div>
+
+  <div class="category-row">
+    <label>Kategori:</label>
+    <select id="categorySelect">
+      <option value="Fashion">Fashion</option>
+      <option value="Beauty">Beauty</option>
+      <option value="Home & Living">Home & Living</option>
+      <option value="Electronics">Electronics</option>
+      <option value="Sports">Sports</option>
+      <option value="Food & Beverage">Food & Beverage</option>
+      <option value="Health">Health</option>
+      <option value="Kids & Baby">Kids & Baby</option>
+      <option value="Automotive">Automotive</option>
+      <option value="Books & Stationery">Books & Stationery</option>
+    </select>
+  </div>
+
+  <button id="scrapePageBtn" class="btn btn-orange" disabled>
+    📦 Ambil Semua Produk di Halaman Ini
+  </button>
+
+  <button id="scrapeDetailBtn" class="btn btn-blue" disabled>
+    🔍 Ambil 1 Produk (Halaman Detail)
+  </button>
+
+  <div class="divider"></div>
+
+  <p class="tip">💡 Buka beberapa halaman Shopee, klik "Ambil" di tiap halaman,<br>data nyimpel otomatis. Lalu copy semua sekaligus!</p>
+
+  <div class="collected">
+    <div class="collected-title">
+      <span>Produk dikumpul:</span>
+      <span class="collected-count" id="countBadge">0</span>
+    </div>
+    <div class="collected-list" id="collectedList">
+      <div style="color:#666">Belum ada produk</div>
+    </div>
+  </div>
+
+  <button id="copyCsvBtn" class="btn btn-green" disabled>
+    📋 Copy CSV — Paste ke JB Upload Massal
+  </button>
+
+  <textarea id="copyArea" class="copy-area" readonly></textarea>
+
+  <button id="clearBtn" class="btn btn-dark">
+    🗑️ Hapus Semua
+  </button>
+
+  <script src="popup.js"></script>
+</body>
+</html>
