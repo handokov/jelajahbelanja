@@ -644,85 +644,109 @@ document.addEventListener('DOMContentLoaded', async () => {
     return null;
   }
 
-  // Fetch product data via Shopee API v4 (runs in background script context)
+  // Fetch product data via Shopee API v4 — PENTING: harus dari dalam halaman Shopee!
+  // Kalau fetch dari popup context, Shopee API gak kasih rating/sold/review
+  // Jadi kita buka tab Shopee, inject script, ambil data, tutup tab
   async function fetchProductFromLink(shopId, itemId, category, affiliateUrl) {
-    try {
-      // We need to fetch from Shopee API — use background fetch
-      const apiUrl = `https://shopee.co.id/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`;
+    const productUrl = `https://shopee.co.id/product/${shopId}/${itemId}`;
 
-      const resp = await fetch(apiUrl, {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          'X-Shopee-Language': 'id',
-          'X-API-SOURCE': 'pc',
-        },
-      });
+    return new Promise((resolve) => {
+      let resolved = false;
+      let tabId = null;
 
-      const data = await resp.json();
-      if (!data.data) return null;
-
-      const item = data.data;
-      const product = {
-        category,
-        marketplace: 'shopee',
-        url: `https://shopee.co.id/product/${shopId}/${itemId}`,
-        affiliateUrl: affiliateUrl || '',
-      };
-
-      if (item.name) product.title = item.name;
-
-      // Gambar
-      if (item.image) {
-        product.image = `https://down-id.img.susercontent.com/file/${item.image}`;
-      } else if (item.images && item.images.length > 0) {
-        product.image = `https://down-id.img.susercontent.com/file/${item.images[0]}`;
-      }
-
-      // Harga
-      const priceMin = item.price_min || item.price;
-      if (priceMin) {
-        const priceVal = Array.isArray(priceMin) ? priceMin[0] : priceMin;
-        product.price = typeof priceVal === 'number' ? priceVal : parseInt(String(priceVal), 10);
-      }
-
-      const priceBeforeDiscount = item.price_min_before_discount || item.price_before_discount;
-      if (priceBeforeDiscount) {
-        const origVal = Array.isArray(priceBeforeDiscount) ? priceBeforeDiscount[0] : priceBeforeDiscount;
-        const origPrice = typeof origVal === 'number' ? origVal : parseInt(String(origVal), 10);
-        if (origPrice > 0) {
-          product.originalPrice = origPrice;
-          const p = product.price || 0;
-          if (origPrice > p) {
-            product.discountPercent = Math.round(((origPrice - p) / origPrice) * 100);
-          }
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          if (tabId) chrome.tabs.remove(tabId).catch(() => {});
+          resolve(null);
         }
-      }
+      }, 15000);
 
-      // Rating & Review
-      if (item.item_rating) {
-        product.rating = item.item_rating.rating_star || 0;
-        const ratingCount = item.item_rating.rating_count || [];
-        product.reviewCount = Array.isArray(ratingCount)
-          ? ratingCount.reduce((sum, c) => sum + (c || 0), 0)
-          : 0;
-      }
+      chrome.tabs.create({ url: productUrl, active: false }, (tab) => {
+        tabId = tab.id;
 
-      // Terjual
-      if (item.historical_sold !== undefined && item.historical_sold !== null) {
-        product.soldCount = item.historical_sold;
-      } else if (item.sold !== undefined && item.sold !== null) {
-        product.soldCount = item.sold;
-      }
+        function onUpdated(updatedTabId, changeInfo) {
+          if (updatedTabId !== tabId) return;
+          if (changeInfo.status !== 'complete') return;
 
-      // Lokasi
-      if (item.shop_location) product.location = item.shop_location;
+          // Tunggu sedikit supaya halaman sempat load
+          setTimeout(async () => {
+            try {
+              // Inject fetchShopeeApiInPage ke dalam halaman Shopee
+              const results = await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                func: fetchShopeeApiInPage,
+                args: [shopId, itemId],
+              });
 
-      return product;
-    } catch (e) {
-      console.error('fetchProductFromLink error:', e);
-      return null;
-    }
+              const apiData = results?.[0]?.result;
+
+              // Juga inject scrapeProductDetail untuk data DOM
+              const domResults = await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                func: scrapeProductDetail,
+                args: [category],
+              });
+
+              const domProduct = domResults?.[0]?.result;
+
+              // Gabungkan data API + DOM
+              const product = {
+                category,
+                marketplace: 'shopee',
+                url: productUrl,
+                affiliateUrl: affiliateUrl || '',
+              };
+
+              // Ambil data DOM dulu (baseline)
+              if (domProduct) {
+                if (domProduct.title) product.title = domProduct.title;
+                if (domProduct.image) product.image = domProduct.image;
+                if (domProduct.price) product.price = domProduct.price;
+                if (domProduct.originalPrice) product.originalPrice = domProduct.originalPrice;
+                if (domProduct.discountPercent) product.discountPercent = domProduct.discountPercent;
+                if (domProduct.location) product.location = domProduct.location;
+                if (domProduct.rating) product.rating = domProduct.rating;
+                if (domProduct.reviewCount) product.reviewCount = domProduct.reviewCount;
+                if (domProduct.soldCount) product.soldCount = domProduct.soldCount;
+              }
+
+              // Override dengan data API (lebih akurat)
+              if (apiData) {
+                if (apiData.title) product.title = apiData.title;
+                if (apiData.image) product.image = apiData.image;
+                if (apiData.price && apiData.price > 0) product.price = apiData.price;
+                if (apiData.originalPrice && apiData.originalPrice > 0) product.originalPrice = apiData.originalPrice;
+                if (apiData.discountPercent) product.discountPercent = apiData.discountPercent;
+                if (apiData.rating) product.rating = apiData.rating;
+                if (apiData.reviewCount) product.reviewCount = apiData.reviewCount;
+                if (apiData.soldCount !== undefined) product.soldCount = apiData.soldCount;
+                if (apiData.location) product.location = apiData.location;
+              }
+
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                chrome.tabs.onUpdated.removeListener(onUpdated);
+                chrome.tabs.remove(tabId).catch(() => {});
+                resolve(product.title ? product : null);
+              }
+            } catch (e) {
+              console.error('fetchProductFromLink error:', e);
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                chrome.tabs.onUpdated.removeListener(onUpdated);
+                chrome.tabs.remove(tabId).catch(() => {});
+                resolve(null);
+              }
+            }
+          }, 2000); // Tunggu 2 detik setelah tab selesai load
+        }
+
+        chrome.tabs.onUpdated.addListener(onUpdated);
+      });
+    });
   }
 
   // (resolveShortLink removed — using resolveShortLinkViaTab + resolveShortLinkViaFetch instead)
@@ -757,7 +781,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Check if it's a short link (s.shopee.co.id, shope.ee, etc.)
         if (url.match(/s\.shopee\.co\.id|shope\.ee|shp\.ee|shp\.in/i)) {
           affiliateUrl = url; // Simpan affiliate URL asli
-          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length} (buka tab)...`;
+          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
 
           // Coba fetch dulu (lebih cepat)
           let resolved = await resolveShortLinkViaFetch(url);
@@ -772,7 +796,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Also check for atid.me links (Accesstrade)
         if (url.match(/atid\.me/i)) {
           affiliateUrl = url;
-          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length} (buka tab)...`;
+          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
           let resolved = await resolveShortLinkViaFetch(url);
           if (resolved && parseShopeeUrl(resolved)) {
             url = resolved;
