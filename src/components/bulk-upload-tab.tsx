@@ -20,10 +20,27 @@ const JB_HEADERS = ["title", "url", "image", "price", "originalPrice", "discount
 // Batch size per API request
 const BATCH_SIZE = 500;
 
+// Chunk size untuk streaming read (5MB per baca file)
+const STREAM_CHUNK_SIZE = 5 * 1024 * 1024;
+
 interface BulkUploadResult {
   success: number;
   failed: number;
   total: number;
+  errors: string[];
+}
+
+// Streaming progress — more detailed untuk pipeline read→convert→upload
+interface StreamingProgress {
+  phase: "reading" | "converting" | "uploading" | "done";
+  rowsRead: number;
+  rowsConverted: number;
+  rowsUploaded: number;
+  rowsSuccess: number;
+  rowsFailed: number;
+  currentBatch: number;
+  totalBatches: number;
+  percentRead: number;  // 0-100 estimasi dari file offset
   errors: string[];
 }
 
@@ -99,6 +116,12 @@ function extractShopeeUrl(affiliateUrl: string): string {
     if (shopeeMatch) return shopeeMatch[1];
     return decoded;
   } catch { return affiliateUrl; }
+}
+
+// Cek apakah baris adalah header (skip)
+function isHeaderRow(row: string[]): boolean {
+  const firstCell = (row[0] || "").toLowerCase();
+  return firstCell.includes("product") || firstCell.includes("id") || firstCell.includes("item") || firstCell.includes("name");
 }
 
 function convertAtRowToJb(row: string[]): Record<string, string> {
@@ -214,6 +237,8 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 
 type Mode = "jb-upload" | "at-converter";
 
+type AtConvertMode = "preview" | "streaming";
+
 interface BatchProgress {
   currentBatch: number;
   totalBatches: number;
@@ -246,6 +271,12 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
   // Batch progress state (shared for both modes)
   const [batchProgress, setBatchProgress] = React.useState<BatchProgress | null>(null);
   const [uploading, setUploading] = React.useState(false);
+
+  // Streaming progress state
+  const [streamProgress, setStreamProgress] = React.useState<StreamingProgress | null>(null);
+
+  // AT convert mode: "preview" = konversi dulu lihat preview, "streaming" = langsung convert+upload
+  const [atConvertMode, setAtConvertMode] = React.useState<AtConvertMode>("preview");
 
   // ============================================================
   // JB Upload logic
@@ -554,7 +585,224 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     setAtTotalInput(0);
     setAtResult(null);
     setBatchProgress(null);
+    setStreamProgress(null);
   }, []);
+
+  // ============================================================
+  // STREAMING: Convert + Upload pipeline untuk file besar
+  // Baca file per 5MB chunk → convert → upload per 500 batch
+  // Tidak pernah load seluruh file ke memory
+  // ============================================================
+
+  const handleStreamingConvertUpload = React.useCallback(async () => {
+    if (!atFile) return;
+    setUploading(true);
+    setStreamProgress({
+      phase: "reading",
+      rowsRead: 0,
+      rowsConverted: 0,
+      rowsUploaded: 0,
+      rowsSuccess: 0,
+      rowsFailed: 0,
+      currentBatch: 0,
+      totalBatches: 0,
+      percentRead: 0,
+      errors: [],
+    });
+    setAtResult(null);
+
+    try {
+      const fileSize = atFile.size;
+      let offset = 0;
+      let leftover = ""; // sisa dari chunk sebelumnya (baris belum lengkap)
+      let headerSkipped = false;
+      let delimiter = ","; // akan di-detect dari baris pertama
+      let delimiterDetected = false;
+
+      // Accumulator
+      let totalRowsRead = 0;
+      let totalRowsConverted = 0;
+      let totalRowsSuccess = 0;
+      let totalRowsFailed = 0;
+      let totalBatchesUploaded = 0;
+      const allErrors: string[] = [];
+
+      // Buffer untuk batch upload
+      let batchBuffer: Record<string, string>[] = [];
+
+      // Preview: simpan 5 baris pertama untuk preview
+      let previewRows: Record<string, string>[] = [];
+
+      const flushBatch = async () => {
+        if (batchBuffer.length === 0) return;
+        const batch = [...batchBuffer];
+        batchBuffer = [];
+        totalBatchesUploaded++;
+
+        setStreamProgress(prev => prev ? {
+          ...prev,
+          phase: "uploading",
+          currentBatch: totalBatchesUploaded,
+          rowsUploaded: prev.rowsConverted,
+        } : null);
+
+        const batchCsv = generateJbCsv(batch);
+        const blob = new Blob([batchCsv], { type: "text/csv" });
+        const formData = new FormData();
+        formData.append("file", blob, `at-stream-batch-${totalBatchesUploaded}.csv`);
+
+        try {
+          const res = await adminFetch("/api/bulk-upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            allErrors.push(`Batch ${totalBatchesUploaded}: ${data.error || "Gagal upload"}`);
+            totalRowsFailed += batch.length;
+          } else {
+            totalRowsSuccess += data.success || 0;
+            totalRowsFailed += data.failed || 0;
+            if (data.errors?.length) allErrors.push(...data.errors);
+          }
+        } catch (err: any) {
+          allErrors.push(`Batch ${totalBatchesUploaded}: ${err?.message || "Network error"}`);
+          totalRowsFailed += batch.length;
+        }
+
+        setStreamProgress(prev => prev ? {
+          ...prev,
+          phase: "reading",
+          rowsSuccess: totalRowsSuccess,
+          rowsFailed: totalRowsFailed,
+        } : null);
+      };
+
+      // Read file in chunks
+      while (offset < fileSize) {
+        const end = Math.min(offset + STREAM_CHUNK_SIZE, fileSize);
+        const blob = atFile.slice(offset, end);
+        const chunkText = await blob.text();
+        const combined = leftover + chunkText;
+
+        // Split by newlines
+        const lines = combined.split("\n");
+
+        // Baris terakhir mungkin belum lengkap (terpotong di tengah)
+        // Simpan sebagai leftover kecuali jika ini chunk terakhir
+        if (end < fileSize) {
+          leftover = lines.pop() || "";
+        } else {
+          leftover = "";
+        }
+
+        // Detect delimiter dari baris pertama
+        if (!delimiterDetected && lines.length > 0) {
+          const firstNonEmpty = lines.find(l => l.trim());
+          if (firstNonEmpty) {
+            const tabCount = (firstNonEmpty.match(/\t/g) || []).length;
+            const commaCount = (firstNonEmpty.match(/,/g) || []).length;
+            delimiter = tabCount > commaCount ? "\t" : ",";
+            delimiterDetected = true;
+          }
+        }
+
+        // Parse dan convert setiap baris
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          const row = parseCsvLineWithDelimiter(line, delimiter);
+          totalRowsRead++;
+
+          // Skip header row
+          if (!headerSkipped && isHeaderRow(row)) {
+            headerSkipped = true;
+            continue;
+          }
+          headerSkipped = true; // skip hanya 1x
+
+          // Validasi
+          if (!row[1] || !row[2]) {
+            // Skip tanpa error untuk streaming (terlalu banyak log)
+            continue;
+          }
+          const col7 = parseInt(row[7] || "0", 10);
+          const col8 = parseInt(row[8] || "0", 10);
+          if (col7 <= 0 && col8 <= 0) continue;
+
+          const converted = convertAtRowToJb(row);
+          totalRowsConverted++;
+
+          // Simpan preview
+          if (previewRows.length < 5) {
+            previewRows.push(converted);
+          }
+
+          // Tambah ke batch buffer
+          batchBuffer.push(converted);
+
+          // Flush jika batch penuh
+          if (batchBuffer.length >= BATCH_SIZE) {
+            await flushBatch();
+          }
+        }
+
+        offset = end;
+
+        // Update progress
+        const percentRead = Math.round((offset / fileSize) * 100);
+        setStreamProgress(prev => prev ? {
+          ...prev,
+          phase: "reading",
+          rowsRead: totalRowsRead,
+          rowsConverted: totalRowsConverted,
+          percentRead,
+        } : null);
+
+        // Yield ke UI — biar browser gak freeze
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      // Flush sisa batch terakhir
+      if (batchBuffer.length > 0) {
+        await flushBatch();
+      }
+
+      // Set preview
+      const previewData = previewRows.map((row) =>
+        JB_HEADERS.map((h) => row[h] || "")
+      );
+      setConvertedPreview(previewData);
+
+      // Done
+      setStreamProgress(prev => prev ? {
+        ...prev,
+        phase: "done",
+        rowsRead: totalRowsRead,
+        rowsConverted: totalRowsConverted,
+        rowsSuccess: totalRowsSuccess,
+        rowsFailed: totalRowsFailed,
+        currentBatch: totalBatchesUploaded,
+        totalBatches: totalBatchesUploaded,
+        percentRead: 100,
+        errors: allErrors.slice(0, 30),
+      } : null);
+
+      setAtResult({
+        success: totalRowsSuccess,
+        failed: totalRowsFailed,
+        total: totalRowsConverted,
+        errors: allErrors.slice(0, 30),
+      });
+      setAtTotalInput(totalRowsRead);
+
+    } catch (err: any) {
+      setAtErrors([`Gagal streaming file: ${err?.message || "Unknown error"}`]);
+      setStreamProgress(null);
+    } finally {
+      setUploading(false);
+    }
+  }, [atFile, adminFetch]);
 
   // ============================================================
   // Shared: Progress Bar Component
@@ -819,12 +1067,10 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
             <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
               <li>Download CSV / XLSX dari dashboard <b>Accesstrade</b> (Product Feed / Offer)</li>
               <li>Upload file ke area di bawah — <b>semua format diterima</b> (CSV, TSV, TXT, XLSX)</li>
-              <li>Klik <b>Konversi ke JB</b> — otomatis mapping kolom AT ke format JB</li>
-              <li>Cek preview hasil konversi</li>
-              <li>Pilih: <b>Download CSV JB</b> atau <b>Upload ke Database</b> (otomatis batch per {BATCH_SIZE})</li>
+              <li>Pilih mode: <b>Preview</b> (lihat dulu) atau <b>Streaming</b> (langsung convert+upload)</li>
             </ol>
             <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-              Didukung: CSV, TSV, TXT, XLSX. Tidak ada batas jumlah — 10.000+ produk bisa dikonversi. File besar diproses di browser langsung.
+              File besar (1GB+) aman — diproses per 5MB chunk, tidak load semua ke memory.
             </p>
           </div>
 
@@ -858,11 +1104,63 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
             </div>
           </details>
 
-          {/* Batch Progress */}
+          {/* Streaming Progress */}
+          {streamProgress && streamProgress.phase !== "done" && (
+            <div className="rounded-2xl border border-purple-200 dark:border-purple-900/50 bg-purple-50 dark:bg-purple-900/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
+                  <span className="text-sm font-semibold text-purple-900 dark:text-purple-100">
+                    {streamProgress.phase === "reading" && "Membaca & konversi file..."}
+                    {streamProgress.phase === "converting" && "Mengkonversi..."}
+                    {streamProgress.phase === "uploading" && `Upload batch ${streamProgress.currentBatch}...`}
+                  </span>
+                </div>
+                <span className="text-sm text-purple-700 dark:text-purple-300">
+                  {streamProgress.percentRead}% dibaca
+                </span>
+              </div>
+
+              {/* File read progress bar */}
+              <div className="w-full bg-purple-200 dark:bg-purple-800 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-purple-500 h-full rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${streamProgress.percentRead}%` }}
+                />
+              </div>
+
+              {/* Stats */}
+              <div className="flex flex-wrap gap-3 text-xs">
+                <span className="text-purple-700 dark:text-purple-300">
+                  {streamProgress.rowsRead.toLocaleString()} baris dibaca
+                </span>
+                <span className="text-blue-600 dark:text-blue-400">
+                  {streamProgress.rowsConverted.toLocaleString()} dikonversi
+                </span>
+                {streamProgress.rowsSuccess > 0 && (
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                    ✓ {streamProgress.rowsSuccess.toLocaleString()} berhasil
+                  </span>
+                )}
+                {streamProgress.rowsFailed > 0 && (
+                  <span className="text-red-600 dark:text-red-400 font-medium">
+                    ✗ {streamProgress.rowsFailed.toLocaleString()} gagal
+                  </span>
+                )}
+                {streamProgress.currentBatch > 0 && (
+                  <span className="text-purple-600 dark:text-purple-400">
+                    Batch {streamProgress.currentBatch} diupload
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Batch Progress (old style — for preview mode) */}
           {batchProgress && <ProgressBar progress={batchProgress} />}
 
           {/* Step 1: Upload AT CSV */}
-          {!atResult && convertedRows.length === 0 && !batchProgress && (
+          {!atResult && convertedRows.length === 0 && !batchProgress && !streamProgress && (
             <>
               <div
                 onDragOver={(e) => { e.preventDefault(); setAtDragActive(true); }}
@@ -891,7 +1189,9 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                   <div className="flex flex-col items-center gap-2">
                     <FileText className="w-10 h-10 text-blue-500" />
                     <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{atFile.name}</p>
-                    <p className="text-xs text-zinc-500">{(atFile.size / 1024).toFixed(1)} KB</p>
+                    <p className="text-xs text-zinc-500">
+                      {(atFile.size / (1024 * 1024)).toFixed(1)} MB
+                    </p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2">
@@ -905,24 +1205,95 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
               </div>
 
               {atFile && (
-                <div className="flex gap-2">
-                  <Button onClick={handleConvert} disabled={converting} className="gap-1.5">
-                    {converting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Mengkonversi...
-                      </>
+                <>
+                  {/* Mode selector */}
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 space-y-3">
+                    <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">Pilih Mode Konversi</p>
+                    
+                    <label className={cn(
+                      "flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-colors border",
+                      atConvertMode === "preview"
+                        ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20"
+                        : "border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    )}>
+                      <input
+                        type="radio"
+                        name="atConvertMode"
+                        value="preview"
+                        checked={atConvertMode === "preview"}
+                        onChange={() => setAtConvertMode("preview")}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          Preview Dulu
+                        </p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Konversi → lihat preview → upload manual. Cocok untuk file kecil (&lt;50MB).
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className={cn(
+                      "flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-colors border",
+                      atConvertMode === "streaming"
+                        ? "border-purple-300 bg-purple-50 dark:border-purple-700 dark:bg-purple-900/20"
+                        : "border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    )}>
+                      <input
+                        type="radio"
+                        name="atConvertMode"
+                        value="streaming"
+                        checked={atConvertMode === "streaming"}
+                        onChange={() => setAtConvertMode("streaming")}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          Streaming (Rekomendasi)
+                        </p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Langsung convert + upload streaming. Aman untuk file besar 1GB+. Tidak load semua ke memory.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {atConvertMode === "preview" ? (
+                      <Button onClick={handleConvert} disabled={converting} className="gap-1.5">
+                        {converting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Mengkonversi...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4" />
+                            Konversi ke JB
+                          </>
+                        )}
+                      </Button>
                     ) : (
-                      <>
-                        <RefreshCw className="w-4 h-4" />
-                        Konversi ke JB
-                      </>
+                      <Button onClick={handleStreamingConvertUpload} disabled={uploading} className="gap-1.5 bg-purple-600 hover:bg-purple-700">
+                        {uploading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Streaming...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4" />
+                            Convert & Upload Streaming
+                          </>
+                        )}
+                      </Button>
                     )}
-                  </Button>
-                  <Button variant="outline" onClick={handleAtReset} disabled={converting}>
-                    Batal
-                  </Button>
-                </div>
+                    <Button variant="outline" onClick={handleAtReset} disabled={converting || uploading}>
+                      Batal
+                    </Button>
+                  </div>
+                </>
               )}
 
               {atErrors.length > 0 && convertedRows.length === 0 && (
@@ -941,7 +1312,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
             </>
           )}
 
-          {/* Step 2: Preview Converted Data */}
+          {/* Step 2: Preview Converted Data (preview mode only) */}
           {convertedRows.length > 0 && !atResult && !batchProgress && (
             <div className="space-y-3">
               <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20 p-4">
@@ -1036,7 +1407,83 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
           )}
 
           {/* Upload Result */}
-          {atResult && <ResultCard result={atResult} onReset={handleAtReset} />}
+          {atResult && (
+            <div className="space-y-3">
+              <div className={cn(
+                "rounded-2xl border p-4",
+                atResult.failed === 0
+                  ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20"
+                  : "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/20"
+              )}>
+                <div className="flex items-center gap-3 mb-3">
+                  {atResult.failed === 0 ? (
+                    <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                  ) : (
+                    <AlertCircle className="w-6 h-6 text-amber-500" />
+                  )}
+                  <div>
+                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      {streamProgress ? "Streaming Selesai!" : "Upload Selesai!"}
+                    </p>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                      {atResult.success.toLocaleString()} berhasil, {atResult.failed.toLocaleString()} gagal dari {atResult.total.toLocaleString()} produk
+                    </p>
+                  </div>
+                </div>
+
+                {atResult.errors.length > 0 && (
+                  <div className="mt-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 max-h-48 overflow-y-auto">
+                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
+                      <XCircle className="w-3.5 h-3.5 inline mr-1" />
+                      Detail Error:
+                    </p>
+                    <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5">
+                      {atResult.errors.map((err, i) => (
+                        <li key={i}>• {err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Show preview from streaming if available */}
+              {convertedPreview.length > 0 && (
+                <details className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                  <summary className="px-4 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                    Preview 5 produk pertama
+                  </summary>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-zinc-100 dark:bg-zinc-800">
+                          {JB_HEADERS.map((h, i) => (
+                            <th key={i} className="px-3 py-2 text-left font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {convertedPreview.map((row, ri) => (
+                          <tr key={ri} className="border-t border-zinc-100 dark:border-zinc-800">
+                            {JB_HEADERS.map((h, ci) => (
+                              <td key={ci} className="px-3 py-1.5 text-zinc-600 dark:text-zinc-400 whitespace-nowrap max-w-[180px] truncate">
+                                {row[ci] || <span className="text-zinc-300">—</span>}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
+
+              <Button onClick={handleAtReset} variant="outline">
+                Upload Lagi
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>
