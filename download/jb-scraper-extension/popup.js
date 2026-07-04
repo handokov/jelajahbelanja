@@ -314,6 +314,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       scrapePageBtn.textContent = '⏳ Membaca...';
 
       const category = categorySelect.value;
+      const affiliateUrl = (document.getElementById('affiliateUrlInput')?.value || '').trim();
 
       try {
         const results = await chrome.scripting.executeScript({
@@ -328,6 +329,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           let newCount = 0;
           for (const p of products) {
             if (!existingUrls.has(p.url)) {
+              // Tambahkan affiliate URL dari input
+              if (affiliateUrl) p.affiliateUrl = affiliateUrl;
               collected.push(p);
               existingUrls.add(p.url);
               newCount++;
@@ -356,6 +359,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       scrapeDetailBtn.textContent = '⏳ Membaca...';
 
       const category = categorySelect.value;
+      const affiliateUrl = (document.getElementById('affiliateUrlInput')?.value || '').trim();
 
       try {
         // Step 1: Scrape basic data dari DOM
@@ -375,6 +379,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           }, 2000);
           return;
         }
+
+        // Tambahkan affiliate URL dari input
+        if (affiliateUrl) product.affiliateUrl = affiliateUrl;
 
         // Step 2: Ambil data lengkap dari Shopee API v4
         const url = currentTab.url;
@@ -572,6 +579,68 @@ document.addEventListener('DOMContentLoaded', async () => {
     m = url.match(/\/product\/(\d+)\/(\d+)/);
     if (m) return { shopId: m[1], itemId: m[2] };
 
+    // Format 3: https://shopee.co.id/universal-link/product/1291923399/28837840128
+    m = url.match(/\/universal-link\/product\/(\d+)\/(\d+)/);
+    if (m) return { shopId: m[1], itemId: m[2] };
+
+    return null;
+  }
+
+  // Resolve short link (s.shopee.co.id, shope.ee, atid.me) by opening a tab
+  // Ini lebih reliable daripada fetch() karena Shopee pakai JS redirect
+  function resolveShortLinkViaTab(shortUrl) {
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      chrome.tabs.create({ url: shortUrl, active: false }, (tab) => {
+        const tabId = tab.id;
+
+        // Timeout 10 detik — kalau gak resolve, tutup tab
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            chrome.tabs.remove(tabId).catch(() => {});
+            resolve(shortUrl); // fallback ke URL asli
+          }
+        }, 10000);
+
+        // Watch for URL changes
+        function onUpdated(updatedTabId, changeInfo, updatedTab) {
+          if (updatedTabId !== tabId) return;
+
+          const currentUrl = updatedTab.url || '';
+
+          // Cek apakah URL udah redirect ke halaman produk Shopee
+          if (currentUrl.match(/-i\.\d+\.\d+/) ||
+              currentUrl.match(/\/product\/\d+\/\d+/) ||
+              currentUrl.match(/\/universal-link\/product\/\d+\/\d+/)) {
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              chrome.tabs.onUpdated.removeListener(onUpdated);
+              chrome.tabs.remove(tabId).catch(() => {});
+              resolve(currentUrl);
+            }
+          }
+        }
+
+        chrome.tabs.onUpdated.addListener(onUpdated);
+      });
+    });
+  }
+
+  // Fallback: resolve via fetch (kadang kerja untuk redirect HTTP 302)
+  async function resolveShortLinkViaFetch(shortUrl) {
+    try {
+      const resp = await fetch(shortUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        credentials: 'include',
+      });
+      if (resp.url && resp.url.includes('shopee.co.id')) {
+        return resp.url;
+      }
+    } catch {}
     return null;
   }
 
@@ -656,26 +725,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Resolve short link (s.shopee.co.id) to get the real URL
-  async function resolveShortLink(shortUrl) {
-    try {
-      const resp = await fetch(shortUrl, {
-        method: 'GET',
-        redirect: 'follow',
-        credentials: 'include',
-      });
-      // The final URL after redirects
-      return resp.url || shortUrl;
-    } catch {
-      // Fallback: try HEAD request
-      try {
-        const resp = await fetch(shortUrl, { method: 'HEAD', redirect: 'follow' });
-        return resp.url || shortUrl;
-      } catch {
-        return shortUrl;
-      }
-    }
-  }
+  // (resolveShortLink removed — using resolveShortLinkViaTab + resolveShortLinkViaFetch instead)
 
   if (fetchLinkBtn) {
     fetchLinkBtn.addEventListener('click', async () => {
@@ -705,19 +755,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         let affiliateUrl = '';
 
         // Check if it's a short link (s.shopee.co.id, shope.ee, etc.)
-        if (url.match(/s\.shopee\.co\.id|shope\.ee|shp\.ee/i)) {
+        if (url.match(/s\.shopee\.co\.id|shope\.ee|shp\.ee|shp\.in/i)) {
           affiliateUrl = url; // Simpan affiliate URL asli
-          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
-          const resolved = await resolveShortLink(url);
-          url = resolved;
+          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length} (buka tab)...`;
+
+          // Coba fetch dulu (lebih cepat)
+          let resolved = await resolveShortLinkViaFetch(url);
+          if (resolved && parseShopeeUrl(resolved)) {
+            url = resolved;
+          } else {
+            // Fallback: buka tab untuk resolve (lebih reliable)
+            url = await resolveShortLinkViaTab(url);
+          }
         }
 
         // Also check for atid.me links (Accesstrade)
         if (url.match(/atid\.me/i)) {
           affiliateUrl = url;
-          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
-          const resolved = await resolveShortLink(url);
-          url = resolved;
+          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length} (buka tab)...`;
+          let resolved = await resolveShortLinkViaFetch(url);
+          if (resolved && parseShopeeUrl(resolved)) {
+            url = resolved;
+          } else {
+            url = await resolveShortLinkViaTab(url);
+          }
         }
 
         // Extract shopId & itemId

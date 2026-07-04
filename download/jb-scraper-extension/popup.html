@@ -195,6 +195,35 @@
     }
     .link-input-group textarea::placeholder { color: #555; }
     .link-input-group textarea:focus { outline: none; border-color: #00838f; }
+
+    .affiliate-input-group {
+      margin-bottom: 6px;
+    }
+    .affiliate-input-group label {
+      font-size: 11px;
+      color: #00bcd4;
+      display: block;
+      margin-bottom: 3px;
+      font-weight: 600;
+    }
+    .affiliate-input-group input {
+      width: 100%;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #00707a;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 11px;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+    }
+    .affiliate-input-group input::placeholder { color: #555; }
+    .affiliate-input-group input:focus { outline: none; border-color: #00bcd4; }
+    .affiliate-input-group small {
+      font-size: 9px;
+      color: #666;
+      display: block;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -228,6 +257,12 @@
         <option value="Automotive">Automotive</option>
         <option value="Books & Stationery">Books & Stationery</option>
       </select>
+    </div>
+
+    <div class="affiliate-input-group">
+      <label>🔗 Link Affiliate (opsional):</label>
+      <input type="text" id="affiliateUrlInput" placeholder="https://s.shopee.co.id/xxxxx atau https://atid.me/xxxxx">
+      <small>Paste link affiliate dari Shopee Affiliate, otomatis masuk ke CSV!</small>
     </div>
 
     <button id="scrapePageBtn" class="btn btn-orange" disabled>

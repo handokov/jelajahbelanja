@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "JB Shopee Scraper",
-  "version": "7.0.0",
-  "description": "Klik produk Shopee → copy CSV → paste ke JB upload massal (v7: paste link affiliate, fix URL /product/)",
-  "permissions": ["activeTab", "scripting", "clipboardWrite"],
+  "version": "7.1.0",
+  "description": "Klik produk Shopee → copy CSV → paste ke JB upload massal (v7.1: fix affiliate URL + short link resolver)",
+  "permissions": ["activeTab", "scripting", "clipboardWrite", "tabs"],
   "host_permissions": [
     "https://shopee.co.id/*",
     "https://s.shopee.co.id/*",
