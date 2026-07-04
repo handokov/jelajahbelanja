@@ -56,6 +56,7 @@
     .btn-blue { background: #1565c0; color: white; }
     .btn-green { background: #2e7d32; color: white; }
     .btn-purple { background: #6a1b9a; color: white; }
+    .btn-teal { background: #00838f; color: white; }
     .btn-dark { background: #16213e; color: #eee; border: 1px solid #333; }
 
     .tip {
@@ -176,6 +177,24 @@
 
     .tab-content { display: none; }
     .tab-content.active { display: block; }
+
+    .link-input-group {
+      margin-bottom: 6px;
+    }
+    .link-input-group textarea {
+      width: 100%;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 11px;
+      resize: vertical;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      line-height: 1.5;
+    }
+    .link-input-group textarea::placeholder { color: #555; }
+    .link-input-group textarea:focus { outline: none; border-color: #00838f; }
   </style>
 </head>
 <body>
@@ -189,7 +208,8 @@
   <!-- TAB BAR -->
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="scrape">🛒 Scrape Shopee</button>
-    <button class="tab-btn" data-tab="convert">💰 Convert Accesstrade</button>
+    <button class="tab-btn" data-tab="link">🔗 Paste Link</button>
+    <button class="tab-btn" data-tab="convert">💰 Convert AT</button>
   </div>
 
   <!-- ===== TAB 1: SCRAPE SHOPEE ===== -->
@@ -241,7 +261,60 @@
     </button>
   </div>
 
-  <!-- ===== TAB 2: CONVERT ACCESSTRADE ===== -->
+  <!-- ===== TAB 2: PASTE LINK ===== -->
+  <div id="tab-link" class="tab-content">
+    <p class="tip" style="color:#90caf9;">🔗 Paste link affiliate Shopee di sini,<br>data produk otomatis di-ambil!</p>
+
+    <div class="link-input-group">
+      <textarea id="linkInput" rows="3" placeholder="Paste link di sini...&#10;Contoh: https://s.shopee.co.id/9KgCNdOMjY&#10;Atau: https://shopee.co.id/product/1291923399/28837840128&#10;Atau: https://shopee.co.id/nama-i.129.288"></textarea>
+    </div>
+
+    <div class="category-row">
+      <label>Kategori:</label>
+      <select id="linkCategorySelect">
+        <option value="Fashion">Fashion</option>
+        <option value="Beauty">Beauty</option>
+        <option value="Home & Living">Home & Living</option>
+        <option value="Electronics">Electronics</option>
+        <option value="Sports">Sports</option>
+        <option value="Food & Beverage">Food & Beverage</option>
+        <option value="Health">Health</option>
+        <option value="Kids & Baby">Kids & Baby</option>
+        <option value="Automotive">Automotive</option>
+        <option value="Books & Stationery">Books & Stationery</option>
+      </select>
+    </div>
+
+    <button id="fetchLinkBtn" class="btn btn-teal">
+      🔗 Ambil Data dari Link
+    </button>
+
+    <div class="divider"></div>
+
+    <p class="tip">💡 Bisa paste banyak link sekaligus (1 link per baris)!<br>Support: s.shopee.co.id, shopee.co.id/product/, -i.shopId.itemId</p>
+
+    <div id="linkStatus" class="page-status info" style="display:none;"></div>
+
+    <div class="collected" style="margin-top:6px;">
+      <div class="collected-title">
+        <span>Produk dikumpul:</span>
+        <span class="collected-count" id="linkCountBadge">0</span>
+      </div>
+      <div class="collected-list" id="linkCollectedList">
+        <div style="color:#666">Belum ada produk</div>
+      </div>
+    </div>
+
+    <button id="linkDownloadBtn" class="btn btn-green" disabled>
+      💾 Download File CSV (Format JB)
+    </button>
+
+    <button id="linkClearBtn" class="btn btn-dark">
+      🗑️ Hapus Semua
+    </button>
+  </div>
+
+  <!-- ===== TAB 3: CONVERT ACCESSTRADE ===== -->
   <div id="tab-convert" class="tab-content">
     <p class="tip" style="color:#a5d6a7;">💰 Download CSV dari Accesstrade Product Feed,<br>terus convert ke format JB di sini!</p>
 

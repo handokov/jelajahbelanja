@@ -1,9 +1,16 @@
 {
   "manifest_version": 3,
   "name": "JB Shopee Scraper",
-  "version": "6.0.0",
-  "description": "Klik produk Shopee → copy CSV → paste ke JB upload massal (v6: fix URL /product/shopId/itemId)",
+  "version": "7.0.0",
+  "description": "Klik produk Shopee → copy CSV → paste ke JB upload massal (v7: paste link affiliate, fix URL /product/)",
   "permissions": ["activeTab", "scripting", "clipboardWrite"],
+  "host_permissions": [
+    "https://shopee.co.id/*",
+    "https://s.shopee.co.id/*",
+    "https://shope.ee/*",
+    "https://shp.ee/*",
+    "https://atid.me/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "JB Scraper",
