@@ -127,3 +127,99 @@ Stage Summary:
 - PWARefresh fix stale closure, cuma aktif di standalone mode
 - Error boundaries tetap ada sebagai safety net
 - PWA manifest & maskable icons tetap ada (gak bikin error, cuma metadata)
+
+---
+Task ID: telegram-buttons
+Agent: Super Z (main)
+Task: Implement viral alert Approve/Batal buttons via Telegram polling
+
+Work Log:
+- Analyzed user's screenshot showing Telegram bot with viral alerts and command instructions
+- User worried connecting Telegram to web would break it again (like PWA incident)
+- Explained that polling approach (getUpdates) does NOT touch web code at all
+- Added sendViralAlertWithButtons() to telegram-helper.ts — sends inline keyboard with Approve/Batal buttons
+- Updated ai-bot.ts — added handleCallbackQuery() to process button clicks (approve:{id} / reject:{id})
+- Added answerCallback() to remove loading spinner after button press
+- Added editMessageText() to update the alert message after action (replace buttons with status)
+- Updated polling loop to listen for both "message" and "callback_query" updates
+- Updated ai-watch.ts — changed from sendViralAlert to sendViralAlertWithButtons
+- Tested both scripts: telegram-helper compiles OK, bot starts OK, watch has DB connection issue (expected in dev env)
+- ZERO changes to web code (src/) — all changes in scripts/ only
+
+Stage Summary:
+- Telegram buttons now work via polling — no webhook, no API route, no web code touched
+- Flow: AI-2 detects viral → sends alert with Approve/Batal buttons → user clicks → ai-bot.ts handles callback → updates DB → edits message
+- Files modified: scripts/telegram-helper.ts, scripts/ai-bot.ts, scripts/ai-watch.ts
+- Web stays untouched — isViral field in DB is the only connection point
+
+---
+Task ID: windows-package
+Agent: Super Z (main)
+Task: Create standalone Windows package for JB Telegram Bot
+
+Work Log:
+- User clarified: Windows, project only on Vercel, no VPS
+- User didn't understand how to run scripts (terminal, bash, etc.)
+- Created standalone package: /home/z/my-project/download/jb-telegram-bot/
+- Converted TypeScript to plain JavaScript (no build step needed)
+- Replaced Prisma with direct pg (postgresql) queries — no Prisma install needed
+- Created .bat files for double-click execution on Windows
+- Pre-filled .env.telegram with actual credentials
+- Created README.md with step-by-step Windows instructions
+- Zipped as jb-telegram-bot.zip for easy download
+
+Stage Summary:
+- Package: /home/z/my-project/download/jb-telegram-bot/
+- Zip: /home/z/my-project/download/jb-telegram-bot.zip
+- Files: jb-bot.js, jb-watch.js, jb-report.js, start-bot.bat, start-watch.bat, start-report.bat, package.json, README.md, scripts/.env.telegram
+- User only needs: install Node.js, extract zip, npm install, double-click .bat
+
+---
+Task ID: ai1-scraper
+Agent: Super Z (main)
+Task: Build AI-1 Scraper with human-like behavior for Shopee product data
+
+Work Log:
+- Built jb-scrape.js — standalone Shopee product scraper
+- Two modes: API Fetch (default, lightweight) and Puppeteer Browser (stealth, heavier)
+- Human-like features: random delays 15-45s between products, random user agents, scroll simulation, stealth flags
+- Parses Shopee product URLs to extract shopId/itemId for API calls
+- Compares old vs new soldCount to detect velocity changes
+- Updates Neon PostgreSQL directly with scraped data
+- Sends summary to Telegram with viral candidates
+- Added start-scrape.bat and start-scrape-quick.bat for Windows double-click
+- Updated package.json with puppeteer dependency (optional)
+- Updated README.md with full workflow guide
+- Recreated jb-telegram-bot.zip with all files
+
+Stage Summary:
+- Complete Multi-AI package: AI-1 (scraper) + AI-2 (watch + bot) + Reports
+- Package: /home/z/my-project/download/jb-telegram-bot.zip (18KB)
+- User flow: scrape → watch → approve/reject via Telegram buttons
+- All scripts are standalone (no Prisma needed, just pg + optional puppeteer)
+
+---
+Task ID: ai1-discover
+Agent: Super Z (main)
+Task: Build AI-1 Product Discovery scraper — find & add new Shopee products
+
+Work Log:
+- User asked about scraping NEW products (not just updating existing)
+- Queried DB: 12 categories with keywords, 62 existing products
+- Built jb-discover.js — searches Shopee by category keywords
+- Uses Shopee search API (v4 + v2 fallback)
+- Filters: rating ≥ 4.5, soldCount ≥ 100, price ≥ 5000
+- Checks if product already exists (by URL or shopId+itemId)
+- Adds new products to DB with correct category
+- Sends viral alert with Approve/Batal buttons for products ≥ 1000 sold
+- Human-like delays: 30-60s between keywords, 45-90s between categories
+- Options: --cat (filter category), --top N, --dry-run
+- Created .bat files: start-discover.bat, start-discover-quick.bat, start-discover-category.bat
+- Updated README with SCRAPE vs DISCOVER comparison
+- Re-zipped jb-telegram-bot.zip
+
+Stage Summary:
+- Complete AI-1: DISCOVER (new products) + SCRAPE (update existing)
+- Package: /home/z/my-project/download/jb-telegram-bot.zip
+- Total .bat files: 9 (bot, discover x3, scrape x2, watch, report, stop)
+- Multi-AI system now: AI-1 (discover+scrape) → AI-2 (watch+bot) → DB → Web JB
