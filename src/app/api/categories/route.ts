@@ -17,6 +17,7 @@ function toDTO(c: {
   shopeeCat: string | null;
   tokopediaCat: string | null;
   lazadaCat: string | null;
+  accesstradeCat: string | null;
   order: number;
   enabled: boolean;
 }): CategoryDTO {
@@ -30,6 +31,7 @@ function toDTO(c: {
     shopeeCat: c.shopeeCat,
     tokopediaCat: c.tokopediaCat,
     lazadaCat: c.lazadaCat,
+    accesstradeCat: c.accesstradeCat,
     order: c.order,
     enabled: c.enabled,
   };
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
         shopeeCat: body.shopeeCat?.trim() || null,
         tokopediaCat: body.tokopediaCat?.trim() || null,
         lazadaCat: body.lazadaCat?.trim() || null,
+        accesstradeCat: body.accesstradeCat?.trim() || null,
         order: newOrder,
         enabled: body.enabled ?? true,
       },
@@ -112,6 +115,7 @@ export async function PATCH(req: NextRequest) {
             ...(u.shopeeCat !== undefined ? { shopeeCat: u.shopeeCat } : {}),
             ...(u.tokopediaCat !== undefined ? { tokopediaCat: u.tokopediaCat } : {}),
             ...(u.lazadaCat !== undefined ? { lazadaCat: u.lazadaCat } : {}),
+            ...(u.accesstradeCat !== undefined ? { accesstradeCat: u.accesstradeCat } : {}),
             ...(u.order !== undefined ? { order: u.order } : {}),
             ...(u.enabled !== undefined ? { enabled: u.enabled } : {}),
           },
@@ -140,6 +144,7 @@ export async function PATCH(req: NextRequest) {
         ...(input.shopeeCat !== undefined ? { shopeeCat: input.shopeeCat } : {}),
         ...(input.tokopediaCat !== undefined ? { tokopediaCat: input.tokopediaCat } : {}),
         ...(input.lazadaCat !== undefined ? { lazadaCat: input.lazadaCat } : {}),
+        ...(input.accesstradeCat !== undefined ? { accesstradeCat: input.accesstradeCat } : {}),
         ...(input.order !== undefined ? { order: input.order } : {}),
         ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
       },
@@ -189,6 +194,7 @@ export async function PUT() {
         shopeeCat: c.shopeeCat,
         tokopediaCat: c.tokopediaCat,
         lazadaCat: c.lazadaCat,
+        accesstradeCat: c.accesstradeCat,
         order: i,
         enabled: true,
       })),

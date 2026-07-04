@@ -40,6 +40,7 @@ const EMPTY_FORM: CreateCategoryInput = {
   shopeeCat: "",
   tokopediaCat: "",
   lazadaCat: "",
+  accesstradeCat: "",
   enabled: true,
 };
 
@@ -157,7 +158,8 @@ export function CategoriesTab() {
       name: c.name, emoji: c.emoji, keywords: c.keywords,
       amazonNode: c.amazonNode ?? "", aliexpressCat: c.aliexpressCat ?? "",
       shopeeCat: c.shopeeCat ?? "", tokopediaCat: c.tokopediaCat ?? "",
-      lazadaCat: c.lazadaCat ?? "", enabled: c.enabled,
+      lazadaCat: c.lazadaCat ?? "", accesstradeCat: c.accesstradeCat ?? "",
+      enabled: c.enabled,
     });
   }
 
@@ -215,6 +217,10 @@ export function CategoriesTab() {
             <Label htmlFor="cat-lazada" className="text-xs">Lazada Category</Label>
             <Input id="cat-lazada" placeholder="elektronik" value={form.lazadaCat ?? ""} onChange={(e) => setForm({ ...form, lazadaCat: e.target.value })} />
           </div>
+          <div className="flex flex-col gap-1.5 md:col-span-2">
+            <Label htmlFor="cat-accesstrade" className="text-xs">Accesstrade Categories (pisahkan dengan koma)</Label>
+            <Input id="cat-accesstrade" placeholder="Mobile & Gadgets,Computers & Accessories" value={form.accesstradeCat ?? ""} onChange={(e) => setForm({ ...form, accesstradeCat: e.target.value })} />
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cat-amazon" className="text-xs">Amazon Node (opsional)</Label>
             <Input id="cat-amazon" placeholder="172282" value={form.amazonNode ?? ""} onChange={(e) => setForm({ ...form, amazonNode: e.target.value })} />
@@ -264,6 +270,7 @@ export function CategoriesTab() {
                     {c.shopeeCat && <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] px-1.5 py-0 h-4">Shopee</Badge>}
                     {c.tokopediaCat && <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-[10px] px-1.5 py-0 h-4">Tokopedia</Badge>}
                     {c.lazadaCat && <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] px-1.5 py-0 h-4">Lazada</Badge>}
+                    {c.accesstradeCat && <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 text-[10px] px-1.5 py-0 h-4">AT</Badge>}
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 truncate">Keywords: {c.keywords}</p>
                 </div>

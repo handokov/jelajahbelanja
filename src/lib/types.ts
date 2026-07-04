@@ -51,6 +51,7 @@ export interface CategoryDTO {
   shopeeCat: string | null;
   tokopediaCat: string | null;
   lazadaCat: string | null;
+  accesstradeCat: string | null;
   order: number;
   enabled: boolean;
 }
@@ -64,6 +65,7 @@ export interface CreateCategoryInput {
   shopeeCat?: string | null;
   tokopediaCat?: string | null;
   lazadaCat?: string | null;
+  accesstradeCat?: string | null;
   enabled?: boolean;
 }
 
@@ -77,6 +79,7 @@ export interface UpdateCategoryInput {
   shopeeCat?: string | null;
   tokopediaCat?: string | null;
   lazadaCat?: string | null;
+  accesstradeCat?: string | null;
   order?: number;
   enabled?: boolean;
 }

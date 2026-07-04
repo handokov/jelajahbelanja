@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
+import { mapAtCategory, buildAtCategoryMap } from "@/lib/at-category-map";
+import { db } from "@/lib/db";
 
 /**
  * POST /api/convert-at
@@ -52,7 +54,7 @@ function extractShopeeUrl(affiliateUrl: string): string {
   } catch { return affiliateUrl; }
 }
 
-function convertAtRowToJb(row: any[]): Record<string, string> {
+function convertAtRowToJb(row: any[], atCategoryMap?: Record<string, string>): Record<string, string> {
   const productId = String(row[0] || "").replace(/^\uFEFF/, "").replace("?", "").trim();
   const title = String(row[1] || "").trim();
   const imageUrl = String(row[2] || "").trim();
@@ -77,7 +79,8 @@ function convertAtRowToJb(row: any[]): Record<string, string> {
 
   const affiliateUrl = affiliateLink2 || affiliateLinkRaw;
   const url = extractShopeeUrl(affiliateLinkRaw) || `https://shopee.co.id/search?keyword=${encodeURIComponent(title.slice(0, 50))}`;
-  const category = category3 || category2 || category1 || "Lainnya";
+  // Map AT category1 → JB category menggunakan lookup map
+  const category = mapAtCategory(category1, atCategoryMap);
 
   let discountPercent = "";
   if (originalPrice > price && price > 0) {
@@ -200,6 +203,16 @@ export async function POST(req: NextRequest) {
       startIndex = 1;
     }
 
+    // Build AT category map dari DB untuk mapping kategori
+    let atCategoryMap: Record<string, string> | undefined;
+    try {
+      const categories = await db.category.findMany({ orderBy: { order: "asc" } });
+      atCategoryMap = buildAtCategoryMap(categories);
+    } catch {
+      // Fallback ke hardcoded map di at-category-map.ts
+      atCategoryMap = undefined;
+    }
+
     const MAX_ROWS = 10000;
     const dataRows = allRows.slice(startIndex, startIndex + MAX_ROWS);
     const errors: string[] = [];
@@ -217,7 +230,7 @@ export async function POST(req: NextRequest) {
         errors.push(`Baris ${startIndex + i + 1}: Price tidak valid`);
         continue;
       }
-      convertedRows.push(convertAtRowToJb(row));
+      convertedRows.push(convertAtRowToJb(row, atCategoryMap));
     }
 
     return NextResponse.json({
