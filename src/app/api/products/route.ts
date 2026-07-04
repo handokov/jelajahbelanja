@@ -80,7 +80,10 @@ function dbRowToProduct(row: {
 }
 
 /**
- * GET /api/products?category=<id>&filter=latest|viral|weekly&search=<q>
+ * GET /api/products?category=<id>&filter=latest|viral|weekly&search=<q>&limit=<n>&page=<n>
+ * 
+ * limit: default 100, max 500. page: default 1.
+ * Untuk kompatibilitas, jika limit tidak dispesifikasikan, kirim semua (tapi max 500).
  */
 export async function GET(req: NextRequest) {
   try {
@@ -94,6 +97,12 @@ export async function GET(req: NextRequest) {
       ? filterParam
       : "latest";
     const search = (searchParams.get("search") || "").trim().toLowerCase();
+    
+    // Pagination — default 100, max 500
+    const rawLimit = parseInt(searchParams.get("limit") || "100", 10);
+    const limit = Math.min(Math.max(rawLimit || 100, 1), 500);
+    const rawPage = parseInt(searchParams.get("page") || "1", 10);
+    const page = Math.max(rawPage || 1, 1);
 
     // === 1. Ambil produk manual dari DB (prioritas utama) ===
     const categories = await db.category.findMany({
@@ -108,7 +117,19 @@ export async function GET(req: NextRequest) {
         ? categories.filter((c) => c.id === categoryId).map((c) => c.name)
         : []; // kosong = tidak filter berdasarkan kategori
 
+    // Count total untuk pagination info
+    const totalCount = await db.shopeeProduct.count({
+      where: {
+        enabled: true,
+        isHidden: { not: true },
+        ...(targetCategoryNames.length > 0
+          ? { category: { in: targetCategoryNames } }
+          : {}),
+      },
+    });
+
     // Ambil produk yang enabled=true DAN isHidden bukan true (null juga ditampilkan)
+    // Dengan pagination: limit + skip
     const manualRows = await db.shopeeProduct.findMany({
       where: {
         enabled: true,
@@ -118,6 +139,8 @@ export async function GET(req: NextRequest) {
           : {}),
       },
       orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+      take: limit,
+      skip: (page - 1) * limit,
     });
 
     const manualProducts: Product[] = manualRows.map(dbRowToProduct);
@@ -155,7 +178,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json<ProductsResponse>({
       products: finalProducts,
-      total: finalProducts.length,
+      total: totalCount,
       source: "live",
     });
   } catch (err) {
