@@ -391,14 +391,28 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     setAtResult(null);
 
     try {
-      const text = await atFile.text();
-      const { rows, totalInput, errors } = convertAtCsvToJb(text, 10000);
+      // Kirim file ke API untuk parsing (support CSV & XLSX)
+      const formData = new FormData();
+      formData.append("file", atFile);
 
+      const res = await adminFetch("/api/convert-at", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setAtErrors([data.error || "Gagal konversi file"]);
+        return;
+      }
+
+      const { rows, totalInput, errors } = data;
       setConvertedRows(rows);
       setAtTotalInput(totalInput);
-      setAtErrors(errors);
+      setAtErrors(errors || []);
 
-      const previewData = rows.slice(0, 5).map((row) =>
+      const previewData = rows.slice(0, 5).map((row: Record<string, string>) =>
         JB_HEADERS.map((h) => row[h] || "")
       );
       setConvertedPreview(previewData);
@@ -749,14 +763,14 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
               Cara Konverter CSV Accesstrade
             </p>
             <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
-              <li>Download CSV dari dashboard <b>Accesstrade</b> (Product Feed / Offer)</li>
-              <li>Upload file CSV AT ke area di bawah</li>
+              <li>Download CSV / XLSX dari dashboard <b>Accesstrade</b> (Product Feed / Offer)</li>
+              <li>Upload file ke area di bawah (format <b>CSV</b> atau <b>XLSX</b>)</li>
               <li>Klik <b>Konversi ke JB</b> — otomatis mapping kolom AT ke format JB</li>
               <li>Cek preview hasil konversi</li>
               <li>Pilih: <b>Download CSV JB</b> atau <b>Upload ke Database</b> (otomatis batch per {BATCH_SIZE})</li>
             </ol>
             <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-              Tidak ada batas jumlah — 10.000+ produk bisa dikonversi, upload otomatis batch per {BATCH_SIZE}.
+              Didukung: CSV dan XLSX. Tidak ada batas jumlah — 10.000+ produk bisa dikonversi.
             </p>
           </div>
 
@@ -803,7 +817,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                 onClick={() => {
                   const input = document.createElement("input");
                   input.type = "file";
-                  input.accept = ".csv,.txt";
+                  input.accept = ".csv,.txt,.xlsx";
                   input.onchange = (e: any) => {
                     const file = e.target?.files?.[0];
                     if (file) handleAtFile(file);
