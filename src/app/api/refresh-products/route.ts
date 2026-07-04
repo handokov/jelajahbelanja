@@ -300,10 +300,37 @@ async function refreshOneProduct(
   let ids = extractIds(productUrl);
   let resolvedUrl: string | null = null;
 
-  // Resolve short URL (shope.ee)
-  if (!ids && productUrl.includes("shope.ee")) {
+  // Resolve short URL (shope.ee, atid.me, s.shopee.co.id)
+  if (!ids && (productUrl.includes("shope.ee") || productUrl.includes("atid.me") || productUrl.includes("s.shopee.co.id"))) {
     resolvedUrl = await resolveShortUrl(productUrl);
-    if (resolvedUrl) ids = extractIds(resolvedUrl);
+    if (resolvedUrl) {
+      ids = extractIds(resolvedUrl);
+      // Kadang atid.me → s.shopee.co.id → perlu resolve 2x
+      if (!ids && (resolvedUrl.includes("shope.ee") || resolvedUrl.includes("s.shopee.co.id"))) {
+        const secondResolve = await resolveShortUrl(resolvedUrl);
+        if (secondResolve) {
+          resolvedUrl = secondResolve;
+          ids = extractIds(secondResolve);
+        }
+      }
+    }
+  }
+  // Jika URL punya affiliateUrl (AT link), coba resolve juga
+  if (!ids && !resolvedUrl) {
+    // Cek apakah ada produk dengan URL ini yang punya affiliateUrl
+    try {
+      const product = await db.shopeeProduct.findUnique({
+        where: { id: productId },
+        select: { url: true, affiliateUrl: true },
+      });
+      if (product?.affiliateUrl && product.affiliateUrl !== productUrl) {
+        const affResolved = await resolveShortUrl(product.affiliateUrl);
+        if (affResolved) {
+          ids = extractIds(affResolved);
+          if (ids) resolvedUrl = affResolved;
+        }
+      }
+    } catch {}
   }
 
   const fetchUrl = resolvedUrl || productUrl;
@@ -525,7 +552,81 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ─── Mode 4: Fix marketplace ──
+    // ─── Mode 4: Refresh all products (by IDs) ──
+    if (mode === "all" && Array.isArray(body.ids)) {
+      const productIds = body.ids as string[];
+      const results = [];
+
+      for (let i = 0; i < productIds.length; i++) {
+        const pid = productIds[i];
+        const product = await db.shopeeProduct.findUnique({
+          where: { id: pid },
+          select: { id: true, url: true },
+        });
+        if (product) {
+          const result = await refreshOneProduct(product.id, product.url);
+          results.push(result);
+          if (i < productIds.length - 1) {
+            await delay(DELAY_MS);
+          }
+        }
+      }
+
+      const ok = results.filter((r) => r.status === "ok").length;
+      const fail = results.filter((r) => r.status === "fail").length;
+
+      if (ok > 0) {
+        try { revalidatePath("/", "layout"); } catch {}
+      }
+
+      return NextResponse.json({
+        results,
+        total: results.length,
+        summary: { ok, fail, skip: results.filter((r) => r.status === "skip").length },
+      });
+    }
+
+    // ─── Mode 5: Refresh all products in DB ──
+    if (mode === "refresh-all") {
+      const limitCount = Math.min(limit || 10, 20);
+      const allProducts = await db.shopeeProduct.findMany({
+        where: { enabled: true },
+        select: { id: true, url: true },
+        orderBy: { createdAt: "desc" },
+        take: limitCount,
+      });
+
+      if (allProducts.length === 0) {
+        return NextResponse.json({ results: [], total: 0, message: "Tidak ada produk" });
+      }
+
+      const results = [];
+      for (let i = 0; i < allProducts.length; i++) {
+        const p = allProducts[i];
+        const result = await refreshOneProduct(p.id, p.url);
+        results.push(result);
+        if (i < allProducts.length - 1) {
+          await delay(DELAY_MS);
+        }
+      }
+
+      const ok = results.filter((r) => r.status === "ok").length;
+      if (ok > 0) {
+        try { revalidatePath("/", "layout"); } catch {}
+      }
+
+      return NextResponse.json({
+        results,
+        total: results.length,
+        summary: {
+          ok,
+          fail: results.filter((r) => r.status === "fail").length,
+          skip: results.filter((r) => r.status === "skip").length,
+        },
+      });
+    }
+
+    // ─── Mode 6: Fix marketplace ──
     if (mode === "fix-marketplace") {
       const { detectMarketplaceFromUrl } = await import("@/lib/utils");
 
