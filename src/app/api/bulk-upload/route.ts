@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse rows
-    const MAX_ROWS = 200;
+    // Parse rows — max 500 (dari AT converter bisa lebih banyak)
+    const MAX_ROWS = 500;
     const dataLines = lines.slice(1, MAX_ROWS + 1);
     const errors: string[] = [];
     let success = 0;
