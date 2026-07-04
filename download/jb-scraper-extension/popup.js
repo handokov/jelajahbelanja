@@ -1,11 +1,12 @@
 /**
- * JB Shopee Scraper — v2 SIMPLE
+ * JB Shopee Scraper — v3 DOWNLOAD CSV FILE
  *
  * Cara pakai:
  * 1. Buka Shopee, browsing produk kayak biasa
  * 2. Klik icon extension → "Ambil Semua Produk di Halaman Ini"
  * 3. Buka halaman lain → klik lagi → data nyimpel
- * 4. Klik "Copy CSV" → paste ke JB Bulk Upload
+ * 4. Klik "💾 Download File CSV" → file .csv ke-download
+ * 5. Buka JB admin → Bulk Upload → drag & drop file CSV → upload!
  *
  * GAK butuh server. GAK butuh bot. GAK butuh Node.js.
  * Murni Chrome Extension aja.
@@ -31,18 +32,18 @@ function saveCollected() {
 function updateUI() {
   const countBadge = document.getElementById('countBadge');
   const collectedList = document.getElementById('collectedList');
-  const copyCsvBtn = document.getElementById('copyCsvBtn');
+  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
 
   countBadge.textContent = collected.length;
 
   if (collected.length === 0) {
     collectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
-    copyCsvBtn.disabled = true;
+    downloadCsvBtn.disabled = true;
   } else {
     collectedList.innerHTML = collected.map((p, i) =>
       `<div>${i + 1}. ${esc(p.title.substring(0, 45))}${p.title.length > 45 ? '...' : ''}</div>`
     ).join('');
-    copyCsvBtn.disabled = false;
+    downloadCsvBtn.disabled = false;
   }
 }
 
@@ -82,7 +83,25 @@ function buildCSV() {
       csvField(p.notes),
     ].join(','));
   }
-  return lines.join('\n');
+  return lines.join('\r\n'); // Windows line endings
+}
+
+// ========== DOWNLOAD CSV FILE ==========
+function downloadCSV() {
+  const csv = buildCSV();
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  a.href = url;
+  a.download = `jb-upload-${dateStr}-${collected.length}produk.csv`;
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ========== INIT ==========
@@ -90,10 +109,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const pageStatus = document.getElementById('pageStatus');
   const scrapePageBtn = document.getElementById('scrapePageBtn');
   const scrapeDetailBtn = document.getElementById('scrapeDetailBtn');
-  const copyCsvBtn = document.getElementById('copyCsvBtn');
+  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
   const clearBtn = document.getElementById('clearBtn');
   const categorySelect = document.getElementById('categorySelect');
-  const copyArea = document.getElementById('copyArea');
 
   let currentTab = null;
   let isShopee = false;
@@ -197,19 +215,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 2000);
   });
 
-  // ====== COPY CSV ======
-  copyCsvBtn.addEventListener('click', () => {
-    const csv = buildCSV();
-
-    // Tampilkan di textarea + copy
-    copyArea.value = csv;
-    copyArea.style.display = 'block';
-    copyArea.select();
-    document.execCommand('copy');
-
-    copyCsvBtn.textContent = `✅ CSV dicopy! (${collected.length} produk)`;
+  // ====== DOWNLOAD CSV FILE ======
+  downloadCsvBtn.addEventListener('click', () => {
+    downloadCSV();
+    downloadCsvBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
     setTimeout(() => {
-      copyCsvBtn.textContent = '📋 Copy CSV — Paste ke JB Upload Massal';
+      downloadCsvBtn.textContent = '💾 Download File CSV';
     }, 3000);
   });
 
@@ -218,8 +229,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (collected.length === 0) return;
     collected = [];
     saveCollected();
-    copyArea.style.display = 'none';
-    copyArea.value = '';
   });
 
   updateUI();
