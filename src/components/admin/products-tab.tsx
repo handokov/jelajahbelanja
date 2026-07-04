@@ -38,6 +38,7 @@ import {
   AlertTriangle,
   Filter,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -64,6 +65,9 @@ export function ProductsTab() {
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = React.useState(false);
   const [showFilterDeleteDialog, setShowFilterDeleteDialog] = React.useState(false);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = React.useState(false);
+
+  // ─── Refresh State ───
+  const [refreshProgress, setRefreshProgress] = React.useState<{ total: number; done: number; ok: number } | null>(null);
   const [filterDeleteCategory, setFilterDeleteCategory] = React.useState("");
   const [filterDeleteMarketplace, setFilterDeleteMarketplace] = React.useState("");
   const [filterDeleteOlderDays, setFilterDeleteOlderDays] = React.useState("");
@@ -170,6 +174,94 @@ export function ProductsTab() {
     },
     onError: (err: Error) => { toast({ title: "Gagal Hapus", description: err.message, variant: "destructive" }); },
   });
+
+  // ─── Refresh Mutation (single product) ───
+  const refreshProductMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      const res = await fetch("/api/refresh-products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId }),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal refresh produk"); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      const result = data.results?.[0];
+      if (result?.status === "ok") {
+        toast({ title: "Produk di-refresh", description: `Data produk berhasil diupdate dari Shopee (${result.reason})` });
+      } else {
+        toast({ title: "Refresh gagal", description: result?.reason || "Tidak bisa ambil data dari Shopee", variant: "destructive" });
+      }
+    },
+    onError: (err: Error) => { toast({ title: "Gagal Refresh", description: err.message, variant: "destructive" }); },
+  });
+
+  // ─── Refresh Selected Products ───
+  async function handleRefreshSelected() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    setRefreshProgress({ total: ids.length, done: 0, ok: 0 });
+    let okCount = 0;
+
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        const res = await fetch("/api/refresh-products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: ids[i] }),
+        });
+        const data = await res.json();
+        if (data.results?.[0]?.status === "ok") okCount++;
+      } catch {}
+      setRefreshProgress({ total: ids.length, done: i + 1, ok: okCount });
+    }
+
+    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+    queryClient.invalidateQueries({ queryKey: ["products"] });
+    setSelectedIds(new Set());
+    setRefreshProgress(null);
+    toast({ title: "Refresh selesai", description: `${okCount} dari ${ids.length} produk berhasil di-update dari Shopee` });
+  }
+
+  // ─── Refresh All Products ───
+  async function handleRefreshAll() {
+    const allProducts = productsData ?? [];
+    if (allProducts.length === 0) return;
+
+    const ids = allProducts.map((p: any) => p.id);
+    setRefreshProgress({ total: ids.length, done: 0, ok: 0 });
+    let okCount = 0;
+
+    // Process in batches of 5
+    const BATCH = 5;
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const batch = ids.slice(i, i + BATCH);
+      const results = await Promise.allSettled(
+        batch.map(async (pid: string) => {
+          const res = await fetch("/api/refresh-products", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId: pid }),
+          });
+          const data = await res.json();
+          return data.results?.[0]?.status === "ok" ? 1 : 0;
+        })
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value) okCount++;
+      }
+      setRefreshProgress({ total: ids.length, done: Math.min(i + BATCH, ids.length), ok: okCount });
+    }
+
+    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+    queryClient.invalidateQueries({ queryKey: ["products"] });
+    setRefreshProgress(null);
+    toast({ title: "Refresh semua selesai", description: `${okCount} dari ${ids.length} produk berhasil di-update dari Shopee` });
+  }
 
   // ─── Selection Handlers ───
   function toggleSelect(id: string) {
@@ -429,6 +521,17 @@ export function ProductsTab() {
             Daftar Produk ({products.length})
           </h2>
           <div className="flex items-center gap-2">
+            {/* Refresh All Button */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+              onClick={handleRefreshAll}
+              disabled={refreshProgress !== null}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshProgress ? "animate-spin" : ""}`} />
+              {refreshProgress ? `Refresh ${refreshProgress.done}/${refreshProgress.total}` : "Refresh dari Shopee"}
+            </Button>
             {/* Filter Delete Button */}
             <Button
               size="sm"
@@ -469,6 +572,16 @@ export function ProductsTab() {
                 onClick={clearSelection}
               >
                 Batal Pilih
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+                onClick={handleRefreshSelected}
+                disabled={refreshProgress !== null}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshProgress ? "animate-spin" : ""}`} />
+                Refresh {selectedIds.size} Produk
               </Button>
               <Button
                 size="sm"
@@ -567,6 +680,7 @@ export function ProductsTab() {
                 {/* Actions */}
                 <div className="flex flex-col gap-1">
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEditProduct(p)}><Pencil className="w-3 h-3" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-500" onClick={() => refreshProductMutation.mutate(p.id)} disabled={refreshProductMutation.isPending} title="Refresh dari Shopee"><RefreshCw className={`w-3 h-3 ${refreshProductMutation.isPending ? "animate-spin" : ""}`} /></Button>
                   <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDeleteProductTarget(p)}><Trash2 className="w-3 h-3" /></Button>
                 </div>
               </div>
