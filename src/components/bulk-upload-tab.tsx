@@ -31,7 +31,14 @@ interface BulkUploadResult {
 // AT CSV Converter Logic
 // ============================================================
 
-function parseCsvLine(line: string): string[] {
+// Auto-detect delimiter dari baris pertama
+function detectDelimiter(firstLine: string): string {
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  return tabCount > commaCount ? "\t" : ",";
+}
+
+function parseCsvLineWithDelimiter(line: string, delimiter: string): string[] {
   const result: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -39,7 +46,7 @@ function parseCsvLine(line: string): string[] {
     const ch = line[i];
     if (ch === '"') {
       inQuotes = !inQuotes;
-    } else if (ch === "," && !inQuotes) {
+    } else if (ch === delimiter && !inQuotes) {
       result.push(current.trim());
       current = "";
     } else {
@@ -50,11 +57,16 @@ function parseCsvLine(line: string): string[] {
   return result;
 }
 
+// Legacy: comma-only parser (dipakai JB upload)
+function parseCsvLine(line: string): string[] {
+  return parseCsvLineWithDelimiter(line, ",");
+}
+
 function parseCsvText(text: string): string[][] {
-  return text
-    .split("\n")
-    .filter((l) => l.trim())
-    .map(parseCsvLine);
+  const lines = text.split("\n").filter((l) => l.trim());
+  if (lines.length === 0) return [];
+  const delimiter = detectDelimiter(lines[0]);
+  return lines.map((line) => parseCsvLineWithDelimiter(line, delimiter));
 }
 
 function stripHtml(html: string): string {
@@ -366,10 +378,24 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
   // ============================================================
 
   const handleAtFile = React.useCallback((file: File) => {
-    if (!file.name.endsWith(".csv") && !file.name.endsWith(".txt") && !file.name.endsWith(".xlsx")) {
-      alert("Hanya file CSV/XLSX yang diperbolehkan");
+    // Accept semua file — validasi content di converter, bukan extension
+    // AT bisa provide file dalam berbagai format: .csv, .txt, .tsv, .xlsx, bahkan tanpa extension
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isBinary = ['.xlsx', '.xls', '.zip', '.gz', '.rar'].includes(ext);
+    const isText = ['.csv', '.txt', '.tsv', '.dat', ''].includes(ext) || !isBinary;
+    
+    if (!isText && !isBinary) {
+      alert(`Format file .${ext} tidak dikenali. Gunakan CSV, TSV, TXT, atau XLSX dari Accesstrade.`);
       return;
     }
+    
+    // Warning untuk file > 50MB
+    const sizeMB = file.size / (1024 * 1024);
+    if (sizeMB > 50 && ext !== '.xlsx') {
+      const ok = confirm(`File ini ${sizeMB.toFixed(1)} MB — cukup besar. Proses di browser mungkin butuh waktu. Lanjutkan?`);
+      if (!ok) return;
+    }
+    
     setAtFile(file);
     setConvertedRows([]);
     setConvertedPreview([]);
@@ -391,37 +417,65 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     setAtResult(null);
 
     try {
-      // Kirim file ke API untuk parsing (support CSV & XLSX)
-      const formData = new FormData();
-      formData.append("file", atFile);
+      const ext = atFile.name.split('.').pop()?.toLowerCase() || '';
+      const isXlsx = ['.xlsx', '.xls'].includes(ext);
 
-      const res = await adminFetch("/api/convert-at", {
-        method: "POST",
-        body: formData,
-      });
+      if (isXlsx) {
+        // XLSX: pakai API (server-side processing)
+        // Tapi cek size dulu — Vercel limit 4.5MB body
+        const sizeMB = atFile.size / (1024 * 1024);
+        if (sizeMB > 4) {
+          setAtErrors([`File XLSX terlalu besar (${sizeMB.toFixed(1)} MB). Maksimum 4 MB untuk XLSX. Untuk file besar, export ke CSV dari Accesstrade lalu upload file CSV-nya.`]);
+          return;
+        }
+        const formData = new FormData();
+        formData.append("file", atFile);
 
-      const data = await res.json();
+        const res = await adminFetch("/api/convert-at", {
+          method: "POST",
+          body: formData,
+        });
 
-      if (!res.ok) {
-        setAtErrors([data.error || "Gagal konversi file"]);
-        return;
+        const data = await res.json();
+
+        if (!res.ok) {
+          setAtErrors([data.error || "Gagal konversi file"]);
+          return;
+        }
+
+        const { rows, totalInput, errors } = data;
+        setConvertedRows(rows);
+        setAtTotalInput(totalInput);
+        setAtErrors(errors || []);
+
+        const previewData = rows.slice(0, 5).map((row: Record<string, string>) =>
+          JB_HEADERS.map((h) => row[h] || "")
+        );
+        setConvertedPreview(previewData);
+      } else {
+        // CSV/TXT/TSV: proses 100% client-side (bypass Vercel body limit)
+        // Baca file sebagai text, lalu parse di browser
+        const text = await atFile.text();
+        
+        // Hapus BOM jika ada
+        const cleanText = text.replace(/^\uFEFF/, '');
+        
+        const { rows, totalInput, errors } = convertAtCsvToJb(cleanText);
+        setConvertedRows(rows);
+        setAtTotalInput(totalInput);
+        setAtErrors(errors);
+
+        const previewData = rows.slice(0, 5).map((row: Record<string, string>) =>
+          JB_HEADERS.map((h) => row[h] || "")
+        );
+        setConvertedPreview(previewData);
       }
-
-      const { rows, totalInput, errors } = data;
-      setConvertedRows(rows);
-      setAtTotalInput(totalInput);
-      setAtErrors(errors || []);
-
-      const previewData = rows.slice(0, 5).map((row: Record<string, string>) =>
-        JB_HEADERS.map((h) => row[h] || "")
-      );
-      setConvertedPreview(previewData);
     } catch (err: any) {
       setAtErrors([`Gagal parse file: ${err?.message || "Unknown error"}`]);
     } finally {
       setConverting(false);
     }
-  }, [atFile]);
+  }, [atFile, adminFetch]);
 
   const handleDownloadConverted = React.useCallback(() => {
     if (convertedRows.length === 0) return;
@@ -764,13 +818,13 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
             </p>
             <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
               <li>Download CSV / XLSX dari dashboard <b>Accesstrade</b> (Product Feed / Offer)</li>
-              <li>Upload file ke area di bawah (format <b>CSV</b> atau <b>XLSX</b>)</li>
+              <li>Upload file ke area di bawah — <b>semua format diterima</b> (CSV, TSV, TXT, XLSX)</li>
               <li>Klik <b>Konversi ke JB</b> — otomatis mapping kolom AT ke format JB</li>
               <li>Cek preview hasil konversi</li>
               <li>Pilih: <b>Download CSV JB</b> atau <b>Upload ke Database</b> (otomatis batch per {BATCH_SIZE})</li>
             </ol>
             <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-              Didukung: CSV dan XLSX. Tidak ada batas jumlah — 10.000+ produk bisa dikonversi.
+              Didukung: CSV, TSV, TXT, XLSX. Tidak ada batas jumlah — 10.000+ produk bisa dikonversi. File besar diproses di browser langsung.
             </p>
           </div>
 
@@ -817,7 +871,8 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                 onClick={() => {
                   const input = document.createElement("input");
                   input.type = "file";
-                  input.accept = ".csv,.txt,.xlsx";
+                  // Accept semua format yang mungkin dari AT
+                  input.accept = ".csv,.txt,.tsv,.xlsx,.xls,.dat";
                   input.onchange = (e: any) => {
                     const file = e.target?.files?.[0];
                     if (file) handleAtFile(file);
@@ -842,9 +897,9 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                   <div className="flex flex-col items-center gap-2">
                     <Upload className="w-10 h-10 text-zinc-400" />
                     <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                      Drag & drop file CSV Accesstrade di sini
+                      Drag & drop file CSV / TSV / XLSX Accesstrade di sini
                     </p>
-                    <p className="text-xs text-zinc-400">atau klik untuk pilih file</p>
+                    <p className="text-xs text-zinc-400">atau klik untuk pilih file — semua format diterima</p>
                   </div>
                 )}
               </div>

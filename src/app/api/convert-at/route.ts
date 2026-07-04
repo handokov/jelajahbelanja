@@ -116,17 +116,27 @@ export async function POST(req: NextRequest) {
     const fileName = file.name.toLowerCase();
     let allRows: any[][] = [];
 
-    if (fileName.endsWith(".xlsx")) {
+    if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
       // Parse XLSX
       const buffer = Buffer.from(await file.arrayBuffer());
       const workbook = XLSX.read(buffer, { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       allRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-    } else if (fileName.endsWith(".csv") || fileName.endsWith(".txt")) {
-      // Parse CSV
+    } else if (fileName.endsWith(".csv") || fileName.endsWith(".txt") || fileName.endsWith(".tsv") || fileName.endsWith(".dat")) {
+      // Parse CSV/TSV — auto-detect delimiter
       const text = await file.text();
-      const lines = text.split("\n").filter((l) => l.trim());
+      const cleanText = text.replace(/^\uFEFF/, '');
+      const lines = cleanText.split("\n").filter((l) => l.trim());
+      if (lines.length === 0) {
+        return NextResponse.json({ error: "File kosong" }, { status: 400 });
+      }
+      // Auto-detect delimiter dari baris pertama
+      const firstLine = lines[0];
+      const tabCount = (firstLine.match(/\t/g) || []).length;
+      const commaCount = (firstLine.match(/,/g) || []).length;
+      const delimiter = tabCount > commaCount ? '\t' : ',';
+      
       for (const line of lines) {
         const row: string[] = [];
         let current = "";
@@ -135,7 +145,7 @@ export async function POST(req: NextRequest) {
           const ch = line[i];
           if (ch === '"') {
             inQuotes = !inQuotes;
-          } else if (ch === "," && !inQuotes) {
+          } else if (ch === delimiter && !inQuotes) {
             row.push(current.trim());
             current = "";
           } else {
@@ -146,7 +156,37 @@ export async function POST(req: NextRequest) {
         allRows.push(row);
       }
     } else {
-      return NextResponse.json({ error: "Format file tidak didukung. Gunakan CSV atau XLSX." }, { status: 400 });
+      // Coba parse sebagai text file apapun extension-nya
+      const text = await file.text();
+      const cleanText = text.replace(/^\uFEFF/, '');
+      const lines = cleanText.split("\n").filter((l) => l.trim());
+      if (lines.length === 0) {
+        return NextResponse.json({ error: "File kosong atau format tidak didukung" }, { status: 400 });
+      }
+      // Auto-detect delimiter
+      const firstLine = lines[0];
+      const tabCount = (firstLine.match(/\t/g) || []).length;
+      const commaCount = (firstLine.match(/,/g) || []).length;
+      const delimiter = tabCount > commaCount ? '\t' : ',';
+      
+      for (const line of lines) {
+        const row: string[] = [];
+        let current = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            inQuotes = !inQuotes;
+          } else if (ch === delimiter && !inQuotes) {
+            row.push(current.trim());
+            current = "";
+          } else {
+            current += ch;
+          }
+        }
+        row.push(current.trim());
+        allRows.push(row);
+      }
     }
 
     if (allRows.length === 0) {
