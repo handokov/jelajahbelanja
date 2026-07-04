@@ -4,6 +4,8 @@ import * as React from "react";
 import { Upload, FileText, CheckCircle2, XCircle, Download, Loader2, AlertCircle, ArrowRightLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { buildAtCategoryMap, mapAtCategory } from "@/lib/at-category-map";
+import type { CategoryDTO } from "@/lib/types";
 
 // CSV template untuk didownload user
 const CSV_TEMPLATE = `title,url,image,price,originalPrice,discountPercent,rating,reviewCount,soldCount,location,category,marketplace,affiliateUrl,notes
@@ -124,7 +126,7 @@ function isHeaderRow(row: string[]): boolean {
   return firstCell.includes("product") || firstCell.includes("id") || firstCell.includes("item") || firstCell.includes("name");
 }
 
-function convertAtRowToJb(row: string[]): Record<string, string> {
+function convertAtRowToJb(row: string[], atCategoryMap?: Record<string, string>): Record<string, string> {
   const productId = (row[0] || "").replace(/^\uFEFF/, "").replace("?", "").trim();
   const title = (row[1] || "").trim();
   const imageUrl = (row[2] || "").trim();
@@ -148,7 +150,8 @@ function convertAtRowToJb(row: string[]): Record<string, string> {
 
   const affiliateUrl = affiliateLink2 || affiliateLinkRaw;
   const url = extractShopeeUrl(affiliateLinkRaw) || `https://shopee.co.id/search?keyword=${encodeURIComponent(title.slice(0, 50))}`;
-  const category = category3 || category2 || category1 || "Lainnya";
+  // Map AT category1 → JB category menggunakan lookup map
+  const category = mapAtCategory(category1, atCategoryMap);
 
   let discountPercent = "";
   if (originalPrice > price && price > 0) {
@@ -175,7 +178,7 @@ function convertAtRowToJb(row: string[]): Record<string, string> {
   };
 }
 
-function convertAtCsvToJb(text: string, maxRows = 10000): { rows: Record<string, string>[]; totalInput: number; errors: string[] } {
+function convertAtCsvToJb(text: string, maxRows = 10000, atCategoryMap?: Record<string, string>): { rows: Record<string, string>[]; totalInput: number; errors: string[] } {
   const allRows = parseCsvText(text);
   const errors: string[] = [];
   const convertedRows: Record<string, string>[] = [];
@@ -202,7 +205,7 @@ function convertAtCsvToJb(text: string, maxRows = 10000): { rows: Record<string,
       errors.push(`Baris ${startIndex + i + 1}: Price tidak valid, skip`);
       continue;
     }
-    convertedRows.push(convertAtRowToJb(row));
+    convertedRows.push(convertAtRowToJb(row, atCategoryMap));
   }
 
   return { rows: convertedRows, totalInput: allRows.length - startIndex, errors };
@@ -267,6 +270,26 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
   const [atTotalInput, setAtTotalInput] = React.useState(0);
   const [atErrors, setAtErrors] = React.useState<string[]>([]);
   const [atResult, setAtResult] = React.useState<BulkUploadResult | null>(null);
+
+  // AT Category Map — fetch dari DB, cache di state
+  const [atCategoryMap, setAtCategoryMap] = React.useState<Record<string, string> | null>(null);
+
+  // Fetch AT category map dari /api/categories
+  const fetchAtCategoryMap = React.useCallback(async (): Promise<Record<string, string>> => {
+    if (atCategoryMap) return atCategoryMap;
+    try {
+      const res = await fetch("/api/categories");
+      if (!res.ok) return {};
+      const data = await res.json();
+      const categories: CategoryDTO[] = data.categories || [];
+      const map = buildAtCategoryMap(categories);
+      setAtCategoryMap(map);
+      return map;
+    } catch {
+      // Fallback ke hardcoded map di at-category-map.ts
+      return {};
+    }
+  }, [atCategoryMap]);
 
   // Batch progress state (shared for both modes)
   const [batchProgress, setBatchProgress] = React.useState<BatchProgress | null>(null);
@@ -491,7 +514,10 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
         // Hapus BOM jika ada
         const cleanText = text.replace(/^\uFEFF/, '');
         
-        const { rows, totalInput, errors } = convertAtCsvToJb(cleanText);
+        // Fetch AT category map untuk mapping kategori
+        const catMap = await fetchAtCategoryMap();
+        
+        const { rows, totalInput, errors } = convertAtCsvToJb(cleanText, 10000, catMap);
         setConvertedRows(rows);
         setAtTotalInput(totalInput);
         setAtErrors(errors);
@@ -506,7 +532,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     } finally {
       setConverting(false);
     }
-  }, [atFile, adminFetch]);
+  }, [atFile, adminFetch, fetchAtCategoryMap]);
 
   const handleDownloadConverted = React.useCallback(() => {
     if (convertedRows.length === 0) return;
@@ -612,6 +638,9 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     setAtResult(null);
 
     try {
+      // Fetch AT category map untuk mapping kategori
+      const catMap = await fetchAtCategoryMap();
+
       const fileSize = atFile.size;
       let offset = 0;
       let leftover = ""; // sisa dari chunk sebelumnya (baris belum lengkap)
@@ -730,7 +759,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
           const col8 = parseInt(row[8] || "0", 10);
           if (col7 <= 0 && col8 <= 0) continue;
 
-          const converted = convertAtRowToJb(row);
+          const converted = convertAtRowToJb(row, catMap);
           totalRowsConverted++;
 
           // Simpan preview
@@ -802,7 +831,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     } finally {
       setUploading(false);
     }
-  }, [atFile, adminFetch]);
+  }, [atFile, adminFetch, fetchAtCategoryMap]);
 
   // ============================================================
   // Shared: Progress Bar Component

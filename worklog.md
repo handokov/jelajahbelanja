@@ -268,3 +268,28 @@ Stage Summary:
 - 3 optimizations complete: createMany, batch upload, pagination
 - Previous tag: stable-before-batch-optimization (rollback point)
 - Current tag: stable-batch-optimization
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Add AT category auto-mapping (Accesstrade category1 → JB category)
+
+Work Log:
+- Added `accesstradeCat` field to Prisma Category model (comma-separated AT category1 names)
+- Updated seed.ts with AT category1 mappings for all 8 JB categories
+- Updated types.ts (CategoryDTO, CreateCategoryInput, UpdateCategoryInput)
+- Updated categories API route (toDTO, POST, PATCH, PUT all include accesstradeCat)
+- Created `/src/lib/at-category-map.ts` shared utility with `buildAtCategoryMap()` and `mapAtCategory()`
+- Updated client-side `convertAtRowToJb()` in bulk-upload-tab.tsx to use category mapping
+- Updated client-side `convertAtCsvToJb()` to pass category map
+- Updated streaming converter `handleStreamingConvertUpload` to fetch and use category map
+- Updated server-side `/api/convert-at/route.ts` to build map from DB and use in conversion
+- Updated categories-tab.tsx admin: added accesstradeCat input field and AT badge
+- Updated `ensureCategoriesSeeded()` to auto-update existing categories with accesstradeCat values
+- Build passes successfully
+
+Stage Summary:
+- AT category mapping is now automatic: AT category1 (e.g. "Mobile & Gadgets") → JB category (e.g. "Elektronik")
+- Fallback: hardcoded map from DEFAULT_CATEGORIES if DB fetch fails
+- Admin can edit mapping via Categories tab → Accesstrade Categories field
+- Prisma migration needed: `npx prisma migrate dev --name add_accesstrade_cat` (requires PostgreSQL)

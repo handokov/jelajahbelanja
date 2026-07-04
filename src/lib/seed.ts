@@ -9,6 +9,7 @@ export interface DefaultCategory {
   shopeeCat: string | null;
   tokopediaCat: string | null;
   lazadaCat: string | null;
+  accesstradeCat: string | null;
 }
 
 export const DEFAULT_CATEGORIES: DefaultCategory[] = [
@@ -21,6 +22,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     shopeeCat: "elektronik",
     tokopediaCat: "elektronik",
     lazadaCat: "elektronik",
+    accesstradeCat: "Mobile & Gadgets,Computers & Accessories,Electronic Accessories,Cameras & Drones,Smart Devices,Watches",
   },
   {
     name: "Fashion",
@@ -31,6 +33,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     shopeeCat: "fashion-pria",
     tokopediaCat: "fashion",
     lazadaCat: "fashion",
+    accesstradeCat: "Women's Fashion,Men's Fashion,Muslim Fashion,Kids Fashion,Travel & Luggage,Jewelry & Accessories",
   },
   {
     name: "Beauty",
@@ -41,6 +44,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     shopeeCat: "perawatan-kecantikan",
     tokopediaCat: "kecantikan",
     lazadaCat: "kecantikan",
+    accesstradeCat: "Beauty,Health,Health & Personal Care",
   },
   {
     name: "Home",
@@ -51,6 +55,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     shopeeCat: "perlengkapan-rumah",
     tokopediaCat: "perlengkapan-rumah-tangga",
     lazadaCat: "peralatan-rumah-tangga",
+    accesstradeCat: "Home & Living,Home Appliances,Pets,Food & Beverages,Groceries,Books & Stationery",
   },
   {
     name: "Gaming",
@@ -61,6 +66,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     shopeeCat: "gaming",
     tokopediaCat: "gaming",
     lazadaCat: "gaming",
+    accesstradeCat: "Gaming",
   },
   {
     name: "Olahraga",
@@ -71,6 +77,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     shopeeCat: "olahraga-outdoor",
     tokopediaCat: "olahraga",
     lazadaCat: "olahraga-outdoor",
+    accesstradeCat: "Sports & Outdoors",
   },
   {
     name: "Mainan",
@@ -81,6 +88,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     shopeeCat: "mainan-hobi",
     tokopediaCat: "hobi-koleksi",
     lazadaCat: "mainan-hobi",
+    accesstradeCat: "Mom & Baby,Toys & Games,Kids & Baby",
   },
   {
     name: "Otomotif",
@@ -91,6 +99,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     shopeeCat: "otomotif",
     tokopediaCat: "otomotif",
     lazadaCat: "otomotif",
+    accesstradeCat: "Automotive",
   },
 ];
 
@@ -120,11 +129,25 @@ export async function ensureCategoriesSeeded(): Promise<void> {
             shopeeCat: c.shopeeCat ?? null,
             tokopediaCat: c.tokopediaCat ?? null,
             lazadaCat: c.lazadaCat ?? null,
+            accesstradeCat: c.accesstradeCat ?? null,
             order: i,
             enabled: true,
           })),
         });
         console.log(`[seed] Seeded ${DEFAULT_CATEGORIES.length} default categories`);
+      } else {
+        // Update existing categories yang belum punya accesstradeCat
+        const existing = await db.category.findMany();
+        for (const cat of existing) {
+          if (cat.accesstradeCat) continue; // sudah ada
+          const defaultCat = DEFAULT_CATEGORIES.find(d => d.name === cat.name);
+          if (defaultCat?.accesstradeCat) {
+            await db.category.update({
+              where: { id: cat.id },
+              data: { accesstradeCat: defaultCat.accesstradeCat },
+            });
+          }
+        }
       }
     } catch (err) {
       console.error("[seed] Failed to seed categories:", err);
