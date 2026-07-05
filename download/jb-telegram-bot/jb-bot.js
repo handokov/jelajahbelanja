@@ -31,11 +31,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ========== LOAD CONFIG ==========
-const envPath = path.join(__dirname, "scripts", ".env.telegram");
-if (!fs.existsSync(envPath)) {
+// Cari .env.telegram di: 1) folder yang sama dengan bot, 2) subfolder scripts/
+const envPaths = [
+  path.join(__dirname, ".env.telegram"),
+  path.join(__dirname, "scripts", ".env.telegram"),
+];
+let envPath = null;
+for (const p of envPaths) {
+  if (fs.existsSync(p)) {
+    envPath = p;
+    break;
+  }
+}
+
+if (!envPath) {
   console.error("");
   console.error("❌ File .env.telegram gak ketemu!");
-  console.error("   Bikin file di: scripts/.env.telegram");
+  console.error("   Taruh file di: " + __dirname + "\\.env.telegram");
   console.error("   Isi dengan: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DATABASE_URL");
   console.error("");
   process.exit(1);
