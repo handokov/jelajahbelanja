@@ -189,13 +189,17 @@ async function launchBrowser() {
       executablePath: browserPath,
       headless: false,  // ⭐ FALSE biar keliatan = lebih stealth
       userDataDir: USER_DATA_DIR,  // ⭐ SIMPAN SESSION — login sekali, pakai terus!
+      ignoreDefaultArgs: ['--enable-automation'],  // ⭐ HAPUS flag yang bikin Shopee deteksi bot!
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-blink-features=AutomationControlled",
-        "--window-size=1366,768",
+        "--disable-automation",  // ⭐ Tambahan anti-deteksi
         "--disable-infobars",
         "--disable-dev-shm-usage",
+        "--window-size=1366,768",
+        "--disable-extensions",
+        "--disable-component-extensions-with-background-pages",
       ],
     });
     return browser;
@@ -212,23 +216,30 @@ async function launchBrowser() {
 async function ensureShopeeLogin(page) {
   console.log("🔍 Cek login Shopee...");
   
+  // ⭐ Inject stealth SEBELUM navigasi — harus sebelum page load!
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['id-ID', 'id', 'en-US', 'en'] });
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) =>
+      parameters.name === 'notifications'
+        ? Promise.resolve({ state: Notification.permission })
+        : originalQuery(parameters);
+    window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
+  });
+  
   // Buka Shopee
   await page.goto("https://shopee.co.id/", { waitUntil: "networkidle2", timeout: 30000 });
-  await randomDelay(2, 4);
+  await randomDelay(3, 5);
   
-  // Cek apakah ada tombol login / ikon user
+  // ⭐ Cek login — pakai cookie SPC_EC yang lebih reliable
   const isLoggedIn = await page.evaluate(() => {
-    // Kalau sudah login, biasanya ada nama user atau ikon profil
-    const bodyText = document.body.innerText;
+    const cookies = document.cookie;
+    if (cookies.includes('SPC_EC') || cookies.includes('SPC_R_T_ID')) return true;
     const html = document.body.innerHTML;
-    
-    // Cek tanda sudah login
     if (html.includes('navbar__username') || html.includes('user-info') || html.includes('account-name')) return true;
-    
-    // Cek tanda BELUM login
-    if (html.includes('btn-login') || html.includes('button-login') || bodyText.includes('Log In') || bodyText.includes('Daftar')) return false;
-    
-    // Cek via cookie SPC_EC (login cookie)
+    if (html.includes('btn-login') || html.includes('button-login')) return false;
     return false;
   });
   
@@ -258,6 +269,17 @@ async function ensureShopeeLogin(page) {
     process.stdin.once("data", () => resolve());
   });
   
+  // ⭐ Re-inject stealth sebelum reload
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['id-ID', 'id', 'en-US', 'en'] });
+    window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
+  });
+  
+  await page.goto("https://shopee.co.id/", { waitUntil: "networkidle2", timeout: 30000 });
+  await randomDelay(3, 5);
+  
   // Reload buat pastiin login
   await page.goto("https://shopee.co.id/", { waitUntil: "networkidle2", timeout: 30000 });
   await randomDelay(2, 4);
@@ -275,11 +297,12 @@ async function ensureShopeeLogin(page) {
  */
 async function scrapeProductWithBrowser(page, product) {
   try {
-    // Stealth: hilangkan webdriver flag
+    // Stealth: hilangkan webdriver flag + chrome runtime
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => false });
       Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
       Object.defineProperty(navigator, "languages", { get: () => ["id-ID", "id", "en-US", "en"] });
+      window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
     });
 
     await page.setUserAgent(randomUserAgent());
@@ -540,6 +563,7 @@ async function main() {
     Object.defineProperty(navigator, "webdriver", { get: () => false });
     Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
     Object.defineProperty(navigator, "languages", { get: () => ["id-ID", "id", "en-US", "en"] });
+    window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
   });
   await page.setUserAgent(randomUserAgent());
 
