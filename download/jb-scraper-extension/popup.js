@@ -645,8 +645,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Fetch product data via Shopee API v4 — PENTING: harus dari dalam halaman Shopee!
-  // Kalau fetch dari popup context, Shopee API gak kasih rating/sold/review
-  // Jadi kita buka tab Shopee, inject script, ambil data, tutup tab
+  // Buka halaman utama Shopee (bukan /product/ karena sering ke-block),
+  // terus inject script buat fetch API dari dalam halaman Shopee
   async function fetchProductFromLink(shopId, itemId, category, affiliateUrl) {
     const productUrl = `https://shopee.co.id/product/${shopId}/${itemId}`;
 
@@ -660,19 +660,21 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (tabId) chrome.tabs.remove(tabId).catch(() => {});
           resolve(null);
         }
-      }, 15000);
+      }, 20000);
 
-      chrome.tabs.create({ url: productUrl, active: false }, (tab) => {
+      // Buka halaman utama Shopee dulu (bukan /product/ karena sering "Halaman Tidak Tersedia")
+      chrome.tabs.create({ url: 'https://shopee.co.id/', active: false }, (tab) => {
         tabId = tab.id;
 
         function onUpdated(updatedTabId, changeInfo) {
           if (updatedTabId !== tabId) return;
           if (changeInfo.status !== 'complete') return;
 
-          // Tunggu sedikit supaya halaman sempat load
+          // Tunggu Shopee homepage load
           setTimeout(async () => {
             try {
-              // Inject fetchShopeeApiInPage ke dalam halaman Shopee
+              // Inject fetchShopeeApiInPage ke dalam halaman Shopee homepage
+              // Dari sini kita bisa fetch API karena cookies & origin bener
               const results = await chrome.scripting.executeScript({
                 target: { tabId: tabId },
                 func: fetchShopeeApiInPage,
@@ -681,16 +683,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
               const apiData = results?.[0]?.result;
 
-              // Juga inject scrapeProductDetail untuk data DOM
-              const domResults = await chrome.scripting.executeScript({
-                target: { tabId: tabId },
-                func: scrapeProductDetail,
-                args: [category],
-              });
+              if (!apiData || !apiData.title) {
+                // API gak kasih data, coba retry sekali
+                await new Promise(r => setTimeout(r, 2000));
+                const retryResults = await chrome.scripting.executeScript({
+                  target: { tabId: tabId },
+                  func: fetchShopeeApiInPage,
+                  args: [shopId, itemId],
+                });
+                const retryData = retryResults?.[0]?.result;
+                if (retryData) Object.assign(apiData || {}, retryData);
+              }
 
-              const domProduct = domResults?.[0]?.result;
-
-              // Gabungkan data API + DOM
+              // Build product dari API data
               const product = {
                 category,
                 marketplace: 'shopee',
@@ -698,20 +703,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 affiliateUrl: affiliateUrl || '',
               };
 
-              // Ambil data DOM dulu (baseline)
-              if (domProduct) {
-                if (domProduct.title) product.title = domProduct.title;
-                if (domProduct.image) product.image = domProduct.image;
-                if (domProduct.price) product.price = domProduct.price;
-                if (domProduct.originalPrice) product.originalPrice = domProduct.originalPrice;
-                if (domProduct.discountPercent) product.discountPercent = domProduct.discountPercent;
-                if (domProduct.location) product.location = domProduct.location;
-                if (domProduct.rating) product.rating = domProduct.rating;
-                if (domProduct.reviewCount) product.reviewCount = domProduct.reviewCount;
-                if (domProduct.soldCount) product.soldCount = domProduct.soldCount;
-              }
-
-              // Override dengan data API (lebih akurat)
               if (apiData) {
                 if (apiData.title) product.title = apiData.title;
                 if (apiData.image) product.image = apiData.image;
@@ -741,7 +732,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 resolve(null);
               }
             }
-          }, 2000); // Tunggu 2 detik setelah tab selesai load
+          }, 3000); // Tunggu 3 detik supaya Shopee homepage sempat load semua
         }
 
         chrome.tabs.onUpdated.addListener(onUpdated);

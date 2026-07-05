@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "JB Shopee Scraper",
-  "version": "7.2.0",
-  "description": "Klik produk Shopee → copy CSV → paste ke JB upload massal (v7.2: fix reviewCount + soldCount)",
+  "version": "7.3.0",
+  "description": "Klik produk Shopee → copy CSV → paste ke JB upload massal (v7.3: fix Halaman Tidak Tersedia)",
   "permissions": ["activeTab", "scripting", "clipboardWrite", "tabs"],
   "host_permissions": [
     "https://shopee.co.id/*",
