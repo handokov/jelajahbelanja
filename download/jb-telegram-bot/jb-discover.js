@@ -182,13 +182,17 @@ async function launchBrowser() {
       executablePath: browserPath,
       headless: false,  // ⭐ FALSE biar keliatan = lebih stealth
       userDataDir: USER_DATA_DIR,  // ⭐ SIMPAN SESSION — login sekali!
+      ignoreDefaultArgs: ['--enable-automation'],  // ⭐ HAPUS flag yang bikin Shopee deteksi bot!
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-blink-features=AutomationControlled",
-        "--window-size=1366,768",
+        "--disable-automation",  // ⭐ Tambahan anti-deteksi
         "--disable-infobars",
         "--disable-dev-shm-usage",
+        "--window-size=1366,768",
+        "--disable-extensions",
+        "--disable-component-extensions-with-background-pages",
       ],
     });
     return browser;
@@ -205,14 +209,31 @@ async function launchBrowser() {
 async function ensureShopeeLogin(page) {
   console.log("🔍 Cek login Shopee...");
   
-  await page.goto("https://shopee.co.id/", { waitUntil: "networkidle2", timeout: 30000 });
-  await randomDelay(2, 4);
+  // ⭐ Inject stealth SEBELUM navigasi — harus sebelum page load!
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['id-ID', 'id', 'en-US', 'en'] });
+    // Override permissions query
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) =>
+      parameters.name === 'notifications'
+        ? Promise.resolve({ state: Notification.permission })
+        : originalQuery(parameters);
+    // Override chrome runtime
+    window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
+  });
   
+  await page.goto("https://shopee.co.id/", { waitUntil: "networkidle2", timeout: 30000 });
+  await randomDelay(3, 5);
+  
+  // ⭐ Cek login — pakai cookie SPC_EC yang lebih reliable
   const isLoggedIn = await page.evaluate(() => {
-    const bodyText = document.body.innerText;
+    const cookies = document.cookie;
+    if (cookies.includes('SPC_EC') || cookies.includes('SPC_R_T_ID')) return true;
     const html = document.body.innerHTML;
     if (html.includes('navbar__username') || html.includes('user-info') || html.includes('account-name')) return true;
-    if (html.includes('btn-login') || html.includes('button-login') || bodyText.includes('Log In') || bodyText.includes('Daftar')) return false;
+    if (html.includes('btn-login') || html.includes('button-login')) return false;
     return false;
   });
   
@@ -240,8 +261,16 @@ async function ensureShopeeLogin(page) {
     process.stdin.once("data", () => resolve());
   });
   
+  // ⭐ Re-inject stealth sebelum reload
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['id-ID', 'id', 'en-US', 'en'] });
+    window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
+  });
+  
   await page.goto("https://shopee.co.id/", { waitUntil: "networkidle2", timeout: 30000 });
-  await randomDelay(2, 4);
+  await randomDelay(3, 5);
   
   console.log("  ✅ Login berhasil! Session disimpan.");
   console.log("  💾 Next run gak perlu login lagi.");
@@ -250,20 +279,28 @@ async function ensureShopeeLogin(page) {
 
 // ========== STEALTH INJECT ==========
 
-function injectStealth() {
-  return `
-    Object.defineProperty(navigator, 'webdriver', { get: () => false });
-    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-    Object.defineProperty(navigator, 'languages', { get: () => ['id-ID', 'id', 'en-US', 'en'] });
-    
-    // Override permissions query
-    const originalQuery = window.navigator.permissions.query;
-    window.navigator.permissions.query = (parameters) =>
-      parameters.name === 'notifications'
-        ? Promise.resolve({ state: Notification.permission })
-        : originalQuery(parameters);
-  `;
-}
+// ⭐ STEALTH CODE — dipakai di evaluateOnNewDocument (INLINE, bukan eval!)
+// Gak bisa pakai eval() di browser context karena fungsi injectStealth gak ada di sana
+const STEALTH_CODE = `
+  Object.defineProperty(navigator, 'webdriver', { get: () => false });
+  Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+  Object.defineProperty(navigator, 'languages', { get: () => ['id-ID', 'id', 'en-US', 'en'] });
+  // Override chrome runtime (Shopee cek ini!)
+  window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
+  // Override permissions query
+  const originalQuery = window.navigator.permissions.query;
+  window.navigator.permissions.query = (parameters) =>
+    parameters.name === 'notifications'
+      ? Promise.resolve({ state: Notification.permission })
+      : originalQuery(parameters);
+  // Override WebGL renderer (anti-fingerprint)
+  const getParameter = WebGLRenderingContext.prototype.getParameter;
+  WebGLRenderingContext.prototype.getParameter = function(parameter) {
+    if (parameter === 37445) return 'Intel Inc.';
+    if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+    return getParameter(parameter);
+  };
+`;
 
 // ========== SHOPEE SEARCH (DOM SCRAPING) ==========
 
@@ -275,9 +312,12 @@ async function searchShopeeViaBrowser(page, keyword, limit = 20) {
   console.log(`\n🔍 Cari: "${keyword}" (limit: ${limit})`);
 
   try {
-    // Set stealth
+    // ⭐ Set stealth — INLINE code, bukan eval()!
     await page.evaluateOnNewDocument(() => {
-      eval(injectStealth());
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['id-ID', 'id', 'en-US', 'en'] });
+      window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
     });
     await page.setUserAgent(randomUserAgent());
 
