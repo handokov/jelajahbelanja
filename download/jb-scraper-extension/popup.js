@@ -1596,26 +1596,124 @@ function scrapeTokopediaProduct(category) {
   }
 
   // ── Image ──
-  // Try og:image first (most reliable)
-  const ogImage = document.querySelector('meta[property="og:image"]');
-  if (ogImage) {
-    const imgContent = ogImage.getAttribute('content');
-    if (imgContent && (imgContent.includes('tokopedia.net') || imgContent.includes('cbn.net') || imgContent.includes('ktpcdn'))) {
-      product.image = imgContent;
+  // IMPORTANT: Tokopedia's og:image and thumbnail selectors often return
+  // placeholder/wrong images. We need the REAL product image.
+  // Strategy: 1) Extract from __NEXT_DATA__ (React SSR), 2) Extract from
+  // JSON-LD, 3) Look for large signed images (tokopedia-static.net), 
+  // 4) og:image fallback
+
+  // Method 1: Extract from __NEXT_DATA__ (most reliable — contains full product data)
+  try {
+    const nextDataScript = document.getElementById('__NEXT_DATA__');
+    if (nextDataScript) {
+      const nextData = JSON.parse(nextDataScript.textContent);
+      const pageProps = nextData?.props?.pageProps;
+      
+      // Try different paths where product images might be stored
+      const possiblePaths = [
+        pageProps?.product?.imageUrl,
+        pageProps?.product?.image,
+        pageProps?.product?.images?.[0],
+        pageProps?.productDetail?.imageUrl,
+        pageProps?.productDetail?.image,
+        pageProps?.productDetail?.images?.[0],
+        pageProps?.detail?.imageUrl,
+        pageProps?.detail?.image,
+        pageProps?.detail?.images?.[0],
+        pageProps?.pdp?.imageUrl,
+        pageProps?.pdp?.image,
+        pageProps?.pdp?.images?.[0],
+      ];
+      
+      for (const img of possiblePaths) {
+        if (img && typeof img === 'string' && img.length > 20) {
+          product.image = img;
+          break;
+        }
+        if (img && Array.isArray(img) && img.length > 0 && typeof img[0] === 'string') {
+          product.image = img[0];
+          break;
+        }
+      }
+      
+      // Also try to find from nested product data
+      if (!product.image) {
+        const searchIn = (obj, depth = 0) => {
+          if (!obj || depth > 4) return null;
+          if (obj.imageUrl && typeof obj.imageUrl === 'string' && obj.imageUrl.length > 20) return obj.imageUrl;
+          if (obj.image && typeof obj.image === 'string' && obj.image.length > 20 && !obj.image.startsWith('data:')) return obj.image;
+          if (obj.images && Array.isArray(obj.images) && obj.images.length > 0) {
+            const first = obj.images[0];
+            if (typeof first === 'string' && first.length > 20) return first;
+            if (typeof first === 'object' && first.url) return first.url;
+          }
+          for (const key of Object.keys(obj)) {
+            if (typeof obj[key] === 'object' && obj[key] !== null) {
+              const found = searchIn(obj[key], depth + 1);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const found = searchIn(pageProps);
+        if (found) product.image = found;
+      }
+    }
+  } catch {}
+
+  // Method 2: Look for large signed Tokopedia images in all <img> tags
+  // (these contain the real product photo with tokopedia-static.net domain)
+  if (!product.image) {
+    const allImages = document.querySelectorAll('img');
+    for (const img of allImages) {
+      const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+      // Signed Tokopedia images have the real product photo
+      if (src.includes('tokopedia-static.net') || src.includes('tokopedia.net/img/cache')) {
+        // Skip small thumbnails (cache/300 is thumbnail, cache/900+ or static.net is real)
+        if (src.includes('/cache/300/') && !src.includes('tokopedia-static.net')) continue;
+        if (src && !src.startsWith('data:') && src.length > 50) {
+          product.image = src;
+          break;
+        }
+      }
+    }
+    
+    // If we still only have thumbnail, try to find the largest image
+    if (!product.image) {
+      let largestSrc = '';
+      let largestArea = 0;
+      for (const img of allImages) {
+        const src = img.getAttribute('src') || '';
+        const w = img.naturalWidth || img.width || 0;
+        const h = img.naturalHeight || img.height || 0;
+        const area = w * h;
+        if (src && (src.includes('tokopedia') || src.includes('ktpcdn') || src.includes('cbn.net')) && area > largestArea && area >= 200) {
+          largestArea = area;
+          largestSrc = src;
+        }
+      }
+      if (largestSrc) product.image = largestSrc;
     }
   }
 
-  // Fallback: find product image from page
+  // Method 3: og:image fallback (often returns placeholder, but better than nothing)
+  if (!product.image) {
+    const ogImage = document.querySelector('meta[property="og:image"]');
+    if (ogImage) {
+      const imgContent = ogImage.getAttribute('content');
+      if (imgContent && (imgContent.includes('tokopedia') || imgContent.includes('cbn.net') || imgContent.includes('ktpcdn'))) {
+        product.image = imgContent;
+      }
+    }
+  }
+
+  // Method 4: Fallback — specific CSS selectors for product images
   if (!product.image) {
     const imgSelectors = [
       'img[data-testid="PDPMainImage"]',
       'img.css-1jwf0hz',
-      'img[alt*="produk"]',
-      'img[alt*="product"]',
       '[class*="pdp-img"] img',
       '[class*="product-image"] img',
-      'img[src*="tokopedia.net/img/"]',
-      'img[src*="ktpcdn"]',
     ];
     for (const sel of imgSelectors) {
       const el = document.querySelector(sel);
@@ -1812,12 +1910,17 @@ function scrapeTokopediaSearchPage(category) {
         if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
       }
 
-      // Get image
+      // Get image — prefer large images (tokopedia-static.net) over thumbnails
       const imgEl = card.querySelector('img');
       if (imgEl) {
         const src = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
+        // Skip small thumbnails from cache/300 — they're often placeholders
         if (src && !src.startsWith('data:') && src.length > 30) {
-          product.image = src;
+          if (src.includes('tokopedia-static.net') || !src.includes('/cache/300/')) {
+            product.image = src;
+          } else if (!product.image) {
+            product.image = src; // Fallback to thumbnail if nothing else
+          }
         }
       }
 
