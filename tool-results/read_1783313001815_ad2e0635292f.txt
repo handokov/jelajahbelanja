@@ -1,0 +1,1717 @@
+     1→/**
+     2→ * JB Scraper — v8.0 (Shopee + Tokopedia + Accesstrade)
+     3→ *
+     4→ * NEW v8.0:
+     5→ * - Support Tokopedia! Scrape produk dari halaman Tokopedia
+     6→ * - Paste link Tokopedia (tokopedia.com, ta.tokopedia.com, tokopedia.link)
+     7→ * - Tab baru "Tokopedia" buat scrape dari halaman TKPD
+     8→ * - Affiliate link Tokopedia dari Accesstrade (AT)
+     9→ *
+    10→ * v7.2:
+    11→ * - Fix: reviewCount/soldCount diambil dari Shopee API via background tab
+    12→ * - Fix: affiliate URL dari input field
+    13→ * - Fix: short link resolution via chrome.tabs
+    14→ */
+    15→
+    16→// CSV headers — sesuai template JB Bulk Upload
+    17→const CSV_HEADERS = 'title,url,image,price,originalPrice,discountPercent,rating,reviewCount,soldCount,location,category,marketplace,affiliateUrl,notes';
+    18→
+    19→// Produk yang udah dikumpul
+    20→let collected = [];
+    21→
+    22→// Produk dari Accesstrade CSV
+    23→let accesstradeProducts = [];
+    24→
+    25→// Load dari localStorage
+    26→try {
+    27→  const saved = localStorage.getItem('jb_collected');
+    28→  if (saved) collected = JSON.parse(saved);
+    29→} catch {}
+    30→
+    31→function saveCollected() {
+    32→  localStorage.setItem('jb_collected', JSON.stringify(collected));
+    33→  updateUI();
+    34→  updateLinkUI();
+    35→  updateTkpdUI();
+    36→}
+    37→
+    38→function esc(text) {
+    39→  const d = document.createElement('div');
+    40→  d.textContent = text;
+    41→  return d.innerHTML;
+    42→}
+    43→
+    44→function csvField(val) {
+    45→  if (val == null || val === '') return '';
+    46→  const s = String(val);
+    47→  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    48→    return '"' + s.replace(/"/g, '""') + '"';
+    49→  }
+    50→  return s;
+    51→}
+    52→
+    53→function buildCSV(products) {
+    54→  const lines = [CSV_HEADERS];
+    55→  for (const p of products) {
+    56→    lines.push([
+    57→      csvField(p.title),
+    58→      csvField(p.url),
+    59→      csvField(p.image),
+    60→      csvField(p.price),
+    61→      csvField(p.originalPrice),
+    62→      csvField(p.discountPercent),
+    63→      csvField(p.rating),
+    64→      csvField(p.reviewCount),
+    65→      csvField(p.soldCount),
+    66→      csvField(p.location),
+    67→      csvField(p.category),
+    68→      csvField(p.marketplace || 'shopee'),
+    69→      csvField(p.affiliateUrl),
+    70→      csvField(p.notes),
+    71→    ].join(','));
+    72→  }
+    73→  return lines.join('\r\n');
+    74→}
+    75→
+    76→function downloadCSV(csv, filename) {
+    77→  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    78→  const url = URL.createObjectURL(blob);
+    79→  const a = document.createElement('a');
+    80→  a.href = url;
+    81→  a.download = filename;
+    82→  document.body.appendChild(a);
+    83→  a.click();
+    84→  document.body.removeChild(a);
+    85→  URL.revokeObjectURL(url);
+    86→}
+    87→
+    88→// ========== ACCESSTRADE CSV PARSER ==========
+    89→
+    90→function parseAccesstradeCSV(text) {
+    91→  const products = [];
+    92→  const lines = text.split('\n');
+    93→
+    94→  for (const line of lines) {
+    95→    if (!line.trim()) continue;
+    96→    const fields = parseCSVLine(line);
+    97→    if (fields.length < 10) continue;
+    98→
+    99→    try {
+   100→      const productId = (fields[0] || '').replace('?', '').trim();
+   101→      const title = (fields[1] || '').trim();
+   102→      const image = (fields[2] || '').trim();
+   103→      const affiliateLink1 = (fields[4] || '').trim();
+   104→      const affiliateLink2 = (fields[5] || '').trim();
+   105→      const description = (fields[6] || '').trim();
+   106→      const price = parseInt((fields[7] || '0').replace(/[^\d]/g, ''), 10);
+   107→      const originalPrice = parseInt((fields[8] || '0').replace(/[^\d]/g, ''), 10);
+   108→      const category = (fields[14] || '').trim();
+   109→      const subCategory = (fields[16] || '').trim();
+   110→      const subSubCategory = (fields[18] || '').trim();
+   111→      const currency = (fields[19] || '').trim();
+   112→      const brand = (fields[20] || '').trim();
+   113→
+   114→      if (!productId || !title || !price) continue;
+   115→      if (currency && currency !== 'IDR') continue;
+   116→
+   117→      // Deteksi marketplace dari affiliate link
+   118→      let marketplace = 'shopee';
+   119→      let productUrl = '';
+   120→      if (affiliateLink1.includes('tokopedia') || affiliateLink2.includes('tokopedia')) {
+   121→        marketplace = 'tokopedia';
+   122→        // Coba extract URL Tokopedia dari affiliate link
+   123→        const tkpdMatch = affiliateLink1.match(/tokopedia\.com\/[^\s&"']+/) ||
+   124→                          affiliateLink2.match(/tokopedia\.com\/[^\s&"']+/);
+   125→        if (tkpdMatch) productUrl = 'https://www.' + tkpdMatch[0];
+   126→      }
+   127→
+   128→      if (marketplace === 'shopee') {
+   129→        let shopId = '', itemId = productId;
+   130→        const urlMatch = affiliateLink1.match(/product%2F(\d+)%2F(\d+)/) ||
+   131→                         affiliateLink1.match(/product\/(\d+)\/(\d+)/);
+   132→        if (urlMatch) {
+   133→          shopId = urlMatch[1];
+   134→          itemId = urlMatch[2];
+   135→        }
+   136→        productUrl = shopId && itemId
+   137→          ? `https://shopee.co.id/universal-link/product/${shopId}/${itemId}`
+   138→          : `https://shopee.co.id/product-${productId}`;
+   139→      }
+   140→
+   141→      if (!productUrl) continue;
+   142→
+   143→      const affiliateUrl = affiliateLink2 || affiliateLink1 || '';
+   144→      const cleanDesc = description
+   145→        .replace(/<br\s*\/?>/gi, ' ')
+   146→        .replace(/<[^>]+>/g, '')
+   147→        .replace(/\s+/g, ' ')
+   148→        .trim()
+   149→        .substring(0, 200);
+   150→
+   151→      const jbCategory = mapCategory(category, subCategory, subSubCategory);
+   152→      let discountPercent = null;
+   153→      if (originalPrice > 0 && price > 0 && originalPrice > price) {
+   154→        discountPercent = Math.round((1 - price / originalPrice) * 100);
+   155→      }
+   156→
+   157→      products.push({
+   158→        title: title.substring(0, 200),
+   159→        url: productUrl,
+   160→        image: image,
+   161→        price: price,
+   162→        originalPrice: originalPrice > price ? originalPrice : null,
+   163→        discountPercent: discountPercent,
+   164→        rating: null,
+   165→        reviewCount: null,
+   166→        soldCount: null,
+   167→        location: null,
+   168→        category: jbCategory,
+   169→        marketplace: marketplace,
+   170→        affiliateUrl: decodeURIComponent(affiliateUrl),
+   171→        notes: brand && brand !== 'NoBrand' ? `Brand: ${brand}` : '',
+   172→      });
+   173→    } catch {}
+   174→  }
+   175→
+   176→  return products;
+   177→}
+   178→
+   179→function parseCSVLine(line) {
+   180→  const fields = [];
+   181→  let current = '';
+   182→  let inQuotes = false;
+   183→
+   184→  for (let i = 0; i < line.length; i++) {
+   185→    const ch = line[i];
+   186→    if (inQuotes) {
+   187→      if (ch === '"') {
+   188→        if (i + 1 < line.length && line[i + 1] === '"') {
+   189→          current += '"';
+   190→          i++;
+   191→        } else {
+   192→          inQuotes = false;
+   193→        }
+   194→      } else {
+   195→        current += ch;
+   196→      }
+   197→    } else {
+   198→      if (ch === '"') {
+   199→        inQuotes = true;
+   200→      } else if (ch === ',') {
+   201→        fields.push(current);
+   202→        current = '';
+   203→      } else {
+   204→        current += ch;
+   205→      }
+   206→    }
+   207→  }
+   208→  fields.push(current);
+   209→  return fields;
+   210→}
+   211→
+   212→function mapCategory(cat, subCat, subSubCat) {
+   213→  const c = (cat || '').toLowerCase();
+   214→  if (c.includes('fashion') || c.includes('muslim fashion')) return 'Fashion';
+   215→  if (c.includes('beauty') || c.includes('health')) return 'Beauty';
+   216→  if (c.includes('home') || c.includes('living')) return 'Home & Living';
+   217→  if (c.includes('gadget') || c.includes('electronic') || c.includes('computer') || c.includes('mobile')) return 'Electronics';
+   218→  if (c.includes('sport') || c.includes('outdoor')) return 'Sports';
+   219→  if (c.includes('food') || c.includes('beverage')) return 'Food & Beverage';
+   220→  if (c.includes('baby') || c.includes('mom') || c.includes('kid')) return 'Kids & Baby';
+   221→  if (c.includes('automotive') || c.includes('motor') || c.includes('car')) return 'Automotive';
+   222→  if (c.includes('book') || c.includes('stationery')) return 'Books & Stationery';
+   223→  if (c.includes('pet')) return 'Pets';
+   224→  return 'Fashion';
+   225→}
+   226→
+   227→// ========== UI ==========
+   228→
+   229→function updateUI() {
+   230→  const countBadge = document.getElementById('countBadge');
+   231→  const collectedList = document.getElementById('collectedList');
+   232→  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+   233→
+   234→  if (countBadge) countBadge.textContent = collected.length;
+   235→  if (collectedList) {
+   236→    if (collected.length === 0) {
+   237→      collectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
+   238→    } else {
+   239→      collectedList.innerHTML = collected.map((p, i) => {
+   240→        const badge = p.marketplace === 'tokopedia'
+   241→          ? '<span class="marketplace-badge tokopedia">TKPD</span>'
+   242→          : '<span class="marketplace-badge shopee">SP</span>';
+   243→        return `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} ${badge} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`;
+   244→      }).join('');
+   245→    }
+   246→  }
+   247→  if (downloadCsvBtn) downloadCsvBtn.disabled = collected.length === 0;
+   248→}
+   249→
+   250→function updateLinkUI() {
+   251→  const linkCountBadge = document.getElementById('linkCountBadge');
+   252→  const linkCollectedList = document.getElementById('linkCollectedList');
+   253→  const linkDownloadBtn = document.getElementById('linkDownloadBtn');
+   254→
+   255→  if (linkCountBadge) linkCountBadge.textContent = collected.length;
+   256→  if (linkCollectedList) {
+   257→    if (collected.length === 0) {
+   258→      linkCollectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
+   259→    } else {
+   260→      linkCollectedList.innerHTML = collected.map((p, i) => {
+   261→        const badge = p.marketplace === 'tokopedia'
+   262→          ? '<span class="marketplace-badge tokopedia">TKPD</span>'
+   263→          : '<span class="marketplace-badge shopee">SP</span>';
+   264→        return `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} ${badge} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`;
+   265→      }).join('');
+   266→    }
+   267→  }
+   268→  if (linkDownloadBtn) linkDownloadBtn.disabled = collected.length === 0;
+   269→}
+   270→
+   271→function updateTkpdUI() {
+   272→  const tkpdCountBadge = document.getElementById('tkpdCountBadge');
+   273→  const tkpdCollectedList = document.getElementById('tkpdCollectedList');
+   274→  const tkpdDownloadBtn = document.getElementById('tkpdDownloadBtn');
+   275→
+   276→  if (tkpdCountBadge) tkpdCountBadge.textContent = collected.length;
+   277→  if (tkpdCollectedList) {
+   278→    if (collected.length === 0) {
+   279→      tkpdCollectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
+   280→    } else {
+   281→      // Filter cuma Tokopedia
+   282→      const tkpdProducts = collected.filter(p => p.marketplace === 'tokopedia');
+   283→      if (tkpdProducts.length === 0) {
+   284→        tkpdCollectedList.innerHTML = '<div style="color:#666">Belum ada produk Tokopedia</div>';
+   285→      } else {
+   286→        tkpdCollectedList.innerHTML = tkpdProducts.map((p, i) =>
+   287→          `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
+   288→        ).join('');
+   289→      }
+   290→    }
+   291→  }
+   292→  if (tkpdDownloadBtn) tkpdDownloadBtn.disabled = collected.length === 0;
+   293→}
+   294→
+   295→// ========== TOKOPEDIA FUNCTIONS ==========
+   296→
+   297→// Parse Tokopedia URL — extract product info from URL
+   298→function parseTokopediaUrl(url) {
+   299→  // Format 1: https://www.tokopedia.com/shop-name/product-name
+   300→  // Format 2: https://www.tokopedia.com/shop-name/product-name?whid=0
+   301→  const tkpdMatch = url.match(/tokopedia\.com\/([^\/]+)\/([^\/\?#]+)/);
+   302→  if (tkpdMatch && tkpdMatch[2] && !['promo', 'category', 'p', 'search', 'blog', 'help', 'cart', 'checkout', 'inbox', 'notification', 'order', 'wallet', 'topads', 'affiliate', 'download', 'login'].includes(tkpdMatch[2])) {
+   303→    return {
+   304→      shop: tkpdMatch[1],
+   305→      product: tkpdMatch[2],
+   306→      url: url.split('?')[0], // clean URL
+   307→    };
+   308→  }
+   309→  return null;
+   310→}
+   311→
+   312→// Resolve Tokopedia affiliate link (ta.tokopedia.com, tokopedia.link, toko.link)
+   313→function resolveTokopediaAffiliate(affUrl) {
+   314→  return new Promise((resolve) => {
+   315→    let resolved = false;
+   316→
+   317→    // Try extracting URL from query params first (faster)
+   318→    try {
+   319→      const urlObj = new URL(affUrl);
+   320→      const redirectUrl = urlObj.searchParams.get('url') || urlObj.searchParams.get('ref') || urlObj.searchParams.get('l');
+   321→      if (redirectUrl && redirectUrl.includes('tokopedia.com')) {
+   322→        const decoded = decodeURIComponent(redirectUrl);
+   323→        resolve(decoded);
+   324→        return;
+   325→      }
+   326→    } catch {}
+   327→
+   328→    // Fallback: open tab and follow redirect
+   329→    chrome.tabs.create({ url: affUrl, active: false }, (tab) => {
+   330→      const tabId = tab.id;
+   331→
+   332→      const timeout = setTimeout(() => {
+   333→        if (!resolved) {
+   334→          resolved = true;
+   335→          chrome.tabs.remove(tabId).catch(() => {});
+   336→          resolve(affUrl);
+   337→        }
+   338→      }, 15000);
+   339→
+   340→      function onUpdated(updatedTabId, changeInfo, updatedTab) {
+   341→        if (updatedTabId !== tabId) return;
+   342→        const currentUrl = updatedTab.url || '';
+   343→
+   344→        // Check if redirected to Tokopedia product page
+   345→        if (currentUrl.match(/tokopedia\.com\/[^\/]+\/[^\/\?#]+/) && !currentUrl.includes('ta.tokopedia.com') && !currentUrl.includes('tokopedia.link') && !currentUrl.includes('toko.link')) {
+   346→          if (!resolved) {
+   347→            resolved = true;
+   348→            clearTimeout(timeout);
+   349→            chrome.tabs.onUpdated.removeListener(onUpdated);
+   350→            chrome.tabs.remove(tabId).catch(() => {});
+   351→            resolve(currentUrl);
+   352→          }
+   353→        }
+   354→      }
+   355→
+   356→      chrome.tabs.onUpdated.addListener(onUpdated);
+   357→    });
+   358→  });
+   359→}
+   360→
+   361→// Fetch Tokopedia product data by opening background tab and scraping
+   362→async function fetchTokopediaProduct(productUrl, category, affiliateUrl) {
+   363→  return new Promise((resolve) => {
+   364→    let resolved = false;
+   365→    let tabId = null;
+   366→
+   367→    const timeout = setTimeout(() => {
+   368→      if (!resolved) {
+   369→        resolved = true;
+   370→        if (tabId) chrome.tabs.remove(tabId).catch(() => {});
+   371→        resolve(null);
+   372→      }
+   373→    }, 25000);
+   374→
+   375→    chrome.tabs.create({ url: productUrl, active: false }, (tab) => {
+   376→      tabId = tab.id;
+   377→
+   378→      function onUpdated(updatedTabId, changeInfo) {
+   379→        if (updatedTabId !== tabId) return;
+   380→        if (changeInfo.status !== 'complete') return;
+   381→
+   382→        // Wait for page to fully load
+   383→        setTimeout(async () => {
+   384→          try {
+   385→            // Inject Tokopedia scraper into the page
+   386→            const results = await chrome.scripting.executeScript({
+   387→              target: { tabId: tabId },
+   388→              func: scrapeTokopediaProduct,
+   389→              args: [category],
+   390→            });
+   391→
+   392→            const product = results?.[0]?.result;
+   393→
+   394→            if (product && product.title) {
+   395→              product.url = productUrl.split('?')[0];
+   396→              product.marketplace = 'tokopedia';
+   397→              if (affiliateUrl) product.affiliateUrl = affiliateUrl;
+   398→
+   399→              if (!resolved) {
+   400→                resolved = true;
+   401→                clearTimeout(timeout);
+   402→                chrome.tabs.onUpdated.removeListener(onUpdated);
+   403→                chrome.tabs.remove(tabId).catch(() => {});
+   404→                resolve(product);
+   405→              }
+   406→            } else {
+   407→              // Retry once after extra wait
+   408→              await new Promise(r => setTimeout(r, 3000));
+   409→              try {
+   410→                const retryResults = await chrome.scripting.executeScript({
+   411→                  target: { tabId: tabId },
+   412→                  func: scrapeTokopediaProduct,
+   413→                  args: [category],
+   414→                });
+   415→                const retryProduct = retryResults?.[0]?.result;
+   416→                if (retryProduct && retryProduct.title) {
+   417→                  retryProduct.url = productUrl.split('?')[0];
+   418→                  retryProduct.marketplace = 'tokopedia';
+   419→                  if (affiliateUrl) retryProduct.affiliateUrl = affiliateUrl;
+   420→
+   421→                  if (!resolved) {
+   422→                    resolved = true;
+   423→                    clearTimeout(timeout);
+   424→                    chrome.tabs.onUpdated.removeListener(onUpdated);
+   425→                    chrome.tabs.remove(tabId).catch(() => {});
+   426→                    resolve(retryProduct);
+   427→                  }
+   428→                }
+   429→              } catch {}
+   430→
+   431→              if (!resolved) {
+   432→                resolved = true;
+   433→                clearTimeout(timeout);
+   434→                chrome.tabs.onUpdated.removeListener(onUpdated);
+   435→                chrome.tabs.remove(tabId).catch(() => {});
+   436→                resolve(null);
+   437→              }
+   438→            }
+   439→          } catch (e) {
+   440→            if (!resolved) {
+   441→              resolved = true;
+   442→              clearTimeout(timeout);
+   443→              chrome.tabs.onUpdated.removeListener(onUpdated);
+   444→              chrome.tabs.remove(tabId).catch(() => {});
+   445→              resolve(null);
+   446→            }
+   447→          }
+   448→        }, 4000); // Wait 4s for Tokopedia SPA to fully render
+   449→      }
+   450→
+   451→      chrome.tabs.onUpdated.addListener(onUpdated);
+   452→    });
+   453→  });
+   454→}
+   455→
+   456→// ========== INIT ==========
+   457→document.addEventListener('DOMContentLoaded', async () => {
+   458→  // Tab switching
+   459→  const tabBtns = document.querySelectorAll('.tab-btn');
+   460→  const tabContents = document.querySelectorAll('.tab-content');
+   461→
+   462→  tabBtns.forEach(btn => {
+   463→    btn.addEventListener('click', () => {
+   464→      tabBtns.forEach(b => b.classList.remove('active'));
+   465→      tabContents.forEach(c => c.classList.remove('active'));
+   466→      btn.classList.add('active');
+   467→      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+   468→    });
+   469→  });
+   470→
+   471→  // ===== TAB 1: SCRAPE SHOPEE =====
+   472→  const pageStatus = document.getElementById('pageStatus');
+   473→  const scrapePageBtn = document.getElementById('scrapePageBtn');
+   474→  const scrapeDetailBtn = document.getElementById('scrapeDetailBtn');
+   475→  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+   476→  const clearBtn = document.getElementById('clearBtn');
+   477→  const categorySelect = document.getElementById('categorySelect');
+   478→
+   479→  let currentTab = null;
+   480→  let isShopee = false;
+   481→  let isDetail = false;
+   482→  let isTokopedia = false;
+   483→  let isTkpdDetail = false;
+   484→
+   485→  try {
+   486→    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+   487→    currentTab = tab;
+   488→    if (tab.url) {
+   489→      if (tab.url.includes('shopee.co.id')) {
+   490→        isShopee = true;
+   491→        const urlMatch1 = tab.url.match(/-i\.(\d+)\.(\d+)/);
+   492→        const urlMatch2 = tab.url.match(/\/product\/(\d+)\/(\d+)/);
+   493→        isDetail = !!(urlMatch1 || urlMatch2);
+   494→        if (isDetail) {
+   495→          pageStatus.textContent = '📄 Halaman produk Shopee detail';
+   496→          pageStatus.className = 'page-status ok';
+   497→        } else {
+   498→          pageStatus.textContent = '🔍 Halaman Shopee — siap ambil!';
+   499→          pageStatus.className = 'page-status ok';
+   500→        }
+   501→      } else if (tab.url.includes('tokopedia.com')) {
+   502→        isTokopedia = true;
+   503→        // Check if it's a product detail page
+   504→        const tkpdMatch = tab.url.match(/tokopedia\.com\/([^\/]+)\/([^\/\?#]+)/);
+   505→        if (tkpdMatch && tkpdMatch[2] && !['promo', 'category', 'p', 'search', 'blog', 'help', 'cart', 'checkout', 'inbox', 'notification', 'order', 'wallet', 'topads', 'affiliate', 'download', 'login'].includes(tkpdMatch[2])) {
+   506→          isTkpdDetail = true;
+   507→          pageStatus.textContent = '📄 Halaman produk Tokopedia detail';
+   508→          pageStatus.className = 'page-status ok';
+   509→        } else {
+   510→          pageStatus.textContent = '🔍 Halaman Tokopedia — siap ambil!';
+   511→          pageStatus.className = 'page-status ok';
+   512→        }
+   513→      }
+   514→    }
+   515→  } catch {}
+   516→
+   517→  if (scrapePageBtn) scrapePageBtn.disabled = !isShopee;
+   518→  if (scrapeDetailBtn) scrapeDetailBtn.disabled = !(isShopee && isDetail);
+   519→
+   520→  // Scrape Shopee page
+   521→  if (scrapePageBtn) {
+   522→    scrapePageBtn.addEventListener('click', async () => {
+   523→      scrapePageBtn.disabled = true;
+   524→      scrapePageBtn.textContent = '⏳ Membaca...';
+   525→
+   526→      const category = categorySelect.value;
+   527→      const affiliateUrl = (document.getElementById('affiliateUrlInput')?.value || '').trim();
+   528→
+   529→      try {
+   530→        const results = await chrome.scripting.executeScript({
+   531→          target: { tabId: currentTab.id },
+   532→          func: scrapeSearchPage,
+   533→          args: [category],
+   534→        });
+   535→
+   536→        if (results?.[0]?.result) {
+   537→          const products = results[0].result;
+   538→          const existingUrls = new Set(collected.map(p => p.url));
+   539→          let newCount = 0;
+   540→          for (const p of products) {
+   541→            if (!existingUrls.has(p.url)) {
+   542→              if (affiliateUrl) p.affiliateUrl = affiliateUrl;
+   543→              collected.push(p);
+   544→              existingUrls.add(p.url);
+   545→              newCount++;
+   546→            }
+   547→          }
+   548→          saveCollected();
+   549→          scrapePageBtn.textContent = `✅ +${newCount} baru (total ${collected.length})`;
+   550→        } else {
+   551→          scrapePageBtn.textContent = '❌ Gak bisa baca — scroll dulu?';
+   552→        }
+   553→      } catch {
+   554→        scrapePageBtn.textContent = '❌ Error';
+   555→      }
+   556→
+   557→      setTimeout(() => {
+   558→        scrapePageBtn.textContent = '📦 Ambil Semua Produk di Halaman Ini';
+   559→        scrapePageBtn.disabled = !isShopee;
+   560→      }, 2000);
+   561→    });
+   562→  }
+   563→
+   564→  // Scrape Shopee detail
+   565→  if (scrapeDetailBtn) {
+   566→    scrapeDetailBtn.addEventListener('click', async () => {
+   567→      scrapeDetailBtn.disabled = true;
+   568→      scrapeDetailBtn.textContent = '⏳ Membaca...';
+   569→
+   570→      const category = categorySelect.value;
+   571→      const affiliateUrl = (document.getElementById('affiliateUrlInput')?.value || '').trim();
+   572→
+   573→      try {
+   574→        const domResults = await chrome.scripting.executeScript({
+   575→          target: { tabId: currentTab.id },
+   576→          func: scrapeProductDetail,
+   577→          args: [category],
+   578→        });
+   579→
+   580→        const product = domResults?.[0]?.result;
+   581→        if (!product || !product.title) {
+   582→          scrapeDetailBtn.textContent = '❌ Gak bisa baca';
+   583→          setTimeout(() => {
+   584→            scrapeDetailBtn.textContent = '🔍 Ambil 1 Produk (Halaman Detail)';
+   585→            scrapeDetailBtn.disabled = !(isShopee && isDetail);
+   586→          }, 2000);
+   587→          return;
+   588→        }
+   589→
+   590→        if (affiliateUrl) product.affiliateUrl = affiliateUrl;
+   591→
+   592→        const url = currentTab.url;
+   593→        const idMatch = url.match(/-i\.(\d+)\.(\d+)/) || url.match(/\/product\/(\d+)\/(\d+)/);
+   594→        if (idMatch) {
+   595→          const shopId = idMatch[1];
+   596→          const itemId = idMatch[2];
+   597→
+   598→          try {
+   599→            const apiResults = await chrome.scripting.executeScript({
+   600→              target: { tabId: currentTab.id },
+   601→              func: fetchShopeeApiInPage,
+   602→              args: [shopId, itemId],
+   603→            });
+   604→
+   605→            const apiData = apiResults?.[0]?.result;
+   606→            if (apiData) {
+   607→              if (apiData.image) product.image = apiData.image;
+   608→              if (apiData.rating) product.rating = apiData.rating;
+   609→              if (apiData.reviewCount) product.reviewCount = apiData.reviewCount;
+   610→              if (apiData.soldCount) product.soldCount = apiData.soldCount;
+   611→              if (apiData.price && apiData.price > 0) product.price = apiData.price;
+   612→              if (apiData.originalPrice && apiData.originalPrice > 0) product.originalPrice = apiData.originalPrice;
+   613→              if (apiData.location) product.location = apiData.location;
+   614→              if (apiData.title) product.title = apiData.title;
+   615→              if (apiData.discountPercent) product.discountPercent = apiData.discountPercent;
+   616→            }
+   617→          } catch {}
+   618→        }
+   619→
+   620→        const existingUrls = new Set(collected.map(p => p.url));
+   621→        if (existingUrls.has(product.url)) {
+   622→          scrapeDetailBtn.textContent = '⚠️ Udah ada!';
+   623→        } else {
+   624→          collected.push(product);
+   625→          saveCollected();
+   626→          scrapeDetailBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} 📦${product.soldCount || 0} (total ${collected.length})`;
+   627→        }
+   628→      } catch {
+   629→        scrapeDetailBtn.textContent = '❌ Error';
+   630→      }
+   631→
+   632→      setTimeout(() => {
+   633→        scrapeDetailBtn.textContent = '🔍 Ambil 1 Produk (Halaman Detail)';
+   634→        scrapeDetailBtn.disabled = !(isShopee && isDetail);
+   635→      }, 2000);
+   636→    });
+   637→  }
+   638→
+   639→  // Download CSV (Tab 1)
+   640→  if (downloadCsvBtn) {
+   641→    downloadCsvBtn.addEventListener('click', () => {
+   642→      const csv = buildCSV(collected);
+   643→      downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
+   644→      downloadCsvBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
+   645→      setTimeout(() => { downloadCsvBtn.textContent = '💾 Download File CSV (Format JB)'; }, 3000);
+   646→    });
+   647→  }
+   648→
+   649→  // Clear (Tab 1)
+   650→  if (clearBtn) {
+   651→    clearBtn.addEventListener('click', () => {
+   652→      if (collected.length === 0) return;
+   653→      collected = [];
+   654→      saveCollected();
+   655→    });
+   656→  }
+   657→
+   658→  // ===== TAB 2: PASTE LINK (Shopee + Tokopedia) =====
+   659→  const linkInput = document.getElementById('linkInput');
+   660→  const fetchLinkBtn = document.getElementById('fetchLinkBtn');
+   661→  const linkStatus = document.getElementById('linkStatus');
+   662→  const linkCategorySelect = document.getElementById('linkCategorySelect');
+   663→  const linkDownloadBtn = document.getElementById('linkDownloadBtn');
+   664→  const linkClearBtn = document.getElementById('linkClearBtn');
+   665→
+   666→  // Parse shopId & itemId from Shopee URL formats
+   667→  function parseShopeeUrl(url) {
+   668→    let m = url.match(/-i\.(\d+)\.(\d+)/);
+   669→    if (m) return { shopId: m[1], itemId: m[2] };
+   670→    m = url.match(/\/product\/(\d+)\/(\d+)/);
+   671→    if (m) return { shopId: m[1], itemId: m[2] };
+   672→    m = url.match(/\/universal-link\/product\/(\d+)\/(\d+)/);
+   673→    if (m) return { shopId: m[1], itemId: m[2] };
+   674→    return null;
+   675→  }
+   676→
+   677→  // Resolve short link (s.shopee.co.id, shope.ee, atid.me)
+   678→  function resolveShortLinkViaTab(shortUrl) {
+   679→    return new Promise((resolve) => {
+   680→      let resolved = false;
+   681→
+   682→      chrome.tabs.create({ url: shortUrl, active: false }, (tab) => {
+   683→        const tabId = tab.id;
+   684→        const timeout = setTimeout(() => {
+   685→          if (!resolved) {
+   686→            resolved = true;
+   687→            chrome.tabs.remove(tabId).catch(() => {});
+   688→            resolve(shortUrl);
+   689→          }
+   690→        }, 10000);
+   691→
+   692→        function onUpdated(updatedTabId, changeInfo, updatedTab) {
+   693→          if (updatedTabId !== tabId) return;
+   694→          const currentUrl = updatedTab.url || '';
+   695→          if (currentUrl.match(/-i\.\d+\.\d+/) ||
+   696→              currentUrl.match(/\/product\/\d+\/\d+/) ||
+   697→              currentUrl.match(/\/universal-link\/product\/\d+\/\d+/)) {
+   698→            if (!resolved) {
+   699→              resolved = true;
+   700→              clearTimeout(timeout);
+   701→              chrome.tabs.onUpdated.removeListener(onUpdated);
+   702→              chrome.tabs.remove(tabId).catch(() => {});
+   703→              resolve(currentUrl);
+   704→            }
+   705→          }
+   706→        }
+   707→
+   708→        chrome.tabs.onUpdated.addListener(onUpdated);
+   709→      });
+   710→    });
+   711→  }
+   712→
+   713→  async function resolveShortLinkViaFetch(shortUrl) {
+   714→    try {
+   715→      const resp = await fetch(shortUrl, {
+   716→        method: 'GET',
+   717→        redirect: 'follow',
+   718→        credentials: 'include',
+   719→      });
+   720→      if (resp.url && resp.url.includes('shopee.co.id')) {
+   721→        return resp.url;
+   722→      }
+   723→    } catch {}
+   724→    return null;
+   725→  }
+   726→
+   727→  // Fetch Shopee product data via background tab
+   728→  async function fetchProductFromLink(shopId, itemId, category, affiliateUrl) {
+   729→    const productUrl = `https://shopee.co.id/product/${shopId}/${itemId}`;
+   730→
+   731→    return new Promise((resolve) => {
+   732→      let resolved = false;
+   733→      let tabId = null;
+   734→
+   735→      const timeout = setTimeout(() => {
+   736→        if (!resolved) {
+   737→          resolved = true;
+   738→          if (tabId) chrome.tabs.remove(tabId).catch(() => {});
+   739→          resolve(null);
+   740→        }
+   741→      }, 20000);
+   742→
+   743→      chrome.tabs.create({ url: 'https://shopee.co.id/', active: false }, (tab) => {
+   744→        tabId = tab.id;
+   745→
+   746→        function onUpdated(updatedTabId, changeInfo) {
+   747→          if (updatedTabId !== tabId) return;
+   748→          if (changeInfo.status !== 'complete') return;
+   749→
+   750→          setTimeout(async () => {
+   751→            try {
+   752→              const results = await chrome.scripting.executeScript({
+   753→                target: { tabId: tabId },
+   754→                func: fetchShopeeApiInPage,
+   755→                args: [shopId, itemId],
+   756→              });
+   757→
+   758→              const apiData = results?.[0]?.result;
+   759→              if (!apiData || !apiData.title) {
+   760→                await new Promise(r => setTimeout(r, 2000));
+   761→                const retryResults = await chrome.scripting.executeScript({
+   762→                  target: { tabId: tabId },
+   763→                  func: fetchShopeeApiInPage,
+   764→                  args: [shopId, itemId],
+   765→                });
+   766→                const retryData = retryResults?.[0]?.result;
+   767→                if (retryData) Object.assign(apiData || {}, retryData);
+   768→              }
+   769→
+   770→              const product = {
+   771→                category,
+   772→                marketplace: 'shopee',
+   773→                url: productUrl,
+   774→                affiliateUrl: affiliateUrl || '',
+   775→              };
+   776→
+   777→              if (apiData) {
+   778→                if (apiData.title) product.title = apiData.title;
+   779→                if (apiData.image) product.image = apiData.image;
+   780→                if (apiData.price && apiData.price > 0) product.price = apiData.price;
+   781→                if (apiData.originalPrice && apiData.originalPrice > 0) product.originalPrice = apiData.originalPrice;
+   782→                if (apiData.discountPercent) product.discountPercent = apiData.discountPercent;
+   783→                if (apiData.rating) product.rating = apiData.rating;
+   784→                if (apiData.reviewCount) product.reviewCount = apiData.reviewCount;
+   785→                if (apiData.soldCount !== undefined) product.soldCount = apiData.soldCount;
+   786→                if (apiData.location) product.location = apiData.location;
+   787→              }
+   788→
+   789→              if (!resolved) {
+   790→                resolved = true;
+   791→                clearTimeout(timeout);
+   792→                chrome.tabs.onUpdated.removeListener(onUpdated);
+   793→                chrome.tabs.remove(tabId).catch(() => {});
+   794→                resolve(product.title ? product : null);
+   795→              }
+   796→            } catch {
+   797→              if (!resolved) {
+   798→                resolved = true;
+   799→                clearTimeout(timeout);
+   800→                chrome.tabs.onUpdated.removeListener(onUpdated);
+   801→                chrome.tabs.remove(tabId).catch(() => {});
+   802→                resolve(null);
+   803→              }
+   804→            }
+   805→          }, 3000);
+   806→        }
+   807→
+   808→        chrome.tabs.onUpdated.addListener(onUpdated);
+   809→      });
+   810→    });
+   811→  }
+   812→
+   813→  if (fetchLinkBtn) {
+   814→    fetchLinkBtn.addEventListener('click', async () => {
+   815→      const rawText = (linkInput?.value || '').trim();
+   816→      if (!rawText) {
+   817→        linkStatus.style.display = 'block';
+   818→        linkStatus.textContent = '❌ Paste link dulu!';
+   819→        linkStatus.className = 'page-status no';
+   820→        return;
+   821→      }
+   822→
+   823→      const category = linkCategorySelect?.value || 'Fashion';
+   824→      const tkpdAffiliate = (document.getElementById('tkpdAffiliateInput')?.value || '').trim();
+   825→      const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+   826→
+   827→      fetchLinkBtn.disabled = true;
+   828→      fetchLinkBtn.textContent = '⏳ Memproses...';
+   829→      linkStatus.style.display = 'block';
+   830→      linkStatus.textContent = `⏳ Memproses ${lines.length} link...`;
+   831→      linkStatus.className = 'page-status info';
+   832→
+   833→      let addedCount = 0;
+   834→      let errorCount = 0;
+   835→      const existingUrls = new Set(collected.map(p => p.url));
+   836→
+   837→      for (let i = 0; i < lines.length; i++) {
+   838→        let url = lines[i];
+   839→        let affiliateUrl = '';
+   840→
+   841→        // === TOKOPEDIA LINKS ===
+   842→        if (url.match(/ta\.tokopedia\.com|tokopedia\.link|toko\.link/i)) {
+   843→          affiliateUrl = tkpdAffiliate || url; // Use AT affiliate input if available
+   844→          linkStatus.textContent = `⏳ Resolve Tokopedia link ${i + 1}/${lines.length}...`;
+   845→
+   846→          const resolved = await resolveTokopediaAffiliate(url);
+   847→          if (resolved && parseTokopediaUrl(resolved)) {
+   848→            url = resolved;
+   849→          } else {
+   850→            errorCount++;
+   851→            continue;
+   852→          }
+   853→
+   854→          // Scrape Tokopedia product
+   855→          linkStatus.textContent = `⏳ Ambil data Tokopedia ${i + 1}/${lines.length}...`;
+   856→          const tkpdInfo = parseTokopediaUrl(url);
+   857→          if (tkpdInfo) {
+   858→            const product = await fetchTokopediaProduct(url, category, affiliateUrl);
+   859→            if (product && product.title) {
+   860→              if (!existingUrls.has(product.url)) {
+   861→                collected.push(product);
+   862→                existingUrls.add(product.url);
+   863→                addedCount++;
+   864→              }
+   865→            } else {
+   866→              errorCount++;
+   867→            }
+   868→          } else {
+   869→            errorCount++;
+   870→          }
+   871→          continue;
+   872→        }
+   873→
+   874→        // === DIRECT TOKOPEDIA LINK ===
+   875→        if (url.match(/tokopedia\.com/i) && !url.match(/ta\.tokopedia|tokopedia\.link|toko\.link/)) {
+   876→          affiliateUrl = tkpdAffiliate || '';
+   877→          linkStatus.textContent = `⏳ Ambil data Tokopedia ${i + 1}/${lines.length}...`;
+   878→
+   879→          const product = await fetchTokopediaProduct(url, category, affiliateUrl);
+   880→          if (product && product.title) {
+   881→            if (!existingUrls.has(product.url)) {
+   882→              collected.push(product);
+   883→              existingUrls.add(product.url);
+   884→              addedCount++;
+   885→            }
+   886→          } else {
+   887→            errorCount++;
+   888→          }
+   889→          continue;
+   890→        }
+   891→
+   892→        // === SHOPEE SHORT LINKS ===
+   893→        if (url.match(/s\.shopee\.co\.id|shope\.ee|shp\.ee|shp\.in/i)) {
+   894→          affiliateUrl = url;
+   895→          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
+   896→
+   897→          let resolved = await resolveShortLinkViaFetch(url);
+   898→          if (resolved && parseShopeeUrl(resolved)) {
+   899→            url = resolved;
+   900→          } else {
+   901→            url = await resolveShortLinkViaTab(url);
+   902→          }
+   903→        }
+   904→
+   905→        // === ATID.ME LINKS ===
+   906→        if (url.match(/atid\.me/i)) {
+   907→          affiliateUrl = url;
+   908→          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
+   909→          let resolved = await resolveShortLinkViaFetch(url);
+   910→          if (resolved && parseShopeeUrl(resolved)) {
+   911→            url = resolved;
+   912→          } else {
+   913→            url = await resolveShortLinkViaTab(url);
+   914→          }
+   915→        }
+   916→
+   917→        // === SHOPEE PRODUCT ===
+   918→        const ids = parseShopeeUrl(url);
+   919→        if (!ids) {
+   920→          errorCount++;
+   921→          continue;
+   922→        }
+   923→
+   924→        linkStatus.textContent = `⏳ Ambil data Shopee ${i + 1}/${lines.length}...`;
+   925→
+   926→        const product = await fetchProductFromLink(ids.shopId, ids.itemId, category, affiliateUrl);
+   927→        if (product && product.title) {
+   928→          if (!existingUrls.has(product.url)) {
+   929→            collected.push(product);
+   930→            existingUrls.add(product.url);
+   931→            addedCount++;
+   932→          }
+   933→        } else {
+   934→          errorCount++;
+   935→        }
+   936→      }
+   937→
+   938→      saveCollected();
+   939→
+   940→      if (addedCount > 0) {
+   941→        linkStatus.textContent = `✅ +${addedCount} produk ditambah!${errorCount > 0 ? ` (${errorCount} gagal)` : ''} — Total: ${collected.length}`;
+   942→        linkStatus.className = 'page-status ok';
+   943→        fetchLinkBtn.textContent = `✅ +${addedCount} ditambah!`;
+   944→      } else {
+   945→        linkStatus.textContent = `❌ Gak ada produk yang berhasil diambil.${errorCount > 0 ? ` ${errorCount} link gagal.` : ''} Coba cek format link.`;
+   946→        linkStatus.className = 'page-status no';
+   947→        fetchLinkBtn.textContent = '❌ Gagal';
+   948→      }
+   949→
+   950→      setTimeout(() => {
+   951→        fetchLinkBtn.disabled = false;
+   952→        fetchLinkBtn.textContent = '🔗 Ambil Data dari Link';
+   953→      }, 2500);
+   954→    });
+   955→  }
+   956→
+   957→  if (linkDownloadBtn) {
+   958→    linkDownloadBtn.addEventListener('click', () => {
+   959→      const csv = buildCSV(collected);
+   960→      downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
+   961→      linkDownloadBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
+   962→      setTimeout(() => { linkDownloadBtn.textContent = '💾 Download File CSV (Format JB)'; }, 3000);
+   963→    });
+   964→  }
+   965→
+   966→  if (linkClearBtn) {
+   967→    linkClearBtn.addEventListener('click', () => {
+   968→      if (collected.length === 0) return;
+   969→      collected = [];
+   970→      saveCollected();
+   971→    });
+   972→  }
+   973→
+   974→  // ===== TAB 3: TOKOPEDIA =====
+   975→  const scrapeTkpdPageBtn = document.getElementById('scrapeTkpdPageBtn');
+   976→  const scrapeTkpdDetailBtn = document.getElementById('scrapeTkpdDetailBtn');
+   977→  const tkpdDownloadBtn = document.getElementById('tkpdDownloadBtn');
+   978→  const tkpdClearBtn = document.getElementById('tkpdClearBtn');
+   979→  const tkpdCategorySelect = document.getElementById('tkpdCategorySelect');
+   980→  const tkpdTabAffiliateInput = document.getElementById('tkpdTabAffiliateInput');
+   981→
+   982→  if (scrapeTkpdPageBtn) scrapeTkpdPageBtn.disabled = !isTokopedia;
+   983→  if (scrapeTkpdDetailBtn) scrapeTkpdDetailBtn.disabled = !(isTokopedia && isTkpdDetail);
+   984→
+   985→  // Scrape Tokopedia page (search/listing)
+   986→  if (scrapeTkpdPageBtn) {
+   987→    scrapeTkpdPageBtn.addEventListener('click', async () => {
+   988→      scrapeTkpdPageBtn.disabled = true;
+   989→      scrapeTkpdPageBtn.textContent = '⏳ Membaca...';
+   990→
+   991→      const category = tkpdCategorySelect?.value || 'Fashion';
+   992→      const affiliateUrl = (tkpdTabAffiliateInput?.value || '').trim();
+   993→
+   994→      try {
+   995→        // If it's a product detail page, scrape as detail
+   996→        if (isTkpdDetail) {
+   997→          const product = await fetchTokopediaProduct(currentTab.url, category, affiliateUrl);
+   998→          if (product && product.title) {
+   999→            const existingUrls = new Set(collected.map(p => p.url));
+  1000→            if (!existingUrls.has(product.url)) {
+  1001→              collected.push(product);
+  1002→              saveCollected();
+  1003→              scrapeTkpdPageBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} (total ${collected.length})`;
+  1004→            } else {
+  1005→              scrapeTkpdPageBtn.textContent = '⚠️ Udah ada!';
+  1006→            }
+  1007→          } else {
+  1008→            scrapeTkpdPageBtn.textContent = '❌ Gak bisa baca';
+  1009→          }
+  1010→        } else {
+  1011→          // Try scraping search/listing page
+  1012→          const results = await chrome.scripting.executeScript({
+  1013→            target: { tabId: currentTab.id },
+  1014→            func: scrapeTokopediaSearchPage,
+  1015→            args: [category],
+  1016→          });
+  1017→
+  1018→          if (results?.[0]?.result) {
+  1019→            const products = results[0].result;
+  1020→            const existingUrls = new Set(collected.map(p => p.url));
+  1021→            let newCount = 0;
+  1022→            for (const p of products) {
+  1023→              if (!existingUrls.has(p.url)) {
+  1024→                if (affiliateUrl) p.affiliateUrl = affiliateUrl;
+  1025→                collected.push(p);
+  1026→                existingUrls.add(p.url);
+  1027→                newCount++;
+  1028→              }
+  1029→            }
+  1030→            saveCollected();
+  1031→            scrapeTkpdPageBtn.textContent = `✅ +${newCount} baru (total ${collected.length})`;
+  1032→          } else {
+  1033→            scrapeTkpdPageBtn.textContent = '❌ Gak bisa baca halaman ini';
+  1034→          }
+  1035→        }
+  1036→      } catch {
+  1037→        scrapeTkpdPageBtn.textContent = '❌ Error';
+  1038→      }
+  1039→
+  1040→      setTimeout(() => {
+  1041→        scrapeTkpdPageBtn.textContent = '📦 Ambil Produk dari Halaman Tokopedia';
+  1042→        scrapeTkpdPageBtn.disabled = !isTokopedia;
+  1043→      }, 2000);
+  1044→    });
+  1045→  }
+  1046→
+  1047→  // Scrape Tokopedia detail page
+  1048→  if (scrapeTkpdDetailBtn) {
+  1049→    scrapeTkpdDetailBtn.addEventListener('click', async () => {
+  1050→      scrapeTkpdDetailBtn.disabled = true;
+  1051→      scrapeTkpdDetailBtn.textContent = '⏳ Membaca...';
+  1052→
+  1053→      const category = tkpdCategorySelect?.value || 'Fashion';
+  1054→      const affiliateUrl = (tkpdTabAffiliateInput?.value || '').trim();
+  1055→
+  1056→      try {
+  1057→        const product = await fetchTokopediaProduct(currentTab.url, category, affiliateUrl);
+  1058→        if (product && product.title) {
+  1059→          const existingUrls = new Set(collected.map(p => p.url));
+  1060→          if (!existingUrls.has(product.url)) {
+  1061→            collected.push(product);
+  1062→            saveCollected();
+  1063→            scrapeTkpdDetailBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} (total ${collected.length})`;
+  1064→          } else {
+  1065→            scrapeTkpdDetailBtn.textContent = '⚠️ Udah ada!';
+  1066→          }
+  1067→        } else {
+  1068→          scrapeTkpdDetailBtn.textContent = '❌ Gak bisa baca';
+  1069→        }
+  1070→      } catch {
+  1071→        scrapeTkpdDetailBtn.textContent = '❌ Error';
+  1072→      }
+  1073→
+  1074→      setTimeout(() => {
+  1075→        scrapeTkpdDetailBtn.textContent = '🔍 Ambil 1 Produk (Halaman Detail Tokopedia)';
+  1076→        scrapeTkpdDetailBtn.disabled = !(isTokopedia && isTkpdDetail);
+  1077→      }, 2000);
+  1078→    });
+  1079→  }
+  1080→
+  1081→  if (tkpdDownloadBtn) {
+  1082→    tkpdDownloadBtn.addEventListener('click', () => {
+  1083→      const csv = buildCSV(collected);
+  1084→      downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
+  1085→      tkpdDownloadBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
+  1086→      setTimeout(() => { tkpdDownloadBtn.textContent = '💾 Download File CSV (Format JB)'; }, 3000);
+  1087→    });
+  1088→  }
+  1089→
+  1090→  if (tkpdClearBtn) {
+  1091→    tkpdClearBtn.addEventListener('click', () => {
+  1092→      if (collected.length === 0) return;
+  1093→      collected = [];
+  1094→      saveCollected();
+  1095→    });
+  1096→  }
+  1097→
+  1098→  // ===== TAB 4: CONVERT ACCESSTRADE =====
+  1099→  const selectFileBtn = document.getElementById('selectFileBtn');
+  1100→  const fileInput = document.getElementById('fileInput');
+  1101→  const convertBtn = document.getElementById('convertBtn');
+  1102→  const convertStatus = document.getElementById('convertStatus');
+  1103→
+  1104→  if (selectFileBtn) {
+  1105→    selectFileBtn.addEventListener('click', () => {
+  1106→      fileInput.click();
+  1107→    });
+  1108→  }
+  1109→
+  1110→  if (fileInput) {
+  1111→    fileInput.addEventListener('change', async (e) => {
+  1112→      const file = e.target.files[0];
+  1113→      if (!file) return;
+  1114→
+  1115→      selectFileBtn.textContent = '⏳ Membaca file...';
+  1116→
+  1117→      try {
+  1118→        const text = await file.text();
+  1119→
+  1120→        convertStatus.style.display = 'block';
+  1121→        convertStatus.textContent = '⏳ Parsing CSV Accesstrade...';
+  1122→        convertStatus.className = 'page-status info';
+  1123→
+  1124→        accesstradeProducts = parseAccesstradeCSV(text);
+  1125→
+  1126→        convertStatus.textContent = `✅ Ditemukan ${accesstradeProducts.length} produk! Atur filter lalu klik Convert.`;
+  1127→        convertStatus.className = 'page-status ok';
+  1128→
+  1129→        selectFileBtn.textContent = `📂 ${file.name} (${accesstradeProducts.length} produk)`;
+  1130→        convertBtn.disabled = false;
+  1131→
+  1132→      } catch (err) {
+  1133→        convertStatus.textContent = `❌ Error: ${err.message}`;
+  1134→        convertStatus.className = 'page-status no';
+  1135→        selectFileBtn.textContent = '📂 Pilih File CSV Accesstrade';
+  1136→      }
+  1137→    });
+  1138→  }
+  1139→
+  1140→  if (convertBtn) {
+  1141→    convertBtn.addEventListener('click', () => {
+  1142→      const minPrice = parseInt(document.getElementById('minPrice')?.value || '0', 10);
+  1143→      const maxPrice = parseInt(document.getElementById('maxPrice')?.value || '999999999', 10);
+  1144→      const maxProducts = parseInt(document.getElementById('maxProducts')?.value || '200', 10);
+  1145→      const catFilter = (document.getElementById('catFilter')?.value || '').toLowerCase().trim();
+  1146→
+  1147→      convertBtn.disabled = true;
+  1148→      convertBtn.textContent = '⏳ Converting...';
+  1149→
+  1150→      let filtered = accesstradeProducts.filter(p => {
+  1151→        if (p.price < minPrice) return false;
+  1152→        if (maxPrice && p.price > maxPrice) return false;
+  1153→        if (catFilter && !(p.category || '').toLowerCase().includes(catFilter)) return false;
+  1154→        return true;
+  1155→      });
+  1156→
+  1157→      filtered = filtered.slice(0, maxProducts);
+  1158→
+  1159→      if (filtered.length === 0) {
+  1160→        convertStatus.textContent = '❌ Gak ada produk yang lolos filter. Coba ubah filter.';
+  1161→        convertStatus.className = 'page-status no';
+  1162→        convertBtn.disabled = false;
+  1163→        convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
+  1164→        return;
+  1165→      }
+  1166→
+  1167→      const csv = buildCSV(filtered);
+  1168→      const now = new Date();
+  1169→      const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  1170→      downloadCSV(csv, `jb-accesstrade-${dateStr}-${filtered.length}produk.csv`);
+  1171→
+  1172→      convertStatus.textContent = `✅ Done! ${filtered.length} produk di-download (dari ${accesstradeProducts.length} total).`;
+  1173→      convertStatus.className = 'page-status ok';
+  1174→
+  1175→      convertBtn.disabled = false;
+  1176→      convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
+  1177→    });
+  1178→  }
+  1179→
+  1180→  updateUI();
+  1181→  updateLinkUI();
+  1182→  updateTkpdUI();
+  1183→});
+  1184→
+  1185→
+  1186→// ================================================================
+  1187→//  SCRAPING FUNCTIONS — run INSIDE the target page
+  1188→// ================================================================
+  1189→
+  1190→// ========== SHOPEE SCRAPERS ==========
+  1191→
+  1192→function scrapeSearchPage(category) {
+  1193→  const products = [];
+  1194→  const links = document.querySelectorAll('a[href*="-i."]');
+  1195→
+  1196→  for (const link of links) {
+  1197→    try {
+  1198→      const product = { category, marketplace: 'shopee' };
+  1199→      const text = link.innerText || '';
+  1200→      const href = link.getAttribute('href') || '';
+  1201→
+  1202→      product.url = href.startsWith('/') ? 'https://shopee.co.id' + href : href;
+  1203→
+  1204→      const idMatch = href.match(/-i\.(\d+)\.(\d+)/);
+  1205→      if (!idMatch) continue;
+  1206→
+  1207→      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+  1208→      if (lines.length > 0) product.title = lines[0];
+  1209→      if (!product.title || product.title.length < 3) continue;
+  1210→
+  1211→      const priceMatch = text.match(/Rp([\d.]+)/);
+  1212→      if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+  1213→
+  1214→      const allPrices = [...text.matchAll(/Rp([\d.]+)/g)];
+  1215→      if (allPrices.length > 1) {
+  1216→        const firstPrice = parseInt(allPrices[0][1].replace(/\./g, ''), 10);
+  1217→        const secondPrice = parseInt(allPrices[1][1].replace(/\./g, ''), 10);
+  1218→        if (secondPrice > firstPrice) {
+  1219→          product.originalPrice = secondPrice;
+  1220→          if (product.originalPrice > 0 && product.price > 0) {
+  1221→            product.discountPercent = Math.round((1 - product.price / product.originalPrice) * 100);
+  1222→          }
+  1223→        }
+  1224→      }
+  1225→
+  1226→      const soldMatch = text.match(/([\d.]+)\s*terjual/i);
+  1227→      if (soldMatch) {
+  1228→        product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
+  1229→      } else {
+  1230→        const rbMatch = text.match(/([\d,]+)\s*rb\s*terjual/i);
+  1231→        if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
+  1232→      }
+  1233→
+  1234→      const ratingPatterns = [
+  1235→        /(\d+[.,]\d+)\s*(?:bintang|⭐|🌟)/i,
+  1236→        /terjual[\s\S]*?(\d+[.,]\d+)/i,
+  1237→        /(\d+[.,]\d+)\s*\((\d[\d.]*)\s*(?:rating|review|evaluasi)/i,
+  1238→      ];
+  1239→      for (const pat of ratingPatterns) {
+  1240→        const m = text.match(pat);
+  1241→        if (m) {
+  1242→          product.rating = parseFloat(m[1].replace(',', '.'));
+  1243→          break;
+  1244→        }
+  1245→      }
+  1246→
+  1247→      const img = link.querySelector('img');
+  1248→      if (img) {
+  1249→        const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+  1250→        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo') && src.includes('susercontent')) {
+  1251→          product.image = src;
+  1252→        }
+  1253→      }
+  1254→
+  1255→      if (product.title && product.price) {
+  1256→        products.push(product);
+  1257→      }
+  1258→    } catch {}
+  1259→  }
+  1260→
+  1261→  const seen = new Set();
+  1262→  return products.filter(p => {
+  1263→    if (seen.has(p.url)) return false;
+  1264→    seen.add(p.url);
+  1265→    return true;
+  1266→  });
+  1267→}
+  1268→
+  1269→function scrapeProductDetail(category) {
+  1270→  const url = window.location.href;
+  1271→  const product = { category, marketplace: 'shopee', url };
+  1272→
+  1273→  const titleSelectors = [
+  1274→    'h1',
+  1275→    '[class*="qaNIZv"]',
+  1276→    '[class*="WBVL_7"]',
+  1277→    '[class*="_44qnta"]',
+  1278→    'span[class*="title"]',
+  1279→    '[data-testid="product-name"]',
+  1280→  ];
+  1281→  for (const sel of titleSelectors) {
+  1282→    const el = document.querySelector(sel);
+  1283→    if (el && el.textContent.trim().length > 3) {
+  1284→      product.title = el.textContent.trim();
+  1285→      break;
+  1286→    }
+  1287→  }
+  1288→
+  1289→  const ogImage = document.querySelector('meta[property="og:image"]');
+  1290→  if (ogImage) {
+  1291→    const imgContent = ogImage.getAttribute('content');
+  1292→    if (imgContent && imgContent.includes('susercontent')) {
+  1293→      product.image = imgContent;
+  1294→    }
+  1295→  }
+  1296→
+  1297→  if (!product.image) {
+  1298→    const imgSelectors = [
+  1299→      'img[src*="down-id.img.susercontent.com"]',
+  1300→      'img[src*="susercontent.com/file/sg-"]',
+  1301→      'img[class*="product-image"]',
+  1302→      '[class*="product-img"] img',
+  1303→      '[class*="MIVED"] img',
+  1304→      '[class*="ZPN9su"] img',
+  1305→    ];
+  1306→    for (const sel of imgSelectors) {
+  1307→      const el = document.querySelector(sel);
+  1308→      if (el) {
+  1309→        const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
+  1310→        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo')) {
+  1311→          product.image = src;
+  1312→          break;
+  1313→        }
+  1314→      }
+  1315→    }
+  1316→  }
+  1317→
+  1318→  const bodyText = document.body.innerText;
+  1319→  const priceMatch = bodyText.match(/Rp([\d.]+)/);
+  1320→  if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+  1321→
+  1322→  const allPrices = [...bodyText.matchAll(/Rp([\d.]+)/g)];
+  1323→  if (allPrices.length > 1) {
+  1324→    const secondPrice = parseInt(allPrices[1][1].replace(/\./g, ''), 10);
+  1325→    if (secondPrice > (product.price || 0)) {
+  1326→      product.originalPrice = secondPrice;
+  1327→      if (product.originalPrice > 0 && product.price > 0) {
+  1328→        product.discountPercent = Math.round((1 - product.price / product.originalPrice) * 100);
+  1329→      }
+  1330→    }
+  1331→  }
+  1332→
+  1333→  const soldMatch = bodyText.match(/([\d.]+)\s*terjual/i);
+  1334→  if (soldMatch) {
+  1335→    product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
+  1336→  } else {
+  1337→    const rbMatch = bodyText.match(/([\d,]+)\s*rb\s*terjual/i);
+  1338→    if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
+  1339→  }
+  1340→
+  1341→  const ratingReviewMatch = bodyText.match(/(\d+[.,]\d+)\s*(?:\(([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review)\)|[•|]\s*([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review))/i);
+  1342→  if (ratingReviewMatch) {
+  1343→    product.rating = parseFloat(ratingReviewMatch[1].replace(',', '.'));
+  1344→    const reviewStr = ratingReviewMatch[2] || ratingReviewMatch[3] || '';
+  1345→    if (reviewStr.includes('rb') || reviewStr.includes('ribu')) {
+  1346→      product.reviewCount = Math.round(parseFloat(reviewStr.replace(/[rbibu\s,]/g, '').replace(',', '.')) * 1000);
+  1347→    } else {
+  1348→      product.reviewCount = parseInt(reviewStr.replace(/\./g, '').replace(',', ''), 10);
+  1349→    }
+  1350→  }
+  1351→
+  1352→  if (!product.rating) {
+  1353→    const ratingEl = document.querySelector('[class*="rating"], [class*="Rating"]');
+  1354→    if (ratingEl) {
+  1355→      const rText = ratingEl.textContent;
+  1356→      const rMatch = rText.match(/(\d+[.,]\d+)/);
+  1357→      if (rMatch) product.rating = parseFloat(rMatch[1].replace(',', '.'));
+  1358→    }
+  1359→  }
+  1360→
+  1361→  const locMatch = bodyText.match(/Dikirim dari\s*([^\n,]+)/i);
+  1362→  if (locMatch) product.location = locMatch[1].trim();
+  1363→
+  1364→  return product;
+  1365→}
+  1366→
+  1367→function fetchShopeeApiInPage(shopId, itemId) {
+  1368→  const apiUrl = `https://shopee.co.id/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`;
+  1369→
+  1370→  return fetch(apiUrl, {
+  1371→    credentials: 'include',
+  1372→    headers: {
+  1373→      'Accept': 'application/json',
+  1374→      'X-Shopee-Language': 'id',
+  1375→      'X-API-SOURCE': 'pc',
+  1376→    },
+  1377→  })
+  1378→    .then(res => res.json())
+  1379→    .then(data => {
+  1380→      if (!data.data) return null;
+  1381→      const item = data.data;
+  1382→      const result = {};
+  1383→
+  1384→      if (item.name) result.title = item.name;
+  1385→
+  1386→      if (item.image) {
+  1387→        result.image = `https://down-id.img.susercontent.com/file/${item.image}`;
+  1388→      } else if (item.images && item.images.length > 0) {
+  1389→        result.image = `https://down-id.img.susercontent.com/file/${item.images[0]}`;
+  1390→      }
+  1391→
+  1392→      const priceMin = item.price_min || item.price;
+  1393→      if (priceMin) {
+  1394→        const priceVal = Array.isArray(priceMin) ? priceMin[0] : priceMin;
+  1395→        result.price = typeof priceVal === 'number' ? priceVal : parseInt(String(priceVal), 10);
+  1396→      }
+  1397→
+  1398→      const priceBeforeDiscount = item.price_min_before_discount || item.price_before_discount;
+  1399→      if (priceBeforeDiscount) {
+  1400→        const origVal = Array.isArray(priceBeforeDiscount) ? priceBeforeDiscount[0] : priceBeforeDiscount;
+  1401→        const origPrice = typeof origVal === 'number' ? origVal : parseInt(String(origVal), 10);
+  1402→        if (origPrice > 0) {
+  1403→          result.originalPrice = origPrice;
+  1404→          const p = result.price || 0;
+  1405→          if (origPrice > p) {
+  1406→            result.discountPercent = Math.round(((origPrice - p) / origPrice) * 100);
+  1407→          }
+  1408→        }
+  1409→      }
+  1410→
+  1411→      if (item.item_rating) {
+  1412→        result.rating = item.item_rating.rating_star || 0;
+  1413→        const ratingCount = item.item_rating.rating_count || [];
+  1414→        result.reviewCount = Array.isArray(ratingCount)
+  1415→          ? ratingCount.reduce((sum, c) => sum + (c || 0), 0)
+  1416→          : 0;
+  1417→      }
+  1418→
+  1419→      if (item.historical_sold !== undefined && item.historical_sold !== null) {
+  1420→        result.soldCount = item.historical_sold;
+  1421→      } else if (item.sold !== undefined && item.sold !== null) {
+  1422→        result.soldCount = item.sold;
+  1423→      }
+  1424→
+  1425→      if (item.shop_location) result.location = item.shop_location;
+  1426→
+  1427→      return result;
+  1428→    })
+  1429→    .catch(() => null);
+  1430→}
+  1431→
+  1432→
+  1433→// ========== TOKOPEDIA SCRAPERS ==========
+  1434→
+  1435→// Scrape Tokopedia product detail page — runs INSIDE the Tokopedia page
+  1436→function scrapeTokopediaProduct(category) {
+  1437→  const url = window.location.href;
+  1438→  const product = { category, marketplace: 'tokopedia', url: url.split('?')[0] };
+  1439→
+  1440→  // ── Title ──
+  1441→  // Tokopedia uses various selectors for product title
+  1442→  const titleSelectors = [
+  1443→    'h1[data-testid="lblPDPDetailProductName"]',
+  1444→    'h1.css-1wtrxts',
+  1445→    'h1',
+  1446→    '[data-testid="lblPDPDetailProductName"]',
+  1447→    '.css-1wtrxts',
+  1448→    '[class*="pdp-detail"] h1',
+  1449→    '[class*="product-name"]',
+  1450→  ];
+  1451→  for (const sel of titleSelectors) {
+  1452→    const el = document.querySelector(sel);
+  1453→    if (el && el.textContent.trim().length > 3) {
+  1454→      product.title = el.textContent.trim();
+  1455→      break;
+  1456→    }
+  1457→  }
+  1458→
+  1459→  // ── Image ──
+  1460→  // Try og:image first (most reliable)
+  1461→  const ogImage = document.querySelector('meta[property="og:image"]');
+  1462→  if (ogImage) {
+  1463→    const imgContent = ogImage.getAttribute('content');
+  1464→    if (imgContent && (imgContent.includes('tokopedia.net') || imgContent.includes('cbn.net') || imgContent.includes('ktpcdn'))) {
+  1465→      product.image = imgContent;
+  1466→    }
+  1467→  }
+  1468→
+  1469→  // Fallback: find product image from page
+  1470→  if (!product.image) {
+  1471→    const imgSelectors = [
+  1472→      'img[data-testid="PDPMainImage"]',
+  1473→      'img.css-1jwf0hz',
+  1474→      'img[alt*="produk"]',
+  1475→      'img[alt*="product"]',
+  1476→      '[class*="pdp-img"] img',
+  1477→      '[class*="product-image"] img',
+  1478→      'img[src*="tokopedia.net/img/"]',
+  1479→      'img[src*="ktpcdn"]',
+  1480→    ];
+  1481→    for (const sel of imgSelectors) {
+  1482→      const el = document.querySelector(sel);
+  1483→      if (el) {
+  1484→        const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
+  1485→        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo') && src.length > 30) {
+  1486→          product.image = src;
+  1487→          break;
+  1488→        }
+  1489→      }
+  1490→    }
+  1491→  }
+  1492→
+  1493→  // ── Price ──
+  1494→  const bodyText = document.body.innerText;
+  1495→
+  1496→  // Try structured price selectors first
+  1497→  const priceSelectors = [
+  1498→    '[data-testid="lblPDPDetailProductPrice"]',
+  1499→    '.css-1ksbit4',
+  1500→    '[class*="price"] [class*="detail"]',
+  1501→    '[class*="pdp-price"]',
+  1502→  ];
+  1503→  for (const sel of priceSelectors) {
+  1504→    const el = document.querySelector(sel);
+  1505→    if (el) {
+  1506→      const priceText = el.textContent;
+  1507→      const priceMatch = priceText.match(/Rp\s*([\d.]+)/i);
+  1508→      if (priceMatch) {
+  1509→        product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+  1510→        break;
+  1511→      }
+  1512→    }
+  1513→  }
+  1514→
+  1515→  // Fallback: regex from body text
+  1516→  if (!product.price) {
+  1517→    const priceMatch = bodyText.match(/Rp\s*([\d.]+)/i);
+  1518→    if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+  1519→  }
+  1520→
+  1521→  // ── Original Price (before discount) ──
+  1522→  const allPrices = [...bodyText.matchAll(/Rp\s*([\d.]+)/gi)];
+  1523→  if (allPrices.length > 1) {
+  1524→    const prices = allPrices.map(m => parseInt(m[1].replace(/\./g, ''), 10)).filter(p => p > 0);
+  1525→    // The highest price is usually the original price
+  1526→    const maxPrice = Math.max(...prices);
+  1527→    if (maxPrice > (product.price || 0)) {
+  1528→      product.originalPrice = maxPrice;
+  1529→      if (product.originalPrice > 0 && product.price > 0) {
+  1530→        product.discountPercent = Math.round((1 - product.price / product.originalPrice) * 100);
+  1531→      }
+  1532→    }
+  1533→  }
+  1534→
+  1535→  // ── Rating ──
+  1536→  const ratingSelectors = [
+  1537→    '[data-testid="lblPDPDetailProductRatingNumber"]',
+  1538→    'span[data-testid="lblPDPDetailProductRatingNumber"]',
+  1539→    '[class*="rating"] [class*="number"]',
+  1540→  ];
+  1541→  for (const sel of ratingSelectors) {
+  1542→    const el = document.querySelector(sel);
+  1543→    if (el) {
+  1544→      const rMatch = el.textContent.match(/(\d+[.,]\d+)/);
+  1545→      if (rMatch) {
+  1546→        product.rating = parseFloat(rMatch[1].replace(',', '.'));
+  1547→        break;
+  1548→      }
+  1549→    }
+  1550→  }
+  1551→
+  1552→  // Fallback: regex from body text
+  1553→  if (!product.rating) {
+  1554→    const ratingMatch = bodyText.match(/(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang)/i);
+  1555→    if (ratingMatch) product.rating = parseFloat(ratingMatch[1].replace(',', '.'));
+  1556→  }
+  1557→
+  1558→  // ── Review Count ──
+  1559→  const reviewSelectors = [
+  1560→    '[data-testid="lblPDPDetailProductRatingCounter"]',
+  1561→    'span[data-testid="lblPDPDetailProductRatingCounter"]',
+  1562→    'button[data-testid="lblPDPDetailProductRatingCounter"]',
+  1563→  ];
+  1564→  for (const sel of reviewSelectors) {
+  1565→    const el = document.querySelector(sel);
+  1566→    if (el) {
+  1567→      const reviewText = el.textContent;
+  1568→      const reviewMatch = reviewText.match(/([\d.]+)/);
+  1569→      if (reviewMatch) {
+  1570→        let count = reviewMatch[1].replace(/\./g, '');
+  1571→        if (reviewText.includes('rb') || reviewText.includes('ribu')) {
+  1572→          count = Math.round(parseFloat(reviewMatch[1].replace(',', '.')) * 1000);
+  1573→        }
+  1574→        product.reviewCount = parseInt(count, 10);
+  1575→        break;
+  1576→      }
+  1577→    }
+  1578→  }
+  1579→
+  1580→  // ── Sold Count ──
+  1581→  const soldMatch = bodyText.match(/([\d.]+)\s*(?:rb|ribu)?\s*terjual/i);
+  1582→  if (soldMatch) {
+  1583→    let soldStr = soldMatch[1];
+  1584→    if (soldMatch[0].includes('rb') || soldMatch[0].includes('ribu')) {
+  1585→      product.soldCount = Math.round(parseFloat(soldStr.replace(',', '.')) * 1000);
+  1586→    } else {
+  1587→      product.soldCount = parseInt(soldStr.replace(/\./g, ''), 10);
+  1588→    }
+  1589→  }
+  1590→
+  1591→  // ── Location ──
+  1592→  const locMatch = bodyText.match(/(?:Dikirim dari|Lokasi)\s*[:\-]?\s*([^\n,]+)/i);
+  1593→  if (locMatch) product.location = locMatch[1].trim().substring(0, 50);
+  1594→
+  1595→  // ── Try JSON-LD structured data (very reliable for Tokopedia) ──
+  1596→  try {
+  1597→    const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+  1598→    for (const script of jsonLdScripts) {
+  1599→      const jsonText = script.textContent;
+  1600→      if (jsonText.includes('Product')) {
+  1601→        const data = JSON.parse(jsonText);
+  1602→        if (data['@type'] === 'Product' || (Array.isArray(data) && data.find(d => d['@type'] === 'Product'))) {
+  1603→          const prod = Array.isArray(data) ? data.find(d => d['@type'] === 'Product') : data;
+  1604→
+  1605→          if (prod.name && (!product.title || product.title.length < 5)) product.title = prod.name;
+  1606→
+  1607→          if (prod.image) {
+  1608→            const img = Array.isArray(prod.image) ? prod.image[0] : prod.image;
+  1609→            if (img && !product.image) product.image = img;
+  1610→          }
+  1611→
+  1612→          if (prod.offers) {
+  1613→            const offers = prod.offers;
+  1614→            if (offers.price && !product.price) {
+  1615→              product.price = parseInt(String(offers.price).replace(/[^\d]/g, ''), 10);
+  1616→            }
+  1617→            if (offers.highPrice && !product.originalPrice) {
+  1618→              product.originalPrice = parseInt(String(offers.highPrice).replace(/[^\d]/g, ''), 10);
+  1619→            }
+  1620→            if (offers.priceCurrency && offers.priceCurrency !== 'IDR') {
+  1621→              // Skip non-IDR
+  1622→            }
+  1623→          }
+  1624→
+  1625→          if (prod.aggregateRating) {
+  1626→            if (prod.aggregateRating.ratingValue && !product.rating) {
+  1627→              product.rating = parseFloat(prod.aggregateRating.ratingValue);
+  1628→            }
+  1629→            if (prod.aggregateRating.reviewCount && !product.reviewCount) {
+  1630→              product.reviewCount = parseInt(prod.aggregateRating.reviewCount, 10);
+  1631→            }
+  1632→          }
+  1633→        }
+  1634→      }
+  1635→    }
+  1636→  } catch {}
+  1637→
+  1638→  return product;
+  1639→}
+  1640→
+  1641→// Scrape Tokopedia search/listing page — runs INSIDE the page
+  1642→function scrapeTokopediaSearchPage(category) {
+  1643→  const products = [];
+  1644→
+  1645→  // Tokopedia search page product cards
+  1646→  const productCards = document.querySelectorAll('[data-testid="master-product-card"], .css-1g1gtb0, [class*="product-card"], [class*="pcv3__info"]');
+  1647→
+  1648→  for (const card of productCards) {
+  1649→    try {
+  1650→      const product = { category, marketplace: 'tokopedia' };
+  1651→
+  1652→      // Get link
+  1653→      const linkEl = card.closest('a') || card.querySelector('a');
+  1654→      if (linkEl) {
+  1655→        const href = linkEl.getAttribute('href') || '';
+  1656→        product.url = href.startsWith('/') ? 'https://www.tokopedia.com' + href : href;
+  1657→      }
+  1658→
+  1659→      if (!product.url || !product.url.includes('tokopedia.com')) continue;
+  1660→
+  1661→      // Get title
+  1662→      const titleEl = card.querySelector('[data-testid="master-product-card-name"], [class*="product-name"], [class*="pcv3__info__name"], span.css-1f4mp12');
+  1663→      if (titleEl) {
+  1664→        product.title = titleEl.textContent.trim();
+  1665→      }
+  1666→      if (!product.title || product.title.length < 3) continue;
+  1667→
+  1668→      // Get price
+  1669→      const priceEl = card.querySelector('[data-testid="master-product-card-price"], [class*="product-price"], [class*="pcv3__info__price"], span.css-1ksbit4');
+  1670→      if (priceEl) {
+  1671→        const priceText = priceEl.textContent;
+  1672→        const priceMatch = priceText.match(/Rp\s*([\d.]+)/i);
+  1673→        if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+  1674→      }
+  1675→
+  1676→      // Get image
+  1677→      const imgEl = card.querySelector('img');
+  1678→      if (imgEl) {
+  1679→        const src = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
+  1680→        if (src && !src.startsWith('data:') && src.length > 30) {
+  1681→          product.image = src;
+  1682→        }
+  1683→      }
+  1684→
+  1685→      // Get rating
+  1686→      const ratingEl = card.querySelector('[class*="rating"], [class*="pcv3__info__rating"]');
+  1687→      if (ratingEl) {
+  1688→        const rMatch = ratingEl.textContent.match(/(\d+[.,]\d+)/);
+  1689→        if (rMatch) product.rating = parseFloat(rMatch[1].replace(',', '.'));
+  1690→      }
+  1691→
+  1692→      // Get sold count
+  1693→      const text = card.textContent;
+  1694→      const soldMatch = text.match(/([\d.]+)\s*(?:rb|ribu)?\s*terjual/i);
+  1695→      if (soldMatch) {
+  1696→        if (soldMatch[0].includes('rb') || soldMatch[0].includes('ribu')) {
+  1697→          product.soldCount = Math.round(parseFloat(soldMatch[1].replace(',', '.')) * 1000);
+  1698→        } else {
+  1699→          product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
+  1700→        }
+  1701→      }
+  1702→
+  1703→      if (product.title && (product.price || product.url)) {
+  1704→        products.push(product);
+  1705→      }
+  1706→    } catch {}
+  1707→  }
+  1708→
+  1709→  // Deduplicate
+  1710→  const seen = new Set();
+  1711→  return products.filter(p => {
+  1712→    if (seen.has(p.url)) return false;
+  1713→    seen.add(p.url);
+  1714→    return true;
+  1715→  });
+  1716→}
+  1717→

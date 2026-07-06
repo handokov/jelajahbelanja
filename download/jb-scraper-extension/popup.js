@@ -1,7 +1,13 @@
 /**
- * JB Scraper — v8.0 (Shopee + Tokopedia + Accesstrade)
+ * JB Scraper — v9.0 (Shopee + Tokopedia + Accesstrade + Local Image Server)
  *
- * NEW v8.0:
+ * NEW v9.0:
+ * - Local Image Server! Simpan gambar di localhost:3000 supaya URL stabil
+ * - Tokopedia gambar gak hilang lagi — auto-download ke server lokal
+ * - Tombol "Simpan Gambar Lokal" sebelum download CSV
+ * - Batch image download (paralel, 5 concurrent)
+ *
+ * v8.0:
  * - Support Tokopedia! Scrape produk dari halaman Tokopedia
  * - Paste link Tokopedia (tokopedia.com, ta.tokopedia.com, tokopedia.link)
  * - Tab baru "Tokopedia" buat scrape dari halaman TKPD
@@ -12,6 +18,10 @@
  * - Fix: affiliate URL dari input field
  * - Fix: short link resolution via chrome.tabs
  */
+
+// ── Image Server Config ──
+const IMAGE_SERVER = 'http://localhost:3000';
+let imageServerOnline = false;
 
 // CSV headers — sesuai template JB Bulk Upload
 const CSV_HEADERS = 'title,url,image,price,originalPrice,discountPercent,rating,reviewCount,soldCount,location,category,marketplace,affiliateUrl,notes';
@@ -83,6 +93,76 @@ function downloadCSV(csv, filename) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ========== LOCAL IMAGE SERVER ==========
+
+// Cek apakah image server jalan
+async function checkImageServer() {
+  try {
+    const resp = await fetch(`${IMAGE_SERVER}/health`, { signal: AbortSignal.timeout(3000) });
+    const data = await resp.json();
+    imageServerOnline = data.status === 'ok';
+    return data;
+  } catch {
+    imageServerOnline = false;
+    return null;
+  }
+}
+
+// Download 1 gambar ke server lokal, return URL lokal
+async function saveImageToLocal(imageUrl) {
+  if (!imageUrl) return imageUrl;
+  if (imageUrl.includes('localhost:3000')) return imageUrl; // Udah lokal
+  
+  try {
+    const resp = await fetch(`${IMAGE_SERVER}/download?url=${encodeURIComponent(imageUrl)}`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await resp.json();
+    if (data.success) return data.localUrl;
+  } catch {}
+  return imageUrl; // Fallback ke URL asli
+}
+
+// Download semua gambar produk ke server lokal (batch)
+async function saveAllImagesToLocal(products) {
+  const needSave = products.filter(p => p.image && !p.image.includes('localhost:3000'));
+  if (needSave.length === 0) return { success: 0, failed: 0, total: 0 };
+  
+  // Coba batch endpoint dulu (lebih cepat)
+  try {
+    const urls = needSave.map(p => p.image);
+    const resp = await fetch(`${IMAGE_SERVER}/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const data = await resp.json();
+    if (data.results) {
+      let successCount = 0;
+      for (let i = 0; i < needSave.length; i++) {
+        if (data.results[i]?.success) {
+          needSave[i].image = data.results[i].localUrl;
+          successCount++;
+        }
+      }
+      return { success: successCount, failed: needSave.length - successCount, total: needSave.length };
+    }
+  } catch {}
+  
+  // Fallback: download satu-satu
+  let successCount = 0;
+  for (const p of needSave) {
+    const newUrl = await saveImageToLocal(p.image);
+    if (newUrl !== p.image) {
+      p.image = newUrl;
+      successCount++;
+    }
+  }
+  return { success: successCount, failed: needSave.length - successCount, total: needSave.length };
 }
 
 // ========== ACCESSTRADE CSV PARSER ==========
@@ -455,6 +535,18 @@ async function fetchTokopediaProduct(productUrl, category, affiliateUrl) {
 
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
+  // ── Check Image Server ──
+  const imgServerLabel = document.getElementById('imgServerLabel');
+  checkImageServer().then(data => {
+    if (data && data.status === 'ok') {
+      imgServerLabel.textContent = `ONLINE (${data.images} gambar)`;
+      imgServerLabel.style.color = '#4caf50';
+    } else {
+      imgServerLabel.textContent = 'OFFLINE — jalankan start.bat';
+      imgServerLabel.style.color = '#f44336';
+    }
+  });
+
   // Tab switching
   const tabBtns = document.querySelectorAll('.tab-btn');
   const tabContents = document.querySelectorAll('.tab-content');
@@ -636,9 +728,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Download CSV (Tab 1)
+  // Download CSV (Tab 1) — simpan gambar lokal dulu kalau server online
   if (downloadCsvBtn) {
-    downloadCsvBtn.addEventListener('click', () => {
+    downloadCsvBtn.addEventListener('click', async () => {
+      downloadCsvBtn.disabled = true;
+      downloadCsvBtn.textContent = '⏳ Menyimpan gambar...';
+
+      // Simpan gambar ke server lokal dulu
+      if (imageServerOnline && collected.length > 0) {
+        const imgResult = await saveAllImagesToLocal(collected);
+        if (imgResult.success > 0) {
+          saveCollected(); // Update localStorage
+          downloadCsvBtn.textContent = `🖼️ ${imgResult.success} gambar disimpan lokal!`;
+        } else {
+          downloadCsvBtn.textContent = '💾 Gambar tetap URL asli (server offline?)';
+        }
+      }
+
+      // Generate & download CSV
       const csv = buildCSV(collected);
       downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
       downloadCsvBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
@@ -955,7 +1062,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   if (linkDownloadBtn) {
-    linkDownloadBtn.addEventListener('click', () => {
+    linkDownloadBtn.addEventListener('click', async () => {
+      linkDownloadBtn.disabled = true;
+      linkDownloadBtn.textContent = '⏳ Menyimpan gambar...';
+
+      // Simpan gambar ke server lokal dulu
+      if (imageServerOnline && collected.length > 0) {
+        const imgResult = await saveAllImagesToLocal(collected);
+        if (imgResult.success > 0) {
+          saveCollected();
+          linkDownloadBtn.textContent = `🖼️ ${imgResult.success} gambar disimpan lokal!`;
+        } else {
+          linkDownloadBtn.textContent = '💾 Gambar tetap URL asli';
+        }
+      }
+
       const csv = buildCSV(collected);
       downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
       linkDownloadBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
@@ -1079,7 +1200,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   if (tkpdDownloadBtn) {
-    tkpdDownloadBtn.addEventListener('click', () => {
+    tkpdDownloadBtn.addEventListener('click', async () => {
+      tkpdDownloadBtn.disabled = true;
+      tkpdDownloadBtn.textContent = '⏳ Menyimpan gambar...';
+
+      // Simpan gambar ke server lokal dulu
+      if (imageServerOnline && collected.length > 0) {
+        const imgResult = await saveAllImagesToLocal(collected);
+        if (imgResult.success > 0) {
+          saveCollected();
+          tkpdDownloadBtn.textContent = `🖼️ ${imgResult.success} gambar disimpan lokal!`;
+        } else {
+          tkpdDownloadBtn.textContent = '💾 Gambar tetap URL asli';
+        }
+      }
+
       const csv = buildCSV(collected);
       downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
       tkpdDownloadBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
