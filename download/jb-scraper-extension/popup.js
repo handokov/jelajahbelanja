@@ -539,8 +539,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const imgServerLabel = document.getElementById('imgServerLabel');
   checkImageServer().then(data => {
     if (data && data.status === 'ok') {
-      imgServerLabel.textContent = `ONLINE (${data.images} gambar)`;
-      imgServerLabel.style.color = '#4caf50';
+      const cloudInfo = data.cloudinary || '';
+      const isConfigured = cloudInfo.includes('connected');
+      imgServerLabel.textContent = isConfigured 
+        ? `ONLINE ☁️ Cloudinary` 
+        : `ONLINE (local only)`;
+      imgServerLabel.style.color = isConfigured ? '#4caf50' : '#ff9800';
     } else {
       imgServerLabel.textContent = 'OFFLINE — jalankan start.bat';
       imgServerLabel.style.color = '#f44336';
