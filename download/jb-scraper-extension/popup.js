@@ -1,22 +1,20 @@
 /**
- * JB Scraper — v10.0 (Shopee + Tokopedia + Accesstrade + Cloudinary)
+ * JB Scraper — v11.0 (Shopee + Tokopedia + Accesstrade + Cloudinary)
  *
- * NEW v10.0:
+ * NEW v11.0:
+ * - AUTO-SAVE DRAFT! Semua form input otomatis tersimpan
+ * - Popup tutup buka lagi, data affiliate URL & image URL gak hilang!
+ * - Workflow: paste affiliate → tutup popup → zoom gambar → copy URL → buka popup → paste image URL → ambil produk
+ * - Visual indicator "💾 Tersimpan" setiap auto-save
+ * - Badge "📋 Draft" kalau ada data tersimpan saat buka popup
+ * - Auto-clear draft setelah produk berhasil ditambah
+ *
+ * v10.0:
  * - Manual Image URL! Paste gambar dari "Copy image address"
  * - Klik zoom gambar produk → klik kanan → Copy → paste di field Image URL
  * - Preview gambar langsung di popup
  * - Auto-upload ke Cloudinary saat download CSV
  * - Gambar Tokopedia gak hilang lagi!
- *
- * v9.0:
- * - Local Image Server! Simpan gambar di localhost:3000 supaya URL stabil
- * - Batch image download (paralel, 5 concurrent)
- *
- * v8.0:
- * - Support Tokopedia! Scrape produk dari halaman Tokopedia
- * - Paste link Tokopedia (tokopedia.com, ta.tokopedia.com, tokopedia.link)
- * - Tab baru "Tokopedia" buat scrape dari halaman TKPD
- * - Affiliate link Tokopedia dari Accesstrade (AT)
  */
 
 // ── Image Server Config ──
@@ -43,6 +41,60 @@ function saveCollected() {
   updateUI();
   updateLinkUI();
   updateTkpdUI();
+}
+
+// ========== AUTO-SAVE DRAFT ==========
+// Simpan semua form input ke localStorage supaya gak hilang kalau popup tutup
+
+const DRAFT_KEY = 'jb_draft';
+
+// Ambil draft dari localStorage
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+// Simpan draft ke localStorage
+function saveDraft(data) {
+  try {
+    const existing = loadDraft();
+    const merged = { ...existing, ...data };
+    // Hapus key yang kosong
+    for (const k of Object.keys(merged)) {
+      if (merged[k] === '' || merged[k] === null || merged[k] === undefined) {
+        delete merged[k];
+      }
+    }
+    if (Object.keys(merged).length > 0) {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(merged));
+    } else {
+      localStorage.removeItem(DRAFT_KEY);
+    }
+  } catch {}
+}
+
+// Hapus draft (setelah produk berhasil ditambah)
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {}
+}
+
+// Cek apakah ada draft tersimpan
+function hasDraft() {
+  const draft = loadDraft();
+  return Object.keys(draft).length > 0;
+}
+
+// Tampilkan indicator "💾 Tersimpan" sesaat
+function showSavedIndicator() {
+  const indicator = document.getElementById('savedIndicator');
+  if (indicator) {
+    indicator.style.opacity = '1';
+    setTimeout(() => { indicator.style.opacity = '0'; }, 1500);
+  }
 }
 
 function esc(text) {
@@ -535,6 +587,66 @@ async function fetchTokopediaProduct(productUrl, category, affiliateUrl) {
 
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
+  // ── AUTO-SAVE DRAFT: Restore & Setup ──
+  const draft = loadDraft();
+  const draftBadge = document.getElementById('draftBadge');
+
+  // Restore draft ke form inputs
+  if (draft.affiliateUrl) { const el = document.getElementById('affiliateUrlInput'); if (el) el.value = draft.affiliateUrl; }
+  if (draft.shopeeImageUrl) { const el = document.getElementById('shopeeImageUrl'); if (el) el.value = draft.shopeeImageUrl; }
+  if (draft.linkInput) { const el = document.getElementById('linkInput'); if (el) el.value = draft.linkInput; }
+  if (draft.tkpdAffiliate) { const el = document.getElementById('tkpdAffiliateInput'); if (el) el.value = draft.tkpdAffiliate; }
+  if (draft.tkpdTabAffiliate) { const el = document.getElementById('tkpdTabAffiliateInput'); if (el) el.value = draft.tkpdTabAffiliate; }
+  if (draft.tkpdImageUrl) { const el = document.getElementById('tkpdImageUrl'); if (el) el.value = draft.tkpdImageUrl; }
+  if (draft.category) { const el = document.getElementById('categorySelect'); if (el) el.value = draft.category; }
+  if (draft.linkCategory) { const el = document.getElementById('linkCategorySelect'); if (el) el.value = draft.linkCategory; }
+  if (draft.tkpdCategory) { const el = document.getElementById('tkpdCategorySelect'); if (el) el.value = draft.tkpdCategory; }
+
+  // Tampilkan badge "📋 Draft" kalau ada data tersimpan
+  if (draftBadge) {
+    const hasData = Object.keys(draft).length > 0;
+    draftBadge.style.display = hasData ? 'inline-block' : 'none';
+  }
+
+  // Setup auto-save untuk semua form inputs
+  const autoSaveFields = [
+    { id: 'affiliateUrlInput', key: 'affiliateUrl' },
+    { id: 'shopeeImageUrl', key: 'shopeeImageUrl' },
+    { id: 'linkInput', key: 'linkInput' },
+    { id: 'tkpdAffiliateInput', key: 'tkpdAffiliate' },
+    { id: 'tkpdTabAffiliateInput', key: 'tkpdTabAffiliate' },
+    { id: 'tkpdImageUrl', key: 'tkpdImageUrl' },
+  ];
+
+  for (const field of autoSaveFields) {
+    const el = document.getElementById(field.id);
+    if (el) {
+      el.addEventListener('input', () => {
+        saveDraft({ [field.key]: el.value.trim() });
+        showSavedIndicator();
+        // Update draft badge visibility
+        if (draftBadge) draftBadge.style.display = hasDraft() ? 'inline-block' : 'none';
+      });
+    }
+  }
+
+  // Auto-save untuk select dropdowns (kategori)
+  const autoSaveSelects = [
+    { id: 'categorySelect', key: 'category' },
+    { id: 'linkCategorySelect', key: 'linkCategory' },
+    { id: 'tkpdCategorySelect', key: 'tkpdCategory' },
+  ];
+
+  for (const field of autoSaveSelects) {
+    const el = document.getElementById(field.id);
+    if (el) {
+      el.addEventListener('change', () => {
+        saveDraft({ [field.key]: el.value });
+        showSavedIndicator();
+      });
+    }
+  }
+
   // ── Image URL preview ──
   const shopeeImageUrlInput = document.getElementById('shopeeImageUrl');
   const shopeeImgPreview = document.getElementById('shopeeImgPreview');
@@ -542,6 +654,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const tkpdImgPreview = document.getElementById('tkpdImgPreview');
 
   if (shopeeImageUrlInput) {
+    // Restore preview dari draft
+    const shopeeUrl = shopeeImageUrlInput.value.trim();
+    if (shopeeUrl && (shopeeUrl.startsWith('http://') || shopeeUrl.startsWith('https://'))) {
+      shopeeImgPreview.src = shopeeUrl;
+      shopeeImgPreview.style.display = 'block';
+    }
     shopeeImageUrlInput.addEventListener('input', () => {
       const url = shopeeImageUrlInput.value.trim();
       if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
@@ -553,6 +671,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   if (tkpdImageUrlInput) {
+    // Restore preview dari draft
+    const tkpdUrl = tkpdImageUrlInput.value.trim();
+    if (tkpdUrl && (tkpdUrl.startsWith('http://') || tkpdUrl.startsWith('https://'))) {
+      tkpdImgPreview.src = tkpdUrl;
+      tkpdImgPreview.style.display = 'block';
+    }
     tkpdImageUrlInput.addEventListener('input', () => {
       const url = tkpdImageUrlInput.value.trim();
       if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
@@ -752,6 +876,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
           collected.push(product);
           saveCollected();
+          // Clear draft & form setelah berhasil tambah produk
+          clearDraft();
+          document.getElementById('shopeeImageUrl').value = '';
+          document.getElementById('shopeeImgPreview').style.display = 'none';
+          document.getElementById('affiliateUrlInput').value = '';
+          if (draftBadge) draftBadge.style.display = 'none';
           scrapeDetailBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} 📦${product.soldCount || 0} (total ${collected.length})`;
         }
       } catch {
@@ -1161,6 +1291,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!existingUrls.has(product.url)) {
               collected.push(product);
               saveCollected();
+              // Clear draft & form setelah berhasil tambah produk
+              clearDraft();
+              document.getElementById('tkpdImageUrl').value = '';
+              document.getElementById('tkpdImgPreview').style.display = 'none';
+              document.getElementById('tkpdTabAffiliateInput').value = '';
+              if (draftBadge) draftBadge.style.display = 'none';
               scrapeTkpdPageBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} (total ${collected.length})`;
             } else {
               scrapeTkpdPageBtn.textContent = '⚠️ Udah ada!';
@@ -1224,6 +1360,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (!existingUrls.has(product.url)) {
             collected.push(product);
             saveCollected();
+            // Clear draft & form setelah berhasil tambah produk
+            clearDraft();
+            document.getElementById('tkpdImageUrl').value = '';
+            document.getElementById('tkpdImgPreview').style.display = 'none';
+            document.getElementById('tkpdTabAffiliateInput').value = '';
+            if (draftBadge) draftBadge.style.display = 'none';
             scrapeTkpdDetailBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} (total ${collected.length})`;
           } else {
             scrapeTkpdDetailBtn.textContent = '⚠️ Udah ada!';
