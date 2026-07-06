@@ -236,11 +236,52 @@
     }
     .marketplace-badge.shopee { background: #ee4d2d; color: white; }
     .marketplace-badge.tokopedia { background: #1a7f37; color: white; }
+
+    .image-input-group {
+      margin-bottom: 6px;
+      padding: 8px;
+      background: #0f1a0f;
+      border-radius: 6px;
+      border: 1px solid #1a5e1a;
+    }
+    .image-input-group label {
+      font-size: 11px;
+      color: #81c784;
+      display: block;
+      margin-bottom: 3px;
+      font-weight: 600;
+    }
+    .image-input-group input {
+      width: 100%;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #2e7d32;
+      border-radius: 6px;
+      padding: 7px;
+      font-size: 10px;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+    }
+    .image-input-group input::placeholder { color: #555; }
+    .image-input-group input:focus { outline: none; border-color: #4caf50; }
+    .image-input-group small {
+      font-size: 9px;
+      color: #66bb6a;
+      display: block;
+      margin-top: 3px;
+      line-height: 1.4;
+    }
+    .image-input-group .img-preview {
+      margin-top: 4px;
+      max-width: 100%;
+      max-height: 60px;
+      border-radius: 4px;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>JB Scraper <span style="font-size:10px;color:#4caf50">v9.0</span></h1>
+    <h1>JB Scraper <span style="font-size:10px;color:#4caf50">v10.0</span></h1>
     <small>Shopee + Tokopedia + Accesstrade</small>
     <div id="imageServerStatus" style="font-size:9px;margin-top:3px;color:#666;">🖼️ Image Server: <span id="imgServerLabel">mengecek...</span></div>
   </div>
@@ -277,6 +318,13 @@
       <label>🔗 Link Affiliate (opsional):</label>
       <input type="text" id="affiliateUrlInput" placeholder="https://s.shopee.co.id/xxxxx atau https://atid.me/xxxxx">
       <small>Paste link affiliate dari Shopee Affiliate, otomatis masuk ke CSV!</small>
+    </div>
+
+    <div class="image-input-group">
+      <label>🖼️ Image URL (opsional):</label>
+      <input type="text" id="shopeeImageUrl" placeholder="Klik kanan gambar → Copy image address">
+      <img class="img-preview" id="shopeeImgPreview">
+      <small>💡 Klik zoom gambar produk, klik kanan → "Copy image address", paste di sini</small>
     </div>
 
     <button id="scrapePageBtn" class="btn btn-orange" disabled>
@@ -393,6 +441,13 @@
       <label>🔗 Link Affiliate (dari AT — opsional):</label>
       <input type="text" id="tkpdTabAffiliateInput" placeholder="https://ta.tokopedia.com/... atau https://tokopedia.link/...">
       <small>Click "GET LINK" di Accesstrade, paste di sini</small>
+    </div>
+
+    <div class="image-input-group">
+      <label>🖼️ Image URL (opsional):</label>
+      <input type="text" id="tkpdImageUrl" placeholder="Klik zoom gambar → klik kanan → Copy image address">
+      <img class="img-preview" id="tkpdImgPreview">
+      <small>💡 Klik gambar produk → zoom → klik kanan "Copy image address", paste di sini</small>
     </div>
 
     <button id="scrapeTkpdPageBtn" class="btn btn-green-tkpd" disabled>

@@ -1,10 +1,15 @@
 /**
- * JB Scraper — v9.0 (Shopee + Tokopedia + Accesstrade + Local Image Server)
+ * JB Scraper — v10.0 (Shopee + Tokopedia + Accesstrade + Cloudinary)
  *
- * NEW v9.0:
+ * NEW v10.0:
+ * - Manual Image URL! Paste gambar dari "Copy image address"
+ * - Klik zoom gambar produk → klik kanan → Copy → paste di field Image URL
+ * - Preview gambar langsung di popup
+ * - Auto-upload ke Cloudinary saat download CSV
+ * - Gambar Tokopedia gak hilang lagi!
+ *
+ * v9.0:
  * - Local Image Server! Simpan gambar di localhost:3000 supaya URL stabil
- * - Tokopedia gambar gak hilang lagi — auto-download ke server lokal
- * - Tombol "Simpan Gambar Lokal" sebelum download CSV
  * - Batch image download (paralel, 5 concurrent)
  *
  * v8.0:
@@ -12,11 +17,6 @@
  * - Paste link Tokopedia (tokopedia.com, ta.tokopedia.com, tokopedia.link)
  * - Tab baru "Tokopedia" buat scrape dari halaman TKPD
  * - Affiliate link Tokopedia dari Accesstrade (AT)
- *
- * v7.2:
- * - Fix: reviewCount/soldCount diambil dari Shopee API via background tab
- * - Fix: affiliate URL dari input field
- * - Fix: short link resolution via chrome.tabs
  */
 
 // ── Image Server Config ──
@@ -535,6 +535,35 @@ async function fetchTokopediaProduct(productUrl, category, affiliateUrl) {
 
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
+  // ── Image URL preview ──
+  const shopeeImageUrlInput = document.getElementById('shopeeImageUrl');
+  const shopeeImgPreview = document.getElementById('shopeeImgPreview');
+  const tkpdImageUrlInput = document.getElementById('tkpdImageUrl');
+  const tkpdImgPreview = document.getElementById('tkpdImgPreview');
+
+  if (shopeeImageUrlInput) {
+    shopeeImageUrlInput.addEventListener('input', () => {
+      const url = shopeeImageUrlInput.value.trim();
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        shopeeImgPreview.src = url;
+        shopeeImgPreview.style.display = 'block';
+      } else {
+        shopeeImgPreview.style.display = 'none';
+      }
+    });
+  }
+  if (tkpdImageUrlInput) {
+    tkpdImageUrlInput.addEventListener('input', () => {
+      const url = tkpdImageUrlInput.value.trim();
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        tkpdImgPreview.src = url;
+        tkpdImgPreview.style.display = 'block';
+      } else {
+        tkpdImgPreview.style.display = 'none';
+      }
+    });
+  }
+
   // ── Check Image Server ──
   const imgServerLabel = document.getElementById('imgServerLabel');
   checkImageServer().then(data => {
@@ -665,6 +694,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const category = categorySelect.value;
       const affiliateUrl = (document.getElementById('affiliateUrlInput')?.value || '').trim();
+      const manualImageUrl = (document.getElementById('shopeeImageUrl')?.value || '').trim();
 
       try {
         const domResults = await chrome.scripting.executeScript({
@@ -684,6 +714,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (affiliateUrl) product.affiliateUrl = affiliateUrl;
+
+        // Override image URL kalau user paste manual (lebih reliable)
+        if (manualImageUrl) product.image = manualImageUrl;
 
         const url = currentTab.url;
         const idMatch = url.match(/-i\.(\d+)\.(\d+)/) || url.match(/\/product\/(\d+)\/(\d+)/);
@@ -1115,12 +1148,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const category = tkpdCategorySelect?.value || 'Fashion';
       const affiliateUrl = (tkpdTabAffiliateInput?.value || '').trim();
+      const manualImageUrl = (document.getElementById('tkpdImageUrl')?.value || '').trim();
 
       try {
         // If it's a product detail page, scrape as detail
         if (isTkpdDetail) {
           const product = await fetchTokopediaProduct(currentTab.url, category, affiliateUrl);
           if (product && product.title) {
+            // Override image URL kalau user paste manual
+            if (manualImageUrl) product.image = manualImageUrl;
             const existingUrls = new Set(collected.map(p => p.url));
             if (!existingUrls.has(product.url)) {
               collected.push(product);
@@ -1177,10 +1213,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const category = tkpdCategorySelect?.value || 'Fashion';
       const affiliateUrl = (tkpdTabAffiliateInput?.value || '').trim();
+      const manualImageUrl = (document.getElementById('tkpdImageUrl')?.value || '').trim();
 
       try {
         const product = await fetchTokopediaProduct(currentTab.url, category, affiliateUrl);
         if (product && product.title) {
+          // Override image URL kalau user paste manual
+          if (manualImageUrl) product.image = manualImageUrl;
           const existingUrls = new Set(collected.map(p => p.url));
           if (!existingUrls.has(product.url)) {
             collected.push(product);
