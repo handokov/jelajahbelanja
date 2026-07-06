@@ -277,14 +277,44 @@
       border-radius: 4px;
       display: none;
     }
+
+    /* Auto-save indicator */
+    #savedIndicator {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: #1b5e20;
+      color: #a5d6a7;
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* Draft badge */
+    #draftBadge {
+      display: none;
+      font-size: 9px;
+      background: #1565c0;
+      color: #90caf9;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>JB Scraper <span style="font-size:10px;color:#4caf50">v10.0</span></h1>
+    <h1>JB Scraper <span style="font-size:10px;color:#4caf50">v11.0</span><span id="draftBadge">📋 Draft</span></h1>
     <small>Shopee + Tokopedia + Accesstrade</small>
     <div id="imageServerStatus" style="font-size:9px;margin-top:3px;color:#666;">🖼️ Image Server: <span id="imgServerLabel">mengecek...</span></div>
   </div>
+
+  <div id="savedIndicator">💾 Tersimpan!</div>
 
   <div id="pageStatus" class="page-status info">Buka Shopee/Tokopedia atau paste link</div>
 
