@@ -56,6 +56,10 @@ interface AffiliateBannerProps {
 /**
  * Komponen untuk menampilkan banner affiliate dari database.
  * Mendukung tracking pixel untuk impression tracking.
+ *
+ * PENTING: referrerPolicy="no-referrer" digunakan agar gambar
+ * dari affiliate network (AccessTrade, dll) bisa dimuat tanpa
+ * diblokir oleh referrer check.
  */
 export function AffiliateBanner({
   position = "sidebar",
@@ -79,19 +83,7 @@ export function AffiliateBanner({
 
   // Error atau tidak ada data
   if (isError || !ads || ads.length === 0) {
-    // Tampilkan placeholder (tidak ada iklan aktif)
-    return (
-      <div
-        className={`rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-center ${className}`}
-        style={{ minHeight: 120 }}
-      >
-        <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center px-4">
-          Slot Iklan
-          <br />
-          <span className="text-[10px]">300x250</span>
-        </p>
-      </div>
-    );
+    return null; // Jangan tampilkan placeholder - lebih bersih
   }
 
   // Pilih banner: spesifik atau acak
@@ -110,8 +102,9 @@ export function AffiliateBanner({
         href={banner.href}
         target="_blank"
         rel="noopener noreferrer nofollow sponsored"
-        className="block rounded-lg overflow-hidden hover:opacity-90 transition-opacity"
+        className="group block rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:border-fuchsia-400 dark:hover:border-fuchsia-500 hover:shadow-lg hover:shadow-fuchsia-500/10 transition-all duration-200 cursor-pointer"
         aria-label={banner.name}
+        title={`Klik untuk ${banner.name}`}
       >
         {/* Tracking pixel untuk impression (1x1 invisible) */}
         {banner.trackingPixel && (
@@ -119,20 +112,33 @@ export function AffiliateBanner({
             src={banner.trackingPixel}
             width={1}
             height={1}
-            border={0}
             alt=""
-            style={{ display: "none" }}
+            referrerPolicy="no-referrer"
+            style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
             aria-hidden="true"
           />
         )}
-        {/* Banner image */}
+        {/* Banner image - referrerPolicy no-referrer WAJIB untuk affiliate */}
         <img
           src={banner.imgSrc}
           alt={banner.name}
           width={banner.width}
           height={banner.height}
-          className="w-full h-auto rounded-lg"
+          className="w-full h-auto block group-hover:scale-[1.02] transition-transform duration-200"
           loading="lazy"
+          referrerPolicy="no-referrer"
+          crossOrigin="anonymous"
+          onError={(e) => {
+            // Fallback: coba tanpa crossOrigin jika gagal
+            const img = e.target as HTMLImageElement;
+            if (img.crossOrigin) {
+              img.removeAttribute("crossorigin");
+              img.src = banner.imgSrc; // retry
+            } else {
+              // Jika masih gagal, sembunyikan
+              img.style.display = "none";
+            }
+          }}
         />
       </a>
     </div>

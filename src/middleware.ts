@@ -19,6 +19,7 @@ const PROTECTED_API_PATTERNS = [
   { path: "/api/shopee-products", methods: ["POST", "PATCH", "DELETE"] },
   { path: "/api/categories", methods: ["POST", "PATCH", "DELETE", "PUT"] },
   { path: "/api/affiliate", methods: ["GET", "PATCH", "POST"] },
+  { path: "/api/affiliate-ads", methods: ["POST", "PATCH", "DELETE"] },
   { path: "/api/banners", methods: ["POST", "PATCH", "DELETE"] },
   { path: "/api/bulk-upload", methods: ["POST"] },
   { path: "/api/scrape-shopee", methods: ["POST"] },
