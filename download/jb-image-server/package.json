@@ -1,0 +1,12 @@
+{
+  "name": "jb-image-server",
+  "version": "1.0.0",
+  "description": "Local image server for JB Scraper — simpan gambar Tokopedia/Shopee di lokal supaya URL stabil",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}
