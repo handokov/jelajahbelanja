@@ -1,15 +1,20 @@
 {
   "manifest_version": 3,
-  "name": "JB Shopee Scraper",
-  "version": "7.3.0",
-  "description": "Klik produk Shopee → copy CSV → paste ke JB upload massal (v7.3: fix Halaman Tidak Tersedia)",
+  "name": "JB Scraper",
+  "version": "8.0.0",
+  "description": "Scrape Shopee & Tokopedia → copy CSV → paste ke JB upload massal (v8.0: support Tokopedia!)",
   "permissions": ["activeTab", "scripting", "clipboardWrite", "tabs"],
   "host_permissions": [
     "https://shopee.co.id/*",
     "https://s.shopee.co.id/*",
     "https://shope.ee/*",
     "https://shp.ee/*",
-    "https://atid.me/*"
+    "https://atid.me/*",
+    "https://www.tokopedia.com/*",
+    "https://tokopedia.com/*",
+    "https://ta.tokopedia.com/*",
+    "https://tokopedia.link/*",
+    "https://toko.link/*"
   ],
   "action": {
     "default_popup": "popup.html",

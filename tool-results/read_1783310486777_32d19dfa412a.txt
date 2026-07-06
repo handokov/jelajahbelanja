@@ -1,0 +1,1127 @@
+     1→/**
+     2→ * JB Shopee Scraper + Accesstrade Converter — v6
+     3→ *
+     4→ * FIX v6:
+     5→ * - Fix: deteksi URL format /product/shopId/itemId (bukan cuma -i.shopId.itemId)
+     6→ * - Fix: tombol "Ambil 1 Produk" aktif di kedua format URL
+     7→ * - Fix: shopId/itemId di-extract dari kedua format URL
+     8→ *
+     9→ * FIX v5:
+    10→ * - Fix: gambar ambil dari meta og:image (paling reliable)
+    11→ * - Fix: rating/reviewCount/soldCount diambil dari Shopee API v4 langsung
+    12→ * - Fix: selector gambar diperbaiki supaya nggak ambil logo Shopee
+    13→ *
+    14→ * 2 Tab:
+    15→ * 1. Scrape Shopee — ambil produk langsung dari halaman Shopee
+    16→ * 2. Convert Accesstrade — convert CSV Accesstrade ke format JB
+    17→ *
+    18→ * GAK butuh server. GAK butuh bot. GAK butuh Node.js.
+    19→ */
+    20→
+    21→// CSV headers — sesuai template JB Bulk Upload
+    22→const CSV_HEADERS = 'title,url,image,price,originalPrice,discountPercent,rating,reviewCount,soldCount,location,category,marketplace,affiliateUrl,notes';
+    23→
+    24→// Produk yang udah dikumpul dari Scrape Shopee
+    25→let collected = [];
+    26→
+    27→// Produk dari Accesstrade CSV
+    28→let accesstradeProducts = [];
+    29→
+    30→// Load dari localStorage
+    31→try {
+    32→  const saved = localStorage.getItem('jb_collected');
+    33→  if (saved) collected = JSON.parse(saved);
+    34→} catch {}
+    35→
+    36→function saveCollected() {
+    37→  localStorage.setItem('jb_collected', JSON.stringify(collected));
+    38→  updateUI();
+    39→}
+    40→
+    41→function esc(text) {
+    42→  const d = document.createElement('div');
+    43→  d.textContent = text;
+    44→  return d.innerHTML;
+    45→}
+    46→
+    47→function csvField(val) {
+    48→  if (val == null || val === '') return '';
+    49→  const s = String(val);
+    50→  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    51→    return '"' + s.replace(/"/g, '""') + '"';
+    52→  }
+    53→  return s;
+    54→}
+    55→
+    56→function buildCSV(products) {
+    57→  const lines = [CSV_HEADERS];
+    58→  for (const p of products) {
+    59→    lines.push([
+    60→      csvField(p.title),
+    61→      csvField(p.url),
+    62→      csvField(p.image),
+    63→      csvField(p.price),
+    64→      csvField(p.originalPrice),
+    65→      csvField(p.discountPercent),
+    66→      csvField(p.rating),
+    67→      csvField(p.reviewCount),
+    68→      csvField(p.soldCount),
+    69→      csvField(p.location),
+    70→      csvField(p.category),
+    71→      csvField(p.marketplace || 'shopee'),
+    72→      csvField(p.affiliateUrl),
+    73→      csvField(p.notes),
+    74→    ].join(','));
+    75→  }
+    76→  return lines.join('\r\n');
+    77→}
+    78→
+    79→function downloadCSV(csv, filename) {
+    80→  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    81→  const url = URL.createObjectURL(blob);
+    82→  const a = document.createElement('a');
+    83→  a.href = url;
+    84→  a.download = filename;
+    85→  document.body.appendChild(a);
+    86→  a.click();
+    87→  document.body.removeChild(a);
+    88→  URL.revokeObjectURL(url);
+    89→}
+    90→
+    91→// ========== ACCESSTRADE CSV PARSER ==========
+    92→
+    93→function parseAccesstradeCSV(text) {
+    94→  const products = [];
+    95→  const lines = text.split('\n');
+    96→
+    97→  for (const line of lines) {
+    98→    if (!line.trim()) continue;
+    99→
+   100→    // Accesstrade CSV pakai koma sebagai separator
+   101→    // Tapi ada field yang mengandung koma di dalam kutip
+   102→    const fields = parseCSVLine(line);
+   103→
+   104→    if (fields.length < 10) continue;
+   105→
+   106→    try {
+   107→      const productId = (fields[0] || '').replace('?', '').trim();
+   108→      const title = (fields[1] || '').trim();
+   109→      const image = (fields[2] || '').trim();
+   110→      // fields[3] biasanya kosong
+   111→      const affiliateLink1 = (fields[4] || '').trim(); // s.shopee.co.id link
+   112→      const affiliateLink2 = (fields[5] || '').trim(); // atid.me link (LEBIH BAIK)
+   113→      const description = (fields[6] || '').trim();
+   114→      const price = parseInt((fields[7] || '0').replace(/[^\d]/g, ''), 10);
+   115→      const originalPrice = parseInt((fields[8] || '0').replace(/[^\d]/g, ''), 10);
+   116→      // fields[9] = stock/flag
+   117→      const category = (fields[14] || '').trim(); // Kategori utama
+   118→      const subCategory = (fields[16] || '').trim();
+   119→      const subSubCategory = (fields[18] || '').trim();
+   120→      const currency = (fields[19] || '').trim();
+   121→      const brand = (fields[20] || '').trim();
+   122→
+   123→      // Skip kalau gak ada data penting
+   124→      if (!productId || !title || !price) continue;
+   125→      if (currency && currency !== 'IDR') continue;
+   126→
+   127→      // Extract shopId dan itemId dari affiliate link
+   128→      let shopId = '', itemId = productId;
+   129→      const urlMatch = affiliateLink1.match(/product%2F(\d+)%2F(\d+)/) ||
+   130→                       affiliateLink1.match(/product\/(\d+)\/(\d+)/);
+   131→      if (urlMatch) {
+   132→        shopId = urlMatch[1];
+   133→        itemId = urlMatch[2];
+   134→      }
+   135→
+   136→      // Buat URL Shopee
+   137→      const shopeeUrl = shopId && itemId
+   138→        ? `https://shopee.co.id/universal-link/product/${shopId}/${itemId}`
+   139→        : `https://shopee.co.id/product-${productId}`;
+   140→
+   141→      // Pilih affiliate link terbaik (atid.me lebih trackable)
+   142→      const affiliateUrl = affiliateLink2 || affiliateLink1 || '';
+   143→
+   144→      // Bersihin deskripsi (hapus HTML tags)
+   145→      const cleanDesc = description
+   146→        .replace(/<br\s*\/?>/gi, ' ')
+   147→        .replace(/<[^>]+>/g, '')
+   148→        .replace(/\s+/g, ' ')
+   149→        .trim()
+   150→        .substring(0, 200);
+   151→
+   152→      // Map kategori Accesstrade ke JB
+   153→      const jbCategory = mapCategory(category, subCategory, subSubCategory);
+   154→
+   155→      // Hitung diskon
+   156→      let discountPercent = null;
+   157→      if (originalPrice > 0 && price > 0 && originalPrice > price) {
+   158→        discountPercent = Math.round((1 - price / originalPrice) * 100);
+   159→      }
+   160→
+   161→      products.push({
+   162→        title: title.substring(0, 200),
+   163→        url: shopeeUrl,
+   164→        image: image,
+   165→        price: price,
+   166→        originalPrice: originalPrice > price ? originalPrice : null,
+   167→        discountPercent: discountPercent,
+   168→        rating: null, // Accesstrade gak kasih rating
+   169→        reviewCount: null,
+   170→        soldCount: null,
+   171→        location: null,
+   172→        category: jbCategory,
+   173→        marketplace: 'shopee',
+   174→        affiliateUrl: decodeURIComponent(affiliateUrl),
+   175→        notes: brand && brand !== 'NoBrand' ? `Brand: ${brand}` : '',
+   176→      });
+   177→    } catch {}
+   178→  }
+   179→
+   180→  return products;
+   181→}
+   182→
+   183→// Parse CSV line yang handle kutip dua
+   184→function parseCSVLine(line) {
+   185→  const fields = [];
+   186→  let current = '';
+   187→  let inQuotes = false;
+   188→
+   189→  for (let i = 0; i < line.length; i++) {
+   190→    const ch = line[i];
+   191→    if (inQuotes) {
+   192→      if (ch === '"') {
+   193→        if (i + 1 < line.length && line[i + 1] === '"') {
+   194→          current += '"';
+   195→          i++;
+   196→        } else {
+   197→          inQuotes = false;
+   198→        }
+   199→      } else {
+   200→        current += ch;
+   201→      }
+   202→    } else {
+   203→      if (ch === '"') {
+   204→        inQuotes = true;
+   205→      } else if (ch === ',') {
+   206→        fields.push(current);
+   207→        current = '';
+   208→      } else {
+   209→        current += ch;
+   210→      }
+   211→    }
+   212→  }
+   213→  fields.push(current);
+   214→  return fields;
+   215→}
+   216→
+   217→// Map kategori Accesstrade ke JB
+   218→function mapCategory(cat, subCat, subSubCat) {
+   219→  const c = (cat || '').toLowerCase();
+   220→  if (c.includes('fashion') || c.includes('muslim fashion')) return 'Fashion';
+   221→  if (c.includes('beauty') || c.includes('health')) return 'Beauty';
+   222→  if (c.includes('home') || c.includes('living')) return 'Home & Living';
+   223→  if (c.includes('gadget') || c.includes('electronic') || c.includes('computer') || c.includes('mobile')) return 'Electronics';
+   224→  if (c.includes('sport') || c.includes('outdoor')) return 'Sports';
+   225→  if (c.includes('food') || c.includes('beverage')) return 'Food & Beverage';
+   226→  if (c.includes('baby') || c.includes('mom') || c.includes('kid')) return 'Kids & Baby';
+   227→  if (c.includes('automotive') || c.includes('motor') || c.includes('car')) return 'Automotive';
+   228→  if (c.includes('book') || c.includes('stationery')) return 'Books & Stationery';
+   229→  if (c.includes('pet')) return 'Pets';
+   230→  return 'Fashion'; // default
+   231→}
+   232→
+   233→// ========== UI ==========
+   234→
+   235→function updateUI() {
+   236→  const countBadge = document.getElementById('countBadge');
+   237→  const collectedList = document.getElementById('collectedList');
+   238→  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+   239→
+   240→  if (countBadge) {
+   241→    countBadge.textContent = collected.length;
+   242→  }
+   243→
+   244→  if (collectedList) {
+   245→    if (collected.length === 0) {
+   246→      collectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
+   247→    } else {
+   248→      collectedList.innerHTML = collected.map((p, i) =>
+   249→        `<div>${i + 1}. ${esc(p.title.substring(0, 45))}${p.title.length > 45 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
+   250→      ).join('');
+   251→    }
+   252→  }
+   253→
+   254→  if (downloadCsvBtn) {
+   255→    downloadCsvBtn.disabled = collected.length === 0;
+   256→  }
+   257→}
+   258→
+   259→// ========== INIT ==========
+   260→document.addEventListener('DOMContentLoaded', async () => {
+   261→  // Tab switching
+   262→  const tabBtns = document.querySelectorAll('.tab-btn');
+   263→  const tabContents = document.querySelectorAll('.tab-content');
+   264→
+   265→  tabBtns.forEach(btn => {
+   266→    btn.addEventListener('click', () => {
+   267→      tabBtns.forEach(b => b.classList.remove('active'));
+   268→      tabContents.forEach(c => c.classList.remove('active'));
+   269→      btn.classList.add('active');
+   270→      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+   271→    });
+   272→  });
+   273→
+   274→  // ===== TAB 1: SCRAPE SHOPEE =====
+   275→  const pageStatus = document.getElementById('pageStatus');
+   276→  const scrapePageBtn = document.getElementById('scrapePageBtn');
+   277→  const scrapeDetailBtn = document.getElementById('scrapeDetailBtn');
+   278→  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+   279→  const clearBtn = document.getElementById('clearBtn');
+   280→  const categorySelect = document.getElementById('categorySelect');
+   281→
+   282→  let currentTab = null;
+   283→  let isShopee = false;
+   284→  let isDetail = false;
+   285→
+   286→  try {
+   287→    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+   288→    currentTab = tab;
+   289→    if (tab.url && tab.url.includes('shopee.co.id')) {
+   290→      isShopee = true;
+   291→      // Deteksi halaman detail — 2 format URL:
+   292→      // 1. https://shopee.co.id/nama-produk-i.123.456  (format lama)
+   293→      // 2. https://shopee.co.id/product/123/456        (format baru)
+   294→      const urlMatch1 = tab.url.match(/-i\.(\d+)\.(\d+)/);
+   295→      const urlMatch2 = tab.url.match(/\/product\/(\d+)\/(\d+)/);
+   296→      isDetail = !!(urlMatch1 || urlMatch2);
+   297→      if (isDetail) {
+   298→        pageStatus.textContent = '📄 Halaman produk detail';
+   299→        pageStatus.className = 'page-status ok';
+   300→      } else {
+   301→        pageStatus.textContent = '🔍 Halaman Shopee — siap ambil!';
+   302→        pageStatus.className = 'page-status ok';
+   303→      }
+   304→    }
+   305→  } catch {}
+   306→
+   307→  if (scrapePageBtn) scrapePageBtn.disabled = !isShopee;
+   308→  if (scrapeDetailBtn) scrapeDetailBtn.disabled = !(isShopee && isDetail);
+   309→
+   310→  // Scrape halaman
+   311→  if (scrapePageBtn) {
+   312→    scrapePageBtn.addEventListener('click', async () => {
+   313→      scrapePageBtn.disabled = true;
+   314→      scrapePageBtn.textContent = '⏳ Membaca...';
+   315→
+   316→      const category = categorySelect.value;
+   317→      const affiliateUrl = (document.getElementById('affiliateUrlInput')?.value || '').trim();
+   318→
+   319→      try {
+   320→        const results = await chrome.scripting.executeScript({
+   321→          target: { tabId: currentTab.id },
+   322→          func: scrapeSearchPage,
+   323→          args: [category],
+   324→        });
+   325→
+   326→        if (results?.[0]?.result) {
+   327→          const products = results[0].result;
+   328→          const existingUrls = new Set(collected.map(p => p.url));
+   329→          let newCount = 0;
+   330→          for (const p of products) {
+   331→            if (!existingUrls.has(p.url)) {
+   332→              // Tambahkan affiliate URL dari input
+   333→              if (affiliateUrl) p.affiliateUrl = affiliateUrl;
+   334→              collected.push(p);
+   335→              existingUrls.add(p.url);
+   336→              newCount++;
+   337→            }
+   338→          }
+   339→          saveCollected();
+   340→          scrapePageBtn.textContent = `✅ +${newCount} baru (total ${collected.length})`;
+   341→        } else {
+   342→          scrapePageBtn.textContent = '❌ Gak bisa baca — scroll dulu?';
+   343→        }
+   344→      } catch {
+   345→        scrapePageBtn.textContent = '❌ Error';
+   346→      }
+   347→
+   348→      setTimeout(() => {
+   349→        scrapePageBtn.textContent = '📦 Ambil Semua Produk di Halaman Ini';
+   350→        scrapePageBtn.disabled = !isShopee;
+   351→      }, 2000);
+   352→    });
+   353→  }
+   354→
+   355→  // Scrape detail — v5: pakai Shopee API + meta tags
+   356→  if (scrapeDetailBtn) {
+   357→    scrapeDetailBtn.addEventListener('click', async () => {
+   358→      scrapeDetailBtn.disabled = true;
+   359→      scrapeDetailBtn.textContent = '⏳ Membaca...';
+   360→
+   361→      const category = categorySelect.value;
+   362→      const affiliateUrl = (document.getElementById('affiliateUrlInput')?.value || '').trim();
+   363→
+   364→      try {
+   365→        // Step 1: Scrape basic data dari DOM
+   366→        const domResults = await chrome.scripting.executeScript({
+   367→          target: { tabId: currentTab.id },
+   368→          func: scrapeProductDetail,
+   369→          args: [category],
+   370→        });
+   371→
+   372→        const product = domResults?.[0]?.result;
+   373→
+   374→        if (!product || !product.title) {
+   375→          scrapeDetailBtn.textContent = '❌ Gak bisa baca';
+   376→          setTimeout(() => {
+   377→            scrapeDetailBtn.textContent = '🔍 Ambil 1 Produk (Halaman Detail)';
+   378→            scrapeDetailBtn.disabled = !(isShopee && isDetail);
+   379→          }, 2000);
+   380→          return;
+   381→        }
+   382→
+   383→        // Tambahkan affiliate URL dari input
+   384→        if (affiliateUrl) product.affiliateUrl = affiliateUrl;
+   385→
+   386→        // Step 2: Ambil data lengkap dari Shopee API v4
+   387→        const url = currentTab.url;
+   388→        // Support 2 format URL:
+   389→        // 1. -i.shopId.itemId  (format lama)
+   390→        // 2. /product/shopId/itemId  (format baru)
+   391→        const idMatch = url.match(/-i\.(\d+)\.(\d+)/) || url.match(/\/product\/(\d+)\/(\d+)/);
+   392→        if (idMatch) {
+   393→          const shopId = idMatch[1];
+   394→          const itemId = idMatch[2];
+   395→
+   396→          try {
+   397→            const apiResults = await chrome.scripting.executeScript({
+   398→              target: { tabId: currentTab.id },
+   399→              func: fetchShopeeApiInPage,
+   400→              args: [shopId, itemId],
+   401→            });
+   402→
+   403→            const apiData = apiResults?.[0]?.result;
+   404→            if (apiData) {
+   405→              // Override dengan data API (lebih akurat)
+   406→              if (apiData.image) product.image = apiData.image;
+   407→              if (apiData.rating) product.rating = apiData.rating;
+   408→              if (apiData.reviewCount) product.reviewCount = apiData.reviewCount;
+   409→              if (apiData.soldCount) product.soldCount = apiData.soldCount;
+   410→              if (apiData.price && apiData.price > 0) product.price = apiData.price;
+   411→              if (apiData.originalPrice && apiData.originalPrice > 0) product.originalPrice = apiData.originalPrice;
+   412→              if (apiData.location) product.location = apiData.location;
+   413→              if (apiData.title) product.title = apiData.title;
+   414→              if (apiData.discountPercent) product.discountPercent = apiData.discountPercent;
+   415→            }
+   416→          } catch (e) {
+   417→            console.log('Shopee API fallback to DOM data:', e);
+   418→          }
+   419→        }
+   420→
+   421→        const existingUrls = new Set(collected.map(p => p.url));
+   422→        if (existingUrls.has(product.url)) {
+   423→          scrapeDetailBtn.textContent = '⚠️ Udah ada!';
+   424→        } else {
+   425→          collected.push(product);
+   426→          saveCollected();
+   427→          scrapeDetailBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} 📦${product.soldCount || 0} (total ${collected.length})`;
+   428→        }
+   429→      } catch {
+   430→        scrapeDetailBtn.textContent = '❌ Error';
+   431→      }
+   432→
+   433→      setTimeout(() => {
+   434→        scrapeDetailBtn.textContent = '🔍 Ambil 1 Produk (Halaman Detail)';
+   435→        scrapeDetailBtn.disabled = !(isShopee && isDetail);
+   436→      }, 2000);
+   437→    });
+   438→  }
+   439→
+   440→  // Download CSV
+   441→  if (downloadCsvBtn) {
+   442→    downloadCsvBtn.addEventListener('click', () => {
+   443→      const csv = buildCSV(collected);
+   444→      downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
+   445→      downloadCsvBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
+   446→      setTimeout(() => { downloadCsvBtn.textContent = '💾 Download File CSV (Format JB)'; }, 3000);
+   447→    });
+   448→  }
+   449→
+   450→  // Clear
+   451→  if (clearBtn) {
+   452→    clearBtn.addEventListener('click', () => {
+   453→      if (collected.length === 0) return;
+   454→      collected = [];
+   455→      saveCollected();
+   456→    });
+   457→  }
+   458→
+   459→  // ===== TAB 2: CONVERT ACCESSTRADE =====
+   460→  const selectFileBtn = document.getElementById('selectFileBtn');
+   461→  const fileInput = document.getElementById('fileInput');
+   462→  const convertBtn = document.getElementById('convertBtn');
+   463→  const convertStatus = document.getElementById('convertStatus');
+   464→
+   465→  if (selectFileBtn) {
+   466→    selectFileBtn.addEventListener('click', () => {
+   467→      fileInput.click();
+   468→    });
+   469→  }
+   470→
+   471→  if (fileInput) {
+   472→    fileInput.addEventListener('change', async (e) => {
+   473→      const file = e.target.files[0];
+   474→      if (!file) return;
+   475→
+   476→      selectFileBtn.textContent = '⏳ Membaca file...';
+   477→
+   478→      try {
+   479→        const text = await file.text();
+   480→
+   481→        convertStatus.style.display = 'block';
+   482→        convertStatus.textContent = '⏳ Parsing CSV Accesstrade...';
+   483→        convertStatus.className = 'page-status info';
+   484→
+   485→        // Parse CSV
+   486→        accesstradeProducts = parseAccesstradeCSV(text);
+   487→
+   488→        convertStatus.textContent = `✅ Ditemukan ${accesstradeProducts.length} produk! Atur filter lalu klik Convert.`;
+   489→        convertStatus.className = 'page-status ok';
+   490→
+   491→        selectFileBtn.textContent = `📂 ${file.name} (${accesstradeProducts.length} produk)`;
+   492→        convertBtn.disabled = false;
+   493→
+   494→      } catch (err) {
+   495→        convertStatus.textContent = `❌ Error: ${err.message}`;
+   496→        convertStatus.className = 'page-status no';
+   497→        selectFileBtn.textContent = '📂 Pilih File CSV Accesstrade';
+   498→      }
+   499→    });
+   500→  }
+   501→
+   502→  if (convertBtn) {
+   503→    convertBtn.addEventListener('click', () => {
+   504→      const minPrice = parseInt(document.getElementById('minPrice')?.value || '0', 10);
+   505→      const maxPrice = parseInt(document.getElementById('maxPrice')?.value || '999999999', 10);
+   506→      const maxProducts = parseInt(document.getElementById('maxProducts')?.value || '200', 10);
+   507→      const catFilter = (document.getElementById('catFilter')?.value || '').toLowerCase().trim();
+   508→
+   509→      convertBtn.disabled = true;
+   510→      convertBtn.textContent = '⏳ Converting...';
+   511→
+   512→      // Filter produk
+   513→      let filtered = accesstradeProducts.filter(p => {
+   514→        if (p.price < minPrice) return false;
+   515→        if (maxPrice && p.price > maxPrice) return false;
+   516→        if (catFilter && !(p.category || '').toLowerCase().includes(catFilter)) return false;
+   517→        return true;
+   518→      });
+   519→
+   520→      // Limit jumlah
+   521→      filtered = filtered.slice(0, maxProducts);
+   522→
+   523→      if (filtered.length === 0) {
+   524→        convertStatus.textContent = '❌ Gak ada produk yang lolos filter. Coba ubah filter.';
+   525→        convertStatus.className = 'page-status no';
+   526→        convertBtn.disabled = false;
+   527→        convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
+   528→        return;
+   529→      }
+   530→
+   531→      // Build & download CSV
+   532→      const csv = buildCSV(filtered);
+   533→      const now = new Date();
+   534→      const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+   535→      downloadCSV(csv, `jb-accesstrade-${dateStr}-${filtered.length}produk.csv`);
+   536→
+   537→      convertStatus.textContent = `✅ Done! ${filtered.length} produk di-download (dari ${accesstradeProducts.length} total).`;
+   538→      convertStatus.className = 'page-status ok';
+   539→
+   540→      convertBtn.disabled = false;
+   541→      convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
+   542→    });
+   543→  }
+   544→
+   545→  updateUI();
+   546→
+   547→  // ===== TAB 2: PASTE LINK =====
+   548→  const linkInput = document.getElementById('linkInput');
+   549→  const fetchLinkBtn = document.getElementById('fetchLinkBtn');
+   550→  const linkStatus = document.getElementById('linkStatus');
+   551→  const linkCategorySelect = document.getElementById('linkCategorySelect');
+   552→  const linkDownloadBtn = document.getElementById('linkDownloadBtn');
+   553→  const linkClearBtn = document.getElementById('linkClearBtn');
+   554→  const linkCountBadge = document.getElementById('linkCountBadge');
+   555→  const linkCollectedList = document.getElementById('linkCollectedList');
+   556→
+   557→  // Shared collected array — same as scrape tab
+   558→  function updateLinkUI() {
+   559→    if (linkCountBadge) linkCountBadge.textContent = collected.length;
+   560→    if (linkCollectedList) {
+   561→      if (collected.length === 0) {
+   562→        linkCollectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
+   563→      } else {
+   564→        linkCollectedList.innerHTML = collected.map((p, i) =>
+   565→          `<div>${i + 1}. ${esc(p.title.substring(0, 45))}${p.title.length > 45 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
+   566→        ).join('');
+   567→      }
+   568→    }
+   569→    if (linkDownloadBtn) linkDownloadBtn.disabled = collected.length === 0;
+   570→  }
+   571→
+   572→  // Parse shopId & itemId from various Shopee URL formats
+   573→  function parseShopeeUrl(url) {
+   574→    // Format 1: https://shopee.co.id/nama-produk-i.1291923399.28837840128
+   575→    let m = url.match(/-i\.(\d+)\.(\d+)/);
+   576→    if (m) return { shopId: m[1], itemId: m[2] };
+   577→
+   578→    // Format 2: https://shopee.co.id/product/1291923399/28837840128
+   579→    m = url.match(/\/product\/(\d+)\/(\d+)/);
+   580→    if (m) return { shopId: m[1], itemId: m[2] };
+   581→
+   582→    // Format 3: https://shopee.co.id/universal-link/product/1291923399/28837840128
+   583→    m = url.match(/\/universal-link\/product\/(\d+)\/(\d+)/);
+   584→    if (m) return { shopId: m[1], itemId: m[2] };
+   585→
+   586→    return null;
+   587→  }
+   588→
+   589→  // Resolve short link (s.shopee.co.id, shope.ee, atid.me) by opening a tab
+   590→  // Ini lebih reliable daripada fetch() karena Shopee pakai JS redirect
+   591→  function resolveShortLinkViaTab(shortUrl) {
+   592→    return new Promise((resolve) => {
+   593→      let resolved = false;
+   594→
+   595→      chrome.tabs.create({ url: shortUrl, active: false }, (tab) => {
+   596→        const tabId = tab.id;
+   597→
+   598→        // Timeout 10 detik — kalau gak resolve, tutup tab
+   599→        const timeout = setTimeout(() => {
+   600→          if (!resolved) {
+   601→            resolved = true;
+   602→            chrome.tabs.remove(tabId).catch(() => {});
+   603→            resolve(shortUrl); // fallback ke URL asli
+   604→          }
+   605→        }, 10000);
+   606→
+   607→        // Watch for URL changes
+   608→        function onUpdated(updatedTabId, changeInfo, updatedTab) {
+   609→          if (updatedTabId !== tabId) return;
+   610→
+   611→          const currentUrl = updatedTab.url || '';
+   612→
+   613→          // Cek apakah URL udah redirect ke halaman produk Shopee
+   614→          if (currentUrl.match(/-i\.\d+\.\d+/) ||
+   615→              currentUrl.match(/\/product\/\d+\/\d+/) ||
+   616→              currentUrl.match(/\/universal-link\/product\/\d+\/\d+/)) {
+   617→            if (!resolved) {
+   618→              resolved = true;
+   619→              clearTimeout(timeout);
+   620→              chrome.tabs.onUpdated.removeListener(onUpdated);
+   621→              chrome.tabs.remove(tabId).catch(() => {});
+   622→              resolve(currentUrl);
+   623→            }
+   624→          }
+   625→        }
+   626→
+   627→        chrome.tabs.onUpdated.addListener(onUpdated);
+   628→      });
+   629→    });
+   630→  }
+   631→
+   632→  // Fallback: resolve via fetch (kadang kerja untuk redirect HTTP 302)
+   633→  async function resolveShortLinkViaFetch(shortUrl) {
+   634→    try {
+   635→      const resp = await fetch(shortUrl, {
+   636→        method: 'GET',
+   637→        redirect: 'follow',
+   638→        credentials: 'include',
+   639→      });
+   640→      if (resp.url && resp.url.includes('shopee.co.id')) {
+   641→        return resp.url;
+   642→      }
+   643→    } catch {}
+   644→    return null;
+   645→  }
+   646→
+   647→  // Fetch product data via Shopee API v4 — PENTING: harus dari dalam halaman Shopee!
+   648→  // Buka halaman utama Shopee (bukan /product/ karena sering ke-block),
+   649→  // terus inject script buat fetch API dari dalam halaman Shopee
+   650→  async function fetchProductFromLink(shopId, itemId, category, affiliateUrl) {
+   651→    const productUrl = `https://shopee.co.id/product/${shopId}/${itemId}`;
+   652→
+   653→    return new Promise((resolve) => {
+   654→      let resolved = false;
+   655→      let tabId = null;
+   656→
+   657→      const timeout = setTimeout(() => {
+   658→        if (!resolved) {
+   659→          resolved = true;
+   660→          if (tabId) chrome.tabs.remove(tabId).catch(() => {});
+   661→          resolve(null);
+   662→        }
+   663→      }, 20000);
+   664→
+   665→      // Buka halaman utama Shopee dulu (bukan /product/ karena sering "Halaman Tidak Tersedia")
+   666→      chrome.tabs.create({ url: 'https://shopee.co.id/', active: false }, (tab) => {
+   667→        tabId = tab.id;
+   668→
+   669→        function onUpdated(updatedTabId, changeInfo) {
+   670→          if (updatedTabId !== tabId) return;
+   671→          if (changeInfo.status !== 'complete') return;
+   672→
+   673→          // Tunggu Shopee homepage load
+   674→          setTimeout(async () => {
+   675→            try {
+   676→              // Inject fetchShopeeApiInPage ke dalam halaman Shopee homepage
+   677→              // Dari sini kita bisa fetch API karena cookies & origin bener
+   678→              const results = await chrome.scripting.executeScript({
+   679→                target: { tabId: tabId },
+   680→                func: fetchShopeeApiInPage,
+   681→                args: [shopId, itemId],
+   682→              });
+   683→
+   684→              const apiData = results?.[0]?.result;
+   685→
+   686→              if (!apiData || !apiData.title) {
+   687→                // API gak kasih data, coba retry sekali
+   688→                await new Promise(r => setTimeout(r, 2000));
+   689→                const retryResults = await chrome.scripting.executeScript({
+   690→                  target: { tabId: tabId },
+   691→                  func: fetchShopeeApiInPage,
+   692→                  args: [shopId, itemId],
+   693→                });
+   694→                const retryData = retryResults?.[0]?.result;
+   695→                if (retryData) Object.assign(apiData || {}, retryData);
+   696→              }
+   697→
+   698→              // Build product dari API data
+   699→              const product = {
+   700→                category,
+   701→                marketplace: 'shopee',
+   702→                url: productUrl,
+   703→                affiliateUrl: affiliateUrl || '',
+   704→              };
+   705→
+   706→              if (apiData) {
+   707→                if (apiData.title) product.title = apiData.title;
+   708→                if (apiData.image) product.image = apiData.image;
+   709→                if (apiData.price && apiData.price > 0) product.price = apiData.price;
+   710→                if (apiData.originalPrice && apiData.originalPrice > 0) product.originalPrice = apiData.originalPrice;
+   711→                if (apiData.discountPercent) product.discountPercent = apiData.discountPercent;
+   712→                if (apiData.rating) product.rating = apiData.rating;
+   713→                if (apiData.reviewCount) product.reviewCount = apiData.reviewCount;
+   714→                if (apiData.soldCount !== undefined) product.soldCount = apiData.soldCount;
+   715→                if (apiData.location) product.location = apiData.location;
+   716→              }
+   717→
+   718→              if (!resolved) {
+   719→                resolved = true;
+   720→                clearTimeout(timeout);
+   721→                chrome.tabs.onUpdated.removeListener(onUpdated);
+   722→                chrome.tabs.remove(tabId).catch(() => {});
+   723→                resolve(product.title ? product : null);
+   724→              }
+   725→            } catch (e) {
+   726→              console.error('fetchProductFromLink error:', e);
+   727→              if (!resolved) {
+   728→                resolved = true;
+   729→                clearTimeout(timeout);
+   730→                chrome.tabs.onUpdated.removeListener(onUpdated);
+   731→                chrome.tabs.remove(tabId).catch(() => {});
+   732→                resolve(null);
+   733→              }
+   734→            }
+   735→          }, 3000); // Tunggu 3 detik supaya Shopee homepage sempat load semua
+   736→        }
+   737→
+   738→        chrome.tabs.onUpdated.addListener(onUpdated);
+   739→      });
+   740→    });
+   741→  }
+   742→
+   743→  // (resolveShortLink removed — using resolveShortLinkViaTab + resolveShortLinkViaFetch instead)
+   744→
+   745→  if (fetchLinkBtn) {
+   746→    fetchLinkBtn.addEventListener('click', async () => {
+   747→      const rawText = (linkInput?.value || '').trim();
+   748→      if (!rawText) {
+   749→        linkStatus.style.display = 'block';
+   750→        linkStatus.textContent = '❌ Paste link dulu!';
+   751→        linkStatus.className = 'page-status no';
+   752→        return;
+   753→      }
+   754→
+   755→      const category = linkCategorySelect?.value || 'Fashion';
+   756→      const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+   757→
+   758→      fetchLinkBtn.disabled = true;
+   759→      fetchLinkBtn.textContent = '⏳ Memproses...';
+   760→      linkStatus.style.display = 'block';
+   761→      linkStatus.textContent = `⏳ Memproses ${lines.length} link...`;
+   762→      linkStatus.className = 'page-status info';
+   763→
+   764→      let addedCount = 0;
+   765→      let errorCount = 0;
+   766→      const existingUrls = new Set(collected.map(p => p.url));
+   767→
+   768→      for (let i = 0; i < lines.length; i++) {
+   769→        let url = lines[i];
+   770→        let affiliateUrl = '';
+   771→
+   772→        // Check if it's a short link (s.shopee.co.id, shope.ee, etc.)
+   773→        if (url.match(/s\.shopee\.co\.id|shope\.ee|shp\.ee|shp\.in/i)) {
+   774→          affiliateUrl = url; // Simpan affiliate URL asli
+   775→          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
+   776→
+   777→          // Coba fetch dulu (lebih cepat)
+   778→          let resolved = await resolveShortLinkViaFetch(url);
+   779→          if (resolved && parseShopeeUrl(resolved)) {
+   780→            url = resolved;
+   781→          } else {
+   782→            // Fallback: buka tab untuk resolve (lebih reliable)
+   783→            url = await resolveShortLinkViaTab(url);
+   784→          }
+   785→        }
+   786→
+   787→        // Also check for atid.me links (Accesstrade)
+   788→        if (url.match(/atid\.me/i)) {
+   789→          affiliateUrl = url;
+   790→          linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
+   791→          let resolved = await resolveShortLinkViaFetch(url);
+   792→          if (resolved && parseShopeeUrl(resolved)) {
+   793→            url = resolved;
+   794→          } else {
+   795→            url = await resolveShortLinkViaTab(url);
+   796→          }
+   797→        }
+   798→
+   799→        // Extract shopId & itemId
+   800→        const ids = parseShopeeUrl(url);
+   801→        if (!ids) {
+   802→          errorCount++;
+   803→          continue;
+   804→        }
+   805→
+   806→        linkStatus.textContent = `⏳ Ambil data produk ${i + 1}/${lines.length}...`;
+   807→
+   808→        const product = await fetchProductFromLink(ids.shopId, ids.itemId, category, affiliateUrl);
+   809→        if (product && product.title) {
+   810→          if (!existingUrls.has(product.url)) {
+   811→            collected.push(product);
+   812→            existingUrls.add(product.url);
+   813→            addedCount++;
+   814→          }
+   815→        } else {
+   816→          errorCount++;
+   817→        }
+   818→      }
+   819→
+   820→      saveCollected();
+   821→      updateLinkUI();
+   822→
+   823→      if (addedCount > 0) {
+   824→        linkStatus.textContent = `✅ +${addedCount} produk ditambah!${errorCount > 0 ? ` (${errorCount} gagal)` : ''} — Total: ${collected.length}`;
+   825→        linkStatus.className = 'page-status ok';
+   826→        fetchLinkBtn.textContent = `✅ +${addedCount} ditambah!`;
+   827→      } else {
+   828→        linkStatus.textContent = `❌ Gak ada produk yang berhasil diambil.${errorCount > 0 ? ` ${errorCount} link gagal.` : ''} Coba cek format link.`;
+   829→        linkStatus.className = 'page-status no';
+   830→        fetchLinkBtn.textContent = '❌ Gagal';
+   831→      }
+   832→
+   833→      setTimeout(() => {
+   834→        fetchLinkBtn.disabled = false;
+   835→        fetchLinkBtn.textContent = '🔗 Ambil Data dari Link';
+   836→      }, 2500);
+   837→    });
+   838→  }
+   839→
+   840→  if (linkDownloadBtn) {
+   841→    linkDownloadBtn.addEventListener('click', () => {
+   842→      const csv = buildCSV(collected);
+   843→      downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
+   844→      linkDownloadBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
+   845→      setTimeout(() => { linkDownloadBtn.textContent = '💾 Download File CSV (Format JB)'; }, 3000);
+   846→    });
+   847→  }
+   848→
+   849→  if (linkClearBtn) {
+   850→    linkClearBtn.addEventListener('click', () => {
+   851→      if (collected.length === 0) return;
+   852→      collected = [];
+   853→      saveCollected();
+   854→      updateLinkUI();
+   855→    });
+   856→  }
+   857→
+   858→  updateLinkUI();
+   859→});
+   860→
+   861→
+   862→// ================================================================
+   863→//  SCRAPING — jalan DI DALAM halaman Shopee
+   864→// ================================================================
+   865→
+   866→function scrapeSearchPage(category) {
+   867→  const products = [];
+   868→  const links = document.querySelectorAll('a[href*="-i."]');
+   869→
+   870→  for (const link of links) {
+   871→    try {
+   872→      const product = { category, marketplace: 'shopee' };
+   873→      const text = link.innerText || '';
+   874→      const href = link.getAttribute('href') || '';
+   875→
+   876→      product.url = href.startsWith('/') ? 'https://shopee.co.id' + href : href;
+   877→
+   878→      const idMatch = href.match(/-i\.(\d+)\.(\d+)/);
+   879→      if (!idMatch) continue;
+   880→
+   881→      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+   882→      if (lines.length > 0) product.title = lines[0];
+   883→      if (!product.title || product.title.length < 3) continue;
+   884→
+   885→      const priceMatch = text.match(/Rp([\d.]+)/);
+   886→      if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+   887→
+   888→      const allPrices = [...text.matchAll(/Rp([\d.]+)/g)];
+   889→      if (allPrices.length > 1) {
+   890→        const firstPrice = parseInt(allPrices[0][1].replace(/\./g, ''), 10);
+   891→        const secondPrice = parseInt(allPrices[1][1].replace(/\./g, ''), 10);
+   892→        if (secondPrice > firstPrice) {
+   893→          product.originalPrice = secondPrice;
+   894→          if (product.originalPrice > 0 && product.price > 0) {
+   895→            product.discountPercent = Math.round((1 - product.price / product.originalPrice) * 100);
+   896→          }
+   897→        }
+   898→      }
+   899→
+   900→      const soldMatch = text.match(/([\d.]+)\s*terjual/i);
+   901→      if (soldMatch) {
+   902→        product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
+   903→      } else {
+   904→        const rbMatch = text.match(/([\d,]+)\s*rb\s*terjual/i);
+   905→        if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
+   906→      }
+   907→
+   908→      // Rating: cari pola "4.9" atau "4,9" yang dekat dengan bintang atau setelah terjual
+   909→      const ratingPatterns = [
+   910→        /(\d+[.,]\d+)\s*(?:bintang|⭐|🌟)/i,
+   911→        /terjual[\s\S]*?(\d+[.,]\d+)/i,
+   912→        /(\d+[.,]\d+)\s*\((\d[\d.]*)\s*(?:rating|review|evaluasi)/i,
+   913→      ];
+   914→      for (const pat of ratingPatterns) {
+   915→        const m = text.match(pat);
+   916→        if (m) {
+   917→          product.rating = parseFloat(m[1].replace(',', '.'));
+   918→          break;
+   919→        }
+   920→      }
+   921→
+   922→      // Gambar: prioritas yang pasti produk, bukan logo
+   923→      const img = link.querySelector('img');
+   924→      if (img) {
+   925→        const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+   926→        // Skip logo/icon kecil dan data URI
+   927→        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo') && src.includes('susercontent')) {
+   928→          product.image = src;
+   929→        }
+   930→      }
+   931→
+   932→      if (product.title && product.price) {
+   933→        products.push(product);
+   934→      }
+   935→    } catch {}
+   936→  }
+   937→
+   938→  const seen = new Set();
+   939→  return products.filter(p => {
+   940→    if (seen.has(p.url)) return false;
+   941→    seen.add(p.url);
+   942→    return true;
+   943→  });
+   944→}
+   945→
+   946→// v5: Scrape detail — diperbaiki supaya gambar, rating, review, terjual benar
+   947→function scrapeProductDetail(category) {
+   948→  const url = window.location.href;
+   949→  const product = { category, marketplace: 'shopee', url };
+   950→
+   951→  // ── Title ──
+   952→  const titleSelectors = [
+   953→    'h1',
+   954→    '[class*="qaNIZv"]',
+   955→    '[class*="WBVL_7"]',
+   956→    '[class*="_44qnta"]',
+   957→    'span[class*="title"]',
+   958→    '[data-testid="product-name"]',
+   959→  ];
+   960→  for (const sel of titleSelectors) {
+   961→    const el = document.querySelector(sel);
+   962→    if (el && el.textContent.trim().length > 3) {
+   963→      product.title = el.textContent.trim();
+   964→      break;
+   965→    }
+   966→  }
+   967→
+   968→  // ── Gambar: prioritaskan og:image dari meta tag ──
+   969→  // og:image paling reliable, bukan logo Shopee
+   970→  const ogImage = document.querySelector('meta[property="og:image"]');
+   971→  if (ogImage) {
+   972→    const imgContent = ogImage.getAttribute('content');
+   973→    if (imgContent && imgContent.includes('susercontent')) {
+   974→      product.image = imgContent;
+   975→    }
+   976→  }
+   977→
+   978→  // Fallback: cari gambar produk yang benar
+   979→  if (!product.image) {
+   980→    const imgSelectors = [
+   981→      'img[src*="down-id.img.susercontent.com"]',
+   982→      'img[src*="susercontent.com/file/sg-"]',
+   983→      'img[class*="product-image"]',
+   984→      '[class*="product-img"] img',
+   985→      '[class*="MIVED"] img',
+   986→      '[class*="ZPN9su"] img',
+   987→    ];
+   988→    for (const sel of imgSelectors) {
+   989→      const el = document.querySelector(sel);
+   990→      if (el) {
+   991→        const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
+   992→        // Pastikan bukan logo dan bukan data URI
+   993→        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo')) {
+   994→          product.image = src;
+   995→          break;
+   996→        }
+   997→      }
+   998→    }
+   999→  }
+  1000→
+  1001→  // ── Harga ──
+  1002→  const bodyText = document.body.innerText;
+  1003→  const priceMatch = bodyText.match(/Rp([\d.]+)/);
+  1004→  if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+  1005→
+  1006→  const allPrices = [...bodyText.matchAll(/Rp([\d.]+)/g)];
+  1007→  if (allPrices.length > 1) {
+  1008→    const secondPrice = parseInt(allPrices[1][1].replace(/\./g, ''), 10);
+  1009→    if (secondPrice > (product.price || 0)) {
+  1010→      product.originalPrice = secondPrice;
+  1011→      if (product.originalPrice > 0 && product.price > 0) {
+  1012→        product.discountPercent = Math.round((1 - product.price / product.originalPrice) * 100);
+  1013→      }
+  1014→    }
+  1015→  }
+  1016→
+  1017→  // ── Terjual ──
+  1018→  const soldMatch = bodyText.match(/([\d.]+)\s*terjual/i);
+  1019→  if (soldMatch) {
+  1020→    product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
+  1021→  } else {
+  1022→    const rbMatch = bodyText.match(/([\d,]+)\s*rb\s*terjual/i);
+  1023→    if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
+  1024→  }
+  1025→
+  1026→  // ── Rating & Review Count ──
+  1027→  // Cari pola "4.9 (1.2rb rating)" atau "4.9 • 1.2rb rating"
+  1028→  const ratingReviewMatch = bodyText.match(/(\d+[.,]\d+)\s*(?:\(([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review)\)|[•|]\s*([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review))/i);
+  1029→  if (ratingReviewMatch) {
+  1030→    product.rating = parseFloat(ratingReviewMatch[1].replace(',', '.'));
+  1031→    const reviewStr = ratingReviewMatch[2] || ratingReviewMatch[3] || '';
+  1032→    if (reviewStr.includes('rb') || reviewStr.includes('ribu')) {
+  1033→      product.reviewCount = Math.round(parseFloat(reviewStr.replace(/[rbibu\s,]/g, '').replace(',', '.')) * 1000);
+  1034→    } else {
+  1035→      product.reviewCount = parseInt(reviewStr.replace(/\./g, '').replace(',', ''), 10);
+  1036→    }
+  1037→  }
+  1038→
+  1039→  // Fallback: cari rating saja
+  1040→  if (!product.rating) {
+  1041→    // Cari di area rating — biasa di dekat bintang
+  1042→    const ratingEl = document.querySelector('[class*="rating"], [class*="Rating"]');
+  1043→    if (ratingEl) {
+  1044→      const rText = ratingEl.textContent;
+  1045→      const rMatch = rText.match(/(\d+[.,]\d+)/);
+  1046→      if (rMatch) product.rating = parseFloat(rMatch[1].replace(',', '.'));
+  1047→    }
+  1048→  }
+  1049→
+  1050→  // ── Lokasi ──
+  1051→  const locMatch = bodyText.match(/Dikirim dari\s*([^\n,]+)/i);
+  1052→  if (locMatch) product.location = locMatch[1].trim();
+  1053→
+  1054→  return product;
+  1055→}
+  1056→
+  1057→// v5: Fetch Shopee API v4 dari dalam halaman (paling akurat!)
+  1058→function fetchShopeeApiInPage(shopId, itemId) {
+  1059→  const apiUrl = `https://shopee.co.id/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`;
+  1060→
+  1061→  return fetch(apiUrl, {
+  1062→    credentials: 'include', // Pakai cookies dari halaman Shopee yang sedang dibuka
+  1063→    headers: {
+  1064→      'Accept': 'application/json',
+  1065→      'X-Shopee-Language': 'id',
+  1066→      'X-API-SOURCE': 'pc',
+  1067→    },
+  1068→  })
+  1069→    .then(res => res.json())
+  1070→    .then(data => {
+  1071→      if (!data.data) return null;
+  1072→      const item = data.data;
+  1073→      const result = {};
+  1074→
+  1075→      if (item.name) result.title = item.name;
+  1076→
+  1077→      // Gambar — paling reliable dari API
+  1078→      if (item.image) {
+  1079→        result.image = `https://down-id.img.susercontent.com/file/${item.image}`;
+  1080→      } else if (item.images && item.images.length > 0) {
+  1081→        result.image = `https://down-id.img.susercontent.com/file/${item.images[0]}`;
+  1082→      }
+  1083→
+  1084→      // Harga
+  1085→      const priceMin = item.price_min || item.price;
+  1086→      if (priceMin) {
+  1087→        const priceVal = Array.isArray(priceMin) ? priceMin[0] : priceMin;
+  1088→        result.price = typeof priceVal === 'number' ? priceVal : parseInt(String(priceVal), 10);
+  1089→      }
+  1090→
+  1091→      const priceBeforeDiscount = item.price_min_before_discount || item.price_before_discount;
+  1092→      if (priceBeforeDiscount) {
+  1093→        const origVal = Array.isArray(priceBeforeDiscount) ? priceBeforeDiscount[0] : priceBeforeDiscount;
+  1094→        const origPrice = typeof origVal === 'number' ? origVal : parseInt(String(origVal), 10);
+  1095→        if (origPrice > 0) {
+  1096→          result.originalPrice = origPrice;
+  1097→          const p = result.price || 0;
+  1098→          if (origPrice > p) {
+  1099→            result.discountPercent = Math.round(((origPrice - p) / origPrice) * 100);
+  1100→          }
+  1101→        }
+  1102→      }
+  1103→
+  1104→      // Rating & Review
+  1105→      if (item.item_rating) {
+  1106→        result.rating = item.item_rating.rating_star || 0;
+  1107→        const ratingCount = item.item_rating.rating_count || [];
+  1108→        result.reviewCount = Array.isArray(ratingCount)
+  1109→          ? ratingCount.reduce((sum, c) => sum + (c || 0), 0)
+  1110→          : 0;
+  1111→      }
+  1112→
+  1113→      // Terjual
+  1114→      if (item.historical_sold !== undefined && item.historical_sold !== null) {
+  1115→        result.soldCount = item.historical_sold;
+  1116→      } else if (item.sold !== undefined && item.sold !== null) {
+  1117→        result.soldCount = item.sold;
+  1118→      }
+  1119→
+  1120→      // Lokasi
+  1121→      if (item.shop_location) result.location = item.shop_location;
+  1122→
+  1123→      return result;
+  1124→    })
+  1125→    .catch(() => null);
+  1126→}
+  1127→

@@ -1,27 +1,22 @@
 /**
- * JB Shopee Scraper + Accesstrade Converter — v6
+ * JB Scraper — v8.0 (Shopee + Tokopedia + Accesstrade)
  *
- * FIX v6:
- * - Fix: deteksi URL format /product/shopId/itemId (bukan cuma -i.shopId.itemId)
- * - Fix: tombol "Ambil 1 Produk" aktif di kedua format URL
- * - Fix: shopId/itemId di-extract dari kedua format URL
+ * NEW v8.0:
+ * - Support Tokopedia! Scrape produk dari halaman Tokopedia
+ * - Paste link Tokopedia (tokopedia.com, ta.tokopedia.com, tokopedia.link)
+ * - Tab baru "Tokopedia" buat scrape dari halaman TKPD
+ * - Affiliate link Tokopedia dari Accesstrade (AT)
  *
- * FIX v5:
- * - Fix: gambar ambil dari meta og:image (paling reliable)
- * - Fix: rating/reviewCount/soldCount diambil dari Shopee API v4 langsung
- * - Fix: selector gambar diperbaiki supaya nggak ambil logo Shopee
- *
- * 2 Tab:
- * 1. Scrape Shopee — ambil produk langsung dari halaman Shopee
- * 2. Convert Accesstrade — convert CSV Accesstrade ke format JB
- *
- * GAK butuh server. GAK butuh bot. GAK butuh Node.js.
+ * v7.2:
+ * - Fix: reviewCount/soldCount diambil dari Shopee API via background tab
+ * - Fix: affiliate URL dari input field
+ * - Fix: short link resolution via chrome.tabs
  */
 
 // CSV headers — sesuai template JB Bulk Upload
 const CSV_HEADERS = 'title,url,image,price,originalPrice,discountPercent,rating,reviewCount,soldCount,location,category,marketplace,affiliateUrl,notes';
 
-// Produk yang udah dikumpul dari Scrape Shopee
+// Produk yang udah dikumpul
 let collected = [];
 
 // Produk dari Accesstrade CSV
@@ -36,6 +31,8 @@ try {
 function saveCollected() {
   localStorage.setItem('jb_collected', JSON.stringify(collected));
   updateUI();
+  updateLinkUI();
+  updateTkpdUI();
 }
 
 function esc(text) {
@@ -96,52 +93,54 @@ function parseAccesstradeCSV(text) {
 
   for (const line of lines) {
     if (!line.trim()) continue;
-
-    // Accesstrade CSV pakai koma sebagai separator
-    // Tapi ada field yang mengandung koma di dalam kutip
     const fields = parseCSVLine(line);
-
     if (fields.length < 10) continue;
 
     try {
       const productId = (fields[0] || '').replace('?', '').trim();
       const title = (fields[1] || '').trim();
       const image = (fields[2] || '').trim();
-      // fields[3] biasanya kosong
-      const affiliateLink1 = (fields[4] || '').trim(); // s.shopee.co.id link
-      const affiliateLink2 = (fields[5] || '').trim(); // atid.me link (LEBIH BAIK)
+      const affiliateLink1 = (fields[4] || '').trim();
+      const affiliateLink2 = (fields[5] || '').trim();
       const description = (fields[6] || '').trim();
       const price = parseInt((fields[7] || '0').replace(/[^\d]/g, ''), 10);
       const originalPrice = parseInt((fields[8] || '0').replace(/[^\d]/g, ''), 10);
-      // fields[9] = stock/flag
-      const category = (fields[14] || '').trim(); // Kategori utama
+      const category = (fields[14] || '').trim();
       const subCategory = (fields[16] || '').trim();
       const subSubCategory = (fields[18] || '').trim();
       const currency = (fields[19] || '').trim();
       const brand = (fields[20] || '').trim();
 
-      // Skip kalau gak ada data penting
       if (!productId || !title || !price) continue;
       if (currency && currency !== 'IDR') continue;
 
-      // Extract shopId dan itemId dari affiliate link
-      let shopId = '', itemId = productId;
-      const urlMatch = affiliateLink1.match(/product%2F(\d+)%2F(\d+)/) ||
-                       affiliateLink1.match(/product\/(\d+)\/(\d+)/);
-      if (urlMatch) {
-        shopId = urlMatch[1];
-        itemId = urlMatch[2];
+      // Deteksi marketplace dari affiliate link
+      let marketplace = 'shopee';
+      let productUrl = '';
+      if (affiliateLink1.includes('tokopedia') || affiliateLink2.includes('tokopedia')) {
+        marketplace = 'tokopedia';
+        // Coba extract URL Tokopedia dari affiliate link
+        const tkpdMatch = affiliateLink1.match(/tokopedia\.com\/[^\s&"']+/) ||
+                          affiliateLink2.match(/tokopedia\.com\/[^\s&"']+/);
+        if (tkpdMatch) productUrl = 'https://www.' + tkpdMatch[0];
       }
 
-      // Buat URL Shopee
-      const shopeeUrl = shopId && itemId
-        ? `https://shopee.co.id/universal-link/product/${shopId}/${itemId}`
-        : `https://shopee.co.id/product-${productId}`;
+      if (marketplace === 'shopee') {
+        let shopId = '', itemId = productId;
+        const urlMatch = affiliateLink1.match(/product%2F(\d+)%2F(\d+)/) ||
+                         affiliateLink1.match(/product\/(\d+)\/(\d+)/);
+        if (urlMatch) {
+          shopId = urlMatch[1];
+          itemId = urlMatch[2];
+        }
+        productUrl = shopId && itemId
+          ? `https://shopee.co.id/universal-link/product/${shopId}/${itemId}`
+          : `https://shopee.co.id/product-${productId}`;
+      }
 
-      // Pilih affiliate link terbaik (atid.me lebih trackable)
+      if (!productUrl) continue;
+
       const affiliateUrl = affiliateLink2 || affiliateLink1 || '';
-
-      // Bersihin deskripsi (hapus HTML tags)
       const cleanDesc = description
         .replace(/<br\s*\/?>/gi, ' ')
         .replace(/<[^>]+>/g, '')
@@ -149,10 +148,7 @@ function parseAccesstradeCSV(text) {
         .trim()
         .substring(0, 200);
 
-      // Map kategori Accesstrade ke JB
       const jbCategory = mapCategory(category, subCategory, subSubCategory);
-
-      // Hitung diskon
       let discountPercent = null;
       if (originalPrice > 0 && price > 0 && originalPrice > price) {
         discountPercent = Math.round((1 - price / originalPrice) * 100);
@@ -160,17 +156,17 @@ function parseAccesstradeCSV(text) {
 
       products.push({
         title: title.substring(0, 200),
-        url: shopeeUrl,
+        url: productUrl,
         image: image,
         price: price,
         originalPrice: originalPrice > price ? originalPrice : null,
         discountPercent: discountPercent,
-        rating: null, // Accesstrade gak kasih rating
+        rating: null,
         reviewCount: null,
         soldCount: null,
         location: null,
         category: jbCategory,
-        marketplace: 'shopee',
+        marketplace: marketplace,
         affiliateUrl: decodeURIComponent(affiliateUrl),
         notes: brand && brand !== 'NoBrand' ? `Brand: ${brand}` : '',
       });
@@ -180,7 +176,6 @@ function parseAccesstradeCSV(text) {
   return products;
 }
 
-// Parse CSV line yang handle kutip dua
 function parseCSVLine(line) {
   const fields = [];
   let current = '';
@@ -214,7 +209,6 @@ function parseCSVLine(line) {
   return fields;
 }
 
-// Map kategori Accesstrade ke JB
 function mapCategory(cat, subCat, subSubCat) {
   const c = (cat || '').toLowerCase();
   if (c.includes('fashion') || c.includes('muslim fashion')) return 'Fashion';
@@ -227,7 +221,7 @@ function mapCategory(cat, subCat, subSubCat) {
   if (c.includes('automotive') || c.includes('motor') || c.includes('car')) return 'Automotive';
   if (c.includes('book') || c.includes('stationery')) return 'Books & Stationery';
   if (c.includes('pet')) return 'Pets';
-  return 'Fashion'; // default
+  return 'Fashion';
 }
 
 // ========== UI ==========
@@ -237,23 +231,226 @@ function updateUI() {
   const collectedList = document.getElementById('collectedList');
   const downloadCsvBtn = document.getElementById('downloadCsvBtn');
 
-  if (countBadge) {
-    countBadge.textContent = collected.length;
-  }
-
+  if (countBadge) countBadge.textContent = collected.length;
   if (collectedList) {
     if (collected.length === 0) {
       collectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
     } else {
-      collectedList.innerHTML = collected.map((p, i) =>
-        `<div>${i + 1}. ${esc(p.title.substring(0, 45))}${p.title.length > 45 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
-      ).join('');
+      collectedList.innerHTML = collected.map((p, i) => {
+        const badge = p.marketplace === 'tokopedia'
+          ? '<span class="marketplace-badge tokopedia">TKPD</span>'
+          : '<span class="marketplace-badge shopee">SP</span>';
+        return `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} ${badge} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`;
+      }).join('');
     }
   }
+  if (downloadCsvBtn) downloadCsvBtn.disabled = collected.length === 0;
+}
 
-  if (downloadCsvBtn) {
-    downloadCsvBtn.disabled = collected.length === 0;
+function updateLinkUI() {
+  const linkCountBadge = document.getElementById('linkCountBadge');
+  const linkCollectedList = document.getElementById('linkCollectedList');
+  const linkDownloadBtn = document.getElementById('linkDownloadBtn');
+
+  if (linkCountBadge) linkCountBadge.textContent = collected.length;
+  if (linkCollectedList) {
+    if (collected.length === 0) {
+      linkCollectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
+    } else {
+      linkCollectedList.innerHTML = collected.map((p, i) => {
+        const badge = p.marketplace === 'tokopedia'
+          ? '<span class="marketplace-badge tokopedia">TKPD</span>'
+          : '<span class="marketplace-badge shopee">SP</span>';
+        return `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} ${badge} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`;
+      }).join('');
+    }
   }
+  if (linkDownloadBtn) linkDownloadBtn.disabled = collected.length === 0;
+}
+
+function updateTkpdUI() {
+  const tkpdCountBadge = document.getElementById('tkpdCountBadge');
+  const tkpdCollectedList = document.getElementById('tkpdCollectedList');
+  const tkpdDownloadBtn = document.getElementById('tkpdDownloadBtn');
+
+  if (tkpdCountBadge) tkpdCountBadge.textContent = collected.length;
+  if (tkpdCollectedList) {
+    if (collected.length === 0) {
+      tkpdCollectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
+    } else {
+      // Filter cuma Tokopedia
+      const tkpdProducts = collected.filter(p => p.marketplace === 'tokopedia');
+      if (tkpdProducts.length === 0) {
+        tkpdCollectedList.innerHTML = '<div style="color:#666">Belum ada produk Tokopedia</div>';
+      } else {
+        tkpdCollectedList.innerHTML = tkpdProducts.map((p, i) =>
+          `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
+        ).join('');
+      }
+    }
+  }
+  if (tkpdDownloadBtn) tkpdDownloadBtn.disabled = collected.length === 0;
+}
+
+// ========== TOKOPEDIA FUNCTIONS ==========
+
+// Parse Tokopedia URL — extract product info from URL
+function parseTokopediaUrl(url) {
+  // Format 1: https://www.tokopedia.com/shop-name/product-name
+  // Format 2: https://www.tokopedia.com/shop-name/product-name?whid=0
+  const tkpdMatch = url.match(/tokopedia\.com\/([^\/]+)\/([^\/\?#]+)/);
+  if (tkpdMatch && tkpdMatch[2] && !['promo', 'category', 'p', 'search', 'blog', 'help', 'cart', 'checkout', 'inbox', 'notification', 'order', 'wallet', 'topads', 'affiliate', 'download', 'login'].includes(tkpdMatch[2])) {
+    return {
+      shop: tkpdMatch[1],
+      product: tkpdMatch[2],
+      url: url.split('?')[0], // clean URL
+    };
+  }
+  return null;
+}
+
+// Resolve Tokopedia affiliate link (ta.tokopedia.com, tokopedia.link, toko.link)
+function resolveTokopediaAffiliate(affUrl) {
+  return new Promise((resolve) => {
+    let resolved = false;
+
+    // Try extracting URL from query params first (faster)
+    try {
+      const urlObj = new URL(affUrl);
+      const redirectUrl = urlObj.searchParams.get('url') || urlObj.searchParams.get('ref') || urlObj.searchParams.get('l');
+      if (redirectUrl && redirectUrl.includes('tokopedia.com')) {
+        const decoded = decodeURIComponent(redirectUrl);
+        resolve(decoded);
+        return;
+      }
+    } catch {}
+
+    // Fallback: open tab and follow redirect
+    chrome.tabs.create({ url: affUrl, active: false }, (tab) => {
+      const tabId = tab.id;
+
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          chrome.tabs.remove(tabId).catch(() => {});
+          resolve(affUrl);
+        }
+      }, 15000);
+
+      function onUpdated(updatedTabId, changeInfo, updatedTab) {
+        if (updatedTabId !== tabId) return;
+        const currentUrl = updatedTab.url || '';
+
+        // Check if redirected to Tokopedia product page
+        if (currentUrl.match(/tokopedia\.com\/[^\/]+\/[^\/\?#]+/) && !currentUrl.includes('ta.tokopedia.com') && !currentUrl.includes('tokopedia.link') && !currentUrl.includes('toko.link')) {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            chrome.tabs.onUpdated.removeListener(onUpdated);
+            chrome.tabs.remove(tabId).catch(() => {});
+            resolve(currentUrl);
+          }
+        }
+      }
+
+      chrome.tabs.onUpdated.addListener(onUpdated);
+    });
+  });
+}
+
+// Fetch Tokopedia product data by opening background tab and scraping
+async function fetchTokopediaProduct(productUrl, category, affiliateUrl) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    let tabId = null;
+
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        if (tabId) chrome.tabs.remove(tabId).catch(() => {});
+        resolve(null);
+      }
+    }, 25000);
+
+    chrome.tabs.create({ url: productUrl, active: false }, (tab) => {
+      tabId = tab.id;
+
+      function onUpdated(updatedTabId, changeInfo) {
+        if (updatedTabId !== tabId) return;
+        if (changeInfo.status !== 'complete') return;
+
+        // Wait for page to fully load
+        setTimeout(async () => {
+          try {
+            // Inject Tokopedia scraper into the page
+            const results = await chrome.scripting.executeScript({
+              target: { tabId: tabId },
+              func: scrapeTokopediaProduct,
+              args: [category],
+            });
+
+            const product = results?.[0]?.result;
+
+            if (product && product.title) {
+              product.url = productUrl.split('?')[0];
+              product.marketplace = 'tokopedia';
+              if (affiliateUrl) product.affiliateUrl = affiliateUrl;
+
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                chrome.tabs.onUpdated.removeListener(onUpdated);
+                chrome.tabs.remove(tabId).catch(() => {});
+                resolve(product);
+              }
+            } else {
+              // Retry once after extra wait
+              await new Promise(r => setTimeout(r, 3000));
+              try {
+                const retryResults = await chrome.scripting.executeScript({
+                  target: { tabId: tabId },
+                  func: scrapeTokopediaProduct,
+                  args: [category],
+                });
+                const retryProduct = retryResults?.[0]?.result;
+                if (retryProduct && retryProduct.title) {
+                  retryProduct.url = productUrl.split('?')[0];
+                  retryProduct.marketplace = 'tokopedia';
+                  if (affiliateUrl) retryProduct.affiliateUrl = affiliateUrl;
+
+                  if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    chrome.tabs.onUpdated.removeListener(onUpdated);
+                    chrome.tabs.remove(tabId).catch(() => {});
+                    resolve(retryProduct);
+                  }
+                }
+              } catch {}
+
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                chrome.tabs.onUpdated.removeListener(onUpdated);
+                chrome.tabs.remove(tabId).catch(() => {});
+                resolve(null);
+              }
+            }
+          } catch (e) {
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              chrome.tabs.onUpdated.removeListener(onUpdated);
+              chrome.tabs.remove(tabId).catch(() => {});
+              resolve(null);
+            }
+          }
+        }, 4000); // Wait 4s for Tokopedia SPA to fully render
+      }
+
+      chrome.tabs.onUpdated.addListener(onUpdated);
+    });
+  });
 }
 
 // ========== INIT ==========
@@ -282,24 +479,37 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentTab = null;
   let isShopee = false;
   let isDetail = false;
+  let isTokopedia = false;
+  let isTkpdDetail = false;
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     currentTab = tab;
-    if (tab.url && tab.url.includes('shopee.co.id')) {
-      isShopee = true;
-      // Deteksi halaman detail — 2 format URL:
-      // 1. https://shopee.co.id/nama-produk-i.123.456  (format lama)
-      // 2. https://shopee.co.id/product/123/456        (format baru)
-      const urlMatch1 = tab.url.match(/-i\.(\d+)\.(\d+)/);
-      const urlMatch2 = tab.url.match(/\/product\/(\d+)\/(\d+)/);
-      isDetail = !!(urlMatch1 || urlMatch2);
-      if (isDetail) {
-        pageStatus.textContent = '📄 Halaman produk detail';
-        pageStatus.className = 'page-status ok';
-      } else {
-        pageStatus.textContent = '🔍 Halaman Shopee — siap ambil!';
-        pageStatus.className = 'page-status ok';
+    if (tab.url) {
+      if (tab.url.includes('shopee.co.id')) {
+        isShopee = true;
+        const urlMatch1 = tab.url.match(/-i\.(\d+)\.(\d+)/);
+        const urlMatch2 = tab.url.match(/\/product\/(\d+)\/(\d+)/);
+        isDetail = !!(urlMatch1 || urlMatch2);
+        if (isDetail) {
+          pageStatus.textContent = '📄 Halaman produk Shopee detail';
+          pageStatus.className = 'page-status ok';
+        } else {
+          pageStatus.textContent = '🔍 Halaman Shopee — siap ambil!';
+          pageStatus.className = 'page-status ok';
+        }
+      } else if (tab.url.includes('tokopedia.com')) {
+        isTokopedia = true;
+        // Check if it's a product detail page
+        const tkpdMatch = tab.url.match(/tokopedia\.com\/([^\/]+)\/([^\/\?#]+)/);
+        if (tkpdMatch && tkpdMatch[2] && !['promo', 'category', 'p', 'search', 'blog', 'help', 'cart', 'checkout', 'inbox', 'notification', 'order', 'wallet', 'topads', 'affiliate', 'download', 'login'].includes(tkpdMatch[2])) {
+          isTkpdDetail = true;
+          pageStatus.textContent = '📄 Halaman produk Tokopedia detail';
+          pageStatus.className = 'page-status ok';
+        } else {
+          pageStatus.textContent = '🔍 Halaman Tokopedia — siap ambil!';
+          pageStatus.className = 'page-status ok';
+        }
       }
     }
   } catch {}
@@ -307,7 +517,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (scrapePageBtn) scrapePageBtn.disabled = !isShopee;
   if (scrapeDetailBtn) scrapeDetailBtn.disabled = !(isShopee && isDetail);
 
-  // Scrape halaman
+  // Scrape Shopee page
   if (scrapePageBtn) {
     scrapePageBtn.addEventListener('click', async () => {
       scrapePageBtn.disabled = true;
@@ -329,7 +539,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           let newCount = 0;
           for (const p of products) {
             if (!existingUrls.has(p.url)) {
-              // Tambahkan affiliate URL dari input
               if (affiliateUrl) p.affiliateUrl = affiliateUrl;
               collected.push(p);
               existingUrls.add(p.url);
@@ -352,7 +561,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Scrape detail — v5: pakai Shopee API + meta tags
+  // Scrape Shopee detail
   if (scrapeDetailBtn) {
     scrapeDetailBtn.addEventListener('click', async () => {
       scrapeDetailBtn.disabled = true;
@@ -362,7 +571,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const affiliateUrl = (document.getElementById('affiliateUrlInput')?.value || '').trim();
 
       try {
-        // Step 1: Scrape basic data dari DOM
         const domResults = await chrome.scripting.executeScript({
           target: { tabId: currentTab.id },
           func: scrapeProductDetail,
@@ -370,7 +578,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         const product = domResults?.[0]?.result;
-
         if (!product || !product.title) {
           scrapeDetailBtn.textContent = '❌ Gak bisa baca';
           setTimeout(() => {
@@ -380,14 +587,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           return;
         }
 
-        // Tambahkan affiliate URL dari input
         if (affiliateUrl) product.affiliateUrl = affiliateUrl;
 
-        // Step 2: Ambil data lengkap dari Shopee API v4
         const url = currentTab.url;
-        // Support 2 format URL:
-        // 1. -i.shopId.itemId  (format lama)
-        // 2. /product/shopId/itemId  (format baru)
         const idMatch = url.match(/-i\.(\d+)\.(\d+)/) || url.match(/\/product\/(\d+)\/(\d+)/);
         if (idMatch) {
           const shopId = idMatch[1];
@@ -402,7 +604,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const apiData = apiResults?.[0]?.result;
             if (apiData) {
-              // Override dengan data API (lebih akurat)
               if (apiData.image) product.image = apiData.image;
               if (apiData.rating) product.rating = apiData.rating;
               if (apiData.reviewCount) product.reviewCount = apiData.reviewCount;
@@ -413,9 +614,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               if (apiData.title) product.title = apiData.title;
               if (apiData.discountPercent) product.discountPercent = apiData.discountPercent;
             }
-          } catch (e) {
-            console.log('Shopee API fallback to DOM data:', e);
-          }
+          } catch {}
         }
 
         const existingUrls = new Set(collected.map(p => p.url));
@@ -437,7 +636,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Download CSV
+  // Download CSV (Tab 1)
   if (downloadCsvBtn) {
     downloadCsvBtn.addEventListener('click', () => {
       const csv = buildCSV(collected);
@@ -447,7 +646,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Clear
+  // Clear (Tab 1)
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
       if (collected.length === 0) return;
@@ -456,161 +655,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // ===== TAB 2: CONVERT ACCESSTRADE =====
-  const selectFileBtn = document.getElementById('selectFileBtn');
-  const fileInput = document.getElementById('fileInput');
-  const convertBtn = document.getElementById('convertBtn');
-  const convertStatus = document.getElementById('convertStatus');
-
-  if (selectFileBtn) {
-    selectFileBtn.addEventListener('click', () => {
-      fileInput.click();
-    });
-  }
-
-  if (fileInput) {
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      selectFileBtn.textContent = '⏳ Membaca file...';
-
-      try {
-        const text = await file.text();
-
-        convertStatus.style.display = 'block';
-        convertStatus.textContent = '⏳ Parsing CSV Accesstrade...';
-        convertStatus.className = 'page-status info';
-
-        // Parse CSV
-        accesstradeProducts = parseAccesstradeCSV(text);
-
-        convertStatus.textContent = `✅ Ditemukan ${accesstradeProducts.length} produk! Atur filter lalu klik Convert.`;
-        convertStatus.className = 'page-status ok';
-
-        selectFileBtn.textContent = `📂 ${file.name} (${accesstradeProducts.length} produk)`;
-        convertBtn.disabled = false;
-
-      } catch (err) {
-        convertStatus.textContent = `❌ Error: ${err.message}`;
-        convertStatus.className = 'page-status no';
-        selectFileBtn.textContent = '📂 Pilih File CSV Accesstrade';
-      }
-    });
-  }
-
-  if (convertBtn) {
-    convertBtn.addEventListener('click', () => {
-      const minPrice = parseInt(document.getElementById('minPrice')?.value || '0', 10);
-      const maxPrice = parseInt(document.getElementById('maxPrice')?.value || '999999999', 10);
-      const maxProducts = parseInt(document.getElementById('maxProducts')?.value || '200', 10);
-      const catFilter = (document.getElementById('catFilter')?.value || '').toLowerCase().trim();
-
-      convertBtn.disabled = true;
-      convertBtn.textContent = '⏳ Converting...';
-
-      // Filter produk
-      let filtered = accesstradeProducts.filter(p => {
-        if (p.price < minPrice) return false;
-        if (maxPrice && p.price > maxPrice) return false;
-        if (catFilter && !(p.category || '').toLowerCase().includes(catFilter)) return false;
-        return true;
-      });
-
-      // Limit jumlah
-      filtered = filtered.slice(0, maxProducts);
-
-      if (filtered.length === 0) {
-        convertStatus.textContent = '❌ Gak ada produk yang lolos filter. Coba ubah filter.';
-        convertStatus.className = 'page-status no';
-        convertBtn.disabled = false;
-        convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
-        return;
-      }
-
-      // Build & download CSV
-      const csv = buildCSV(filtered);
-      const now = new Date();
-      const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
-      downloadCSV(csv, `jb-accesstrade-${dateStr}-${filtered.length}produk.csv`);
-
-      convertStatus.textContent = `✅ Done! ${filtered.length} produk di-download (dari ${accesstradeProducts.length} total).`;
-      convertStatus.className = 'page-status ok';
-
-      convertBtn.disabled = false;
-      convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
-    });
-  }
-
-  updateUI();
-
-  // ===== TAB 2: PASTE LINK =====
+  // ===== TAB 2: PASTE LINK (Shopee + Tokopedia) =====
   const linkInput = document.getElementById('linkInput');
   const fetchLinkBtn = document.getElementById('fetchLinkBtn');
   const linkStatus = document.getElementById('linkStatus');
   const linkCategorySelect = document.getElementById('linkCategorySelect');
   const linkDownloadBtn = document.getElementById('linkDownloadBtn');
   const linkClearBtn = document.getElementById('linkClearBtn');
-  const linkCountBadge = document.getElementById('linkCountBadge');
-  const linkCollectedList = document.getElementById('linkCollectedList');
 
-  // Shared collected array — same as scrape tab
-  function updateLinkUI() {
-    if (linkCountBadge) linkCountBadge.textContent = collected.length;
-    if (linkCollectedList) {
-      if (collected.length === 0) {
-        linkCollectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
-      } else {
-        linkCollectedList.innerHTML = collected.map((p, i) =>
-          `<div>${i + 1}. ${esc(p.title.substring(0, 45))}${p.title.length > 45 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
-        ).join('');
-      }
-    }
-    if (linkDownloadBtn) linkDownloadBtn.disabled = collected.length === 0;
-  }
-
-  // Parse shopId & itemId from various Shopee URL formats
+  // Parse shopId & itemId from Shopee URL formats
   function parseShopeeUrl(url) {
-    // Format 1: https://shopee.co.id/nama-produk-i.1291923399.28837840128
     let m = url.match(/-i\.(\d+)\.(\d+)/);
     if (m) return { shopId: m[1], itemId: m[2] };
-
-    // Format 2: https://shopee.co.id/product/1291923399/28837840128
     m = url.match(/\/product\/(\d+)\/(\d+)/);
     if (m) return { shopId: m[1], itemId: m[2] };
-
-    // Format 3: https://shopee.co.id/universal-link/product/1291923399/28837840128
     m = url.match(/\/universal-link\/product\/(\d+)\/(\d+)/);
     if (m) return { shopId: m[1], itemId: m[2] };
-
     return null;
   }
 
-  // Resolve short link (s.shopee.co.id, shope.ee, atid.me) by opening a tab
-  // Ini lebih reliable daripada fetch() karena Shopee pakai JS redirect
+  // Resolve short link (s.shopee.co.id, shope.ee, atid.me)
   function resolveShortLinkViaTab(shortUrl) {
     return new Promise((resolve) => {
       let resolved = false;
 
       chrome.tabs.create({ url: shortUrl, active: false }, (tab) => {
         const tabId = tab.id;
-
-        // Timeout 10 detik — kalau gak resolve, tutup tab
         const timeout = setTimeout(() => {
           if (!resolved) {
             resolved = true;
             chrome.tabs.remove(tabId).catch(() => {});
-            resolve(shortUrl); // fallback ke URL asli
+            resolve(shortUrl);
           }
         }, 10000);
 
-        // Watch for URL changes
         function onUpdated(updatedTabId, changeInfo, updatedTab) {
           if (updatedTabId !== tabId) return;
-
           const currentUrl = updatedTab.url || '';
-
-          // Cek apakah URL udah redirect ke halaman produk Shopee
           if (currentUrl.match(/-i\.\d+\.\d+/) ||
               currentUrl.match(/\/product\/\d+\/\d+/) ||
               currentUrl.match(/\/universal-link\/product\/\d+\/\d+/)) {
@@ -629,7 +710,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Fallback: resolve via fetch (kadang kerja untuk redirect HTTP 302)
   async function resolveShortLinkViaFetch(shortUrl) {
     try {
       const resp = await fetch(shortUrl, {
@@ -644,9 +724,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return null;
   }
 
-  // Fetch product data via Shopee API v4 — PENTING: harus dari dalam halaman Shopee!
-  // Buka halaman utama Shopee (bukan /product/ karena sering ke-block),
-  // terus inject script buat fetch API dari dalam halaman Shopee
+  // Fetch Shopee product data via background tab
   async function fetchProductFromLink(shopId, itemId, category, affiliateUrl) {
     const productUrl = `https://shopee.co.id/product/${shopId}/${itemId}`;
 
@@ -662,7 +740,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }, 20000);
 
-      // Buka halaman utama Shopee dulu (bukan /product/ karena sering "Halaman Tidak Tersedia")
       chrome.tabs.create({ url: 'https://shopee.co.id/', active: false }, (tab) => {
         tabId = tab.id;
 
@@ -670,11 +747,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (updatedTabId !== tabId) return;
           if (changeInfo.status !== 'complete') return;
 
-          // Tunggu Shopee homepage load
           setTimeout(async () => {
             try {
-              // Inject fetchShopeeApiInPage ke dalam halaman Shopee homepage
-              // Dari sini kita bisa fetch API karena cookies & origin bener
               const results = await chrome.scripting.executeScript({
                 target: { tabId: tabId },
                 func: fetchShopeeApiInPage,
@@ -682,9 +756,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               });
 
               const apiData = results?.[0]?.result;
-
               if (!apiData || !apiData.title) {
-                // API gak kasih data, coba retry sekali
                 await new Promise(r => setTimeout(r, 2000));
                 const retryResults = await chrome.scripting.executeScript({
                   target: { tabId: tabId },
@@ -695,7 +767,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (retryData) Object.assign(apiData || {}, retryData);
               }
 
-              // Build product dari API data
               const product = {
                 category,
                 marketplace: 'shopee',
@@ -722,8 +793,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 chrome.tabs.remove(tabId).catch(() => {});
                 resolve(product.title ? product : null);
               }
-            } catch (e) {
-              console.error('fetchProductFromLink error:', e);
+            } catch {
               if (!resolved) {
                 resolved = true;
                 clearTimeout(timeout);
@@ -732,15 +802,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 resolve(null);
               }
             }
-          }, 3000); // Tunggu 3 detik supaya Shopee homepage sempat load semua
+          }, 3000);
         }
 
         chrome.tabs.onUpdated.addListener(onUpdated);
       });
     });
   }
-
-  // (resolveShortLink removed — using resolveShortLinkViaTab + resolveShortLinkViaFetch instead)
 
   if (fetchLinkBtn) {
     fetchLinkBtn.addEventListener('click', async () => {
@@ -753,6 +821,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const category = linkCategorySelect?.value || 'Fashion';
+      const tkpdAffiliate = (document.getElementById('tkpdAffiliateInput')?.value || '').trim();
       const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 5);
 
       fetchLinkBtn.disabled = true;
@@ -769,22 +838,71 @@ document.addEventListener('DOMContentLoaded', async () => {
         let url = lines[i];
         let affiliateUrl = '';
 
-        // Check if it's a short link (s.shopee.co.id, shope.ee, etc.)
+        // === TOKOPEDIA LINKS ===
+        if (url.match(/ta\.tokopedia\.com|tokopedia\.link|toko\.link/i)) {
+          affiliateUrl = tkpdAffiliate || url; // Use AT affiliate input if available
+          linkStatus.textContent = `⏳ Resolve Tokopedia link ${i + 1}/${lines.length}...`;
+
+          const resolved = await resolveTokopediaAffiliate(url);
+          if (resolved && parseTokopediaUrl(resolved)) {
+            url = resolved;
+          } else {
+            errorCount++;
+            continue;
+          }
+
+          // Scrape Tokopedia product
+          linkStatus.textContent = `⏳ Ambil data Tokopedia ${i + 1}/${lines.length}...`;
+          const tkpdInfo = parseTokopediaUrl(url);
+          if (tkpdInfo) {
+            const product = await fetchTokopediaProduct(url, category, affiliateUrl);
+            if (product && product.title) {
+              if (!existingUrls.has(product.url)) {
+                collected.push(product);
+                existingUrls.add(product.url);
+                addedCount++;
+              }
+            } else {
+              errorCount++;
+            }
+          } else {
+            errorCount++;
+          }
+          continue;
+        }
+
+        // === DIRECT TOKOPEDIA LINK ===
+        if (url.match(/tokopedia\.com/i) && !url.match(/ta\.tokopedia|tokopedia\.link|toko\.link/)) {
+          affiliateUrl = tkpdAffiliate || '';
+          linkStatus.textContent = `⏳ Ambil data Tokopedia ${i + 1}/${lines.length}...`;
+
+          const product = await fetchTokopediaProduct(url, category, affiliateUrl);
+          if (product && product.title) {
+            if (!existingUrls.has(product.url)) {
+              collected.push(product);
+              existingUrls.add(product.url);
+              addedCount++;
+            }
+          } else {
+            errorCount++;
+          }
+          continue;
+        }
+
+        // === SHOPEE SHORT LINKS ===
         if (url.match(/s\.shopee\.co\.id|shope\.ee|shp\.ee|shp\.in/i)) {
-          affiliateUrl = url; // Simpan affiliate URL asli
+          affiliateUrl = url;
           linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
 
-          // Coba fetch dulu (lebih cepat)
           let resolved = await resolveShortLinkViaFetch(url);
           if (resolved && parseShopeeUrl(resolved)) {
             url = resolved;
           } else {
-            // Fallback: buka tab untuk resolve (lebih reliable)
             url = await resolveShortLinkViaTab(url);
           }
         }
 
-        // Also check for atid.me links (Accesstrade)
+        // === ATID.ME LINKS ===
         if (url.match(/atid\.me/i)) {
           affiliateUrl = url;
           linkStatus.textContent = `⏳ Resolve link ${i + 1}/${lines.length}...`;
@@ -796,14 +914,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         }
 
-        // Extract shopId & itemId
+        // === SHOPEE PRODUCT ===
         const ids = parseShopeeUrl(url);
         if (!ids) {
           errorCount++;
           continue;
         }
 
-        linkStatus.textContent = `⏳ Ambil data produk ${i + 1}/${lines.length}...`;
+        linkStatus.textContent = `⏳ Ambil data Shopee ${i + 1}/${lines.length}...`;
 
         const product = await fetchProductFromLink(ids.shopId, ids.itemId, category, affiliateUrl);
         if (product && product.title) {
@@ -818,7 +936,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       saveCollected();
-      updateLinkUI();
 
       if (addedCount > 0) {
         linkStatus.textContent = `✅ +${addedCount} produk ditambah!${errorCount > 0 ? ` (${errorCount} gagal)` : ''} — Total: ${collected.length}`;
@@ -851,17 +968,226 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (collected.length === 0) return;
       collected = [];
       saveCollected();
-      updateLinkUI();
     });
   }
 
+  // ===== TAB 3: TOKOPEDIA =====
+  const scrapeTkpdPageBtn = document.getElementById('scrapeTkpdPageBtn');
+  const scrapeTkpdDetailBtn = document.getElementById('scrapeTkpdDetailBtn');
+  const tkpdDownloadBtn = document.getElementById('tkpdDownloadBtn');
+  const tkpdClearBtn = document.getElementById('tkpdClearBtn');
+  const tkpdCategorySelect = document.getElementById('tkpdCategorySelect');
+  const tkpdTabAffiliateInput = document.getElementById('tkpdTabAffiliateInput');
+
+  if (scrapeTkpdPageBtn) scrapeTkpdPageBtn.disabled = !isTokopedia;
+  if (scrapeTkpdDetailBtn) scrapeTkpdDetailBtn.disabled = !(isTokopedia && isTkpdDetail);
+
+  // Scrape Tokopedia page (search/listing)
+  if (scrapeTkpdPageBtn) {
+    scrapeTkpdPageBtn.addEventListener('click', async () => {
+      scrapeTkpdPageBtn.disabled = true;
+      scrapeTkpdPageBtn.textContent = '⏳ Membaca...';
+
+      const category = tkpdCategorySelect?.value || 'Fashion';
+      const affiliateUrl = (tkpdTabAffiliateInput?.value || '').trim();
+
+      try {
+        // If it's a product detail page, scrape as detail
+        if (isTkpdDetail) {
+          const product = await fetchTokopediaProduct(currentTab.url, category, affiliateUrl);
+          if (product && product.title) {
+            const existingUrls = new Set(collected.map(p => p.url));
+            if (!existingUrls.has(product.url)) {
+              collected.push(product);
+              saveCollected();
+              scrapeTkpdPageBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} (total ${collected.length})`;
+            } else {
+              scrapeTkpdPageBtn.textContent = '⚠️ Udah ada!';
+            }
+          } else {
+            scrapeTkpdPageBtn.textContent = '❌ Gak bisa baca';
+          }
+        } else {
+          // Try scraping search/listing page
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: currentTab.id },
+            func: scrapeTokopediaSearchPage,
+            args: [category],
+          });
+
+          if (results?.[0]?.result) {
+            const products = results[0].result;
+            const existingUrls = new Set(collected.map(p => p.url));
+            let newCount = 0;
+            for (const p of products) {
+              if (!existingUrls.has(p.url)) {
+                if (affiliateUrl) p.affiliateUrl = affiliateUrl;
+                collected.push(p);
+                existingUrls.add(p.url);
+                newCount++;
+              }
+            }
+            saveCollected();
+            scrapeTkpdPageBtn.textContent = `✅ +${newCount} baru (total ${collected.length})`;
+          } else {
+            scrapeTkpdPageBtn.textContent = '❌ Gak bisa baca halaman ini';
+          }
+        }
+      } catch {
+        scrapeTkpdPageBtn.textContent = '❌ Error';
+      }
+
+      setTimeout(() => {
+        scrapeTkpdPageBtn.textContent = '📦 Ambil Produk dari Halaman Tokopedia';
+        scrapeTkpdPageBtn.disabled = !isTokopedia;
+      }, 2000);
+    });
+  }
+
+  // Scrape Tokopedia detail page
+  if (scrapeTkpdDetailBtn) {
+    scrapeTkpdDetailBtn.addEventListener('click', async () => {
+      scrapeTkpdDetailBtn.disabled = true;
+      scrapeTkpdDetailBtn.textContent = '⏳ Membaca...';
+
+      const category = tkpdCategorySelect?.value || 'Fashion';
+      const affiliateUrl = (tkpdTabAffiliateInput?.value || '').trim();
+
+      try {
+        const product = await fetchTokopediaProduct(currentTab.url, category, affiliateUrl);
+        if (product && product.title) {
+          const existingUrls = new Set(collected.map(p => p.url));
+          if (!existingUrls.has(product.url)) {
+            collected.push(product);
+            saveCollected();
+            scrapeTkpdDetailBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} (total ${collected.length})`;
+          } else {
+            scrapeTkpdDetailBtn.textContent = '⚠️ Udah ada!';
+          }
+        } else {
+          scrapeTkpdDetailBtn.textContent = '❌ Gak bisa baca';
+        }
+      } catch {
+        scrapeTkpdDetailBtn.textContent = '❌ Error';
+      }
+
+      setTimeout(() => {
+        scrapeTkpdDetailBtn.textContent = '🔍 Ambil 1 Produk (Halaman Detail Tokopedia)';
+        scrapeTkpdDetailBtn.disabled = !(isTokopedia && isTkpdDetail);
+      }, 2000);
+    });
+  }
+
+  if (tkpdDownloadBtn) {
+    tkpdDownloadBtn.addEventListener('click', () => {
+      const csv = buildCSV(collected);
+      downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
+      tkpdDownloadBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
+      setTimeout(() => { tkpdDownloadBtn.textContent = '💾 Download File CSV (Format JB)'; }, 3000);
+    });
+  }
+
+  if (tkpdClearBtn) {
+    tkpdClearBtn.addEventListener('click', () => {
+      if (collected.length === 0) return;
+      collected = [];
+      saveCollected();
+    });
+  }
+
+  // ===== TAB 4: CONVERT ACCESSTRADE =====
+  const selectFileBtn = document.getElementById('selectFileBtn');
+  const fileInput = document.getElementById('fileInput');
+  const convertBtn = document.getElementById('convertBtn');
+  const convertStatus = document.getElementById('convertStatus');
+
+  if (selectFileBtn) {
+    selectFileBtn.addEventListener('click', () => {
+      fileInput.click();
+    });
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      selectFileBtn.textContent = '⏳ Membaca file...';
+
+      try {
+        const text = await file.text();
+
+        convertStatus.style.display = 'block';
+        convertStatus.textContent = '⏳ Parsing CSV Accesstrade...';
+        convertStatus.className = 'page-status info';
+
+        accesstradeProducts = parseAccesstradeCSV(text);
+
+        convertStatus.textContent = `✅ Ditemukan ${accesstradeProducts.length} produk! Atur filter lalu klik Convert.`;
+        convertStatus.className = 'page-status ok';
+
+        selectFileBtn.textContent = `📂 ${file.name} (${accesstradeProducts.length} produk)`;
+        convertBtn.disabled = false;
+
+      } catch (err) {
+        convertStatus.textContent = `❌ Error: ${err.message}`;
+        convertStatus.className = 'page-status no';
+        selectFileBtn.textContent = '📂 Pilih File CSV Accesstrade';
+      }
+    });
+  }
+
+  if (convertBtn) {
+    convertBtn.addEventListener('click', () => {
+      const minPrice = parseInt(document.getElementById('minPrice')?.value || '0', 10);
+      const maxPrice = parseInt(document.getElementById('maxPrice')?.value || '999999999', 10);
+      const maxProducts = parseInt(document.getElementById('maxProducts')?.value || '200', 10);
+      const catFilter = (document.getElementById('catFilter')?.value || '').toLowerCase().trim();
+
+      convertBtn.disabled = true;
+      convertBtn.textContent = '⏳ Converting...';
+
+      let filtered = accesstradeProducts.filter(p => {
+        if (p.price < minPrice) return false;
+        if (maxPrice && p.price > maxPrice) return false;
+        if (catFilter && !(p.category || '').toLowerCase().includes(catFilter)) return false;
+        return true;
+      });
+
+      filtered = filtered.slice(0, maxProducts);
+
+      if (filtered.length === 0) {
+        convertStatus.textContent = '❌ Gak ada produk yang lolos filter. Coba ubah filter.';
+        convertStatus.className = 'page-status no';
+        convertBtn.disabled = false;
+        convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
+        return;
+      }
+
+      const csv = buildCSV(filtered);
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+      downloadCSV(csv, `jb-accesstrade-${dateStr}-${filtered.length}produk.csv`);
+
+      convertStatus.textContent = `✅ Done! ${filtered.length} produk di-download (dari ${accesstradeProducts.length} total).`;
+      convertStatus.className = 'page-status ok';
+
+      convertBtn.disabled = false;
+      convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
+    });
+  }
+
+  updateUI();
   updateLinkUI();
+  updateTkpdUI();
 });
 
 
 // ================================================================
-//  SCRAPING — jalan DI DALAM halaman Shopee
+//  SCRAPING FUNCTIONS — run INSIDE the target page
 // ================================================================
+
+// ========== SHOPEE SCRAPERS ==========
 
 function scrapeSearchPage(category) {
   const products = [];
@@ -905,7 +1231,6 @@ function scrapeSearchPage(category) {
         if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
       }
 
-      // Rating: cari pola "4.9" atau "4,9" yang dekat dengan bintang atau setelah terjual
       const ratingPatterns = [
         /(\d+[.,]\d+)\s*(?:bintang|⭐|🌟)/i,
         /terjual[\s\S]*?(\d+[.,]\d+)/i,
@@ -919,11 +1244,9 @@ function scrapeSearchPage(category) {
         }
       }
 
-      // Gambar: prioritas yang pasti produk, bukan logo
       const img = link.querySelector('img');
       if (img) {
         const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-        // Skip logo/icon kecil dan data URI
         if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo') && src.includes('susercontent')) {
           product.image = src;
         }
@@ -943,12 +1266,10 @@ function scrapeSearchPage(category) {
   });
 }
 
-// v5: Scrape detail — diperbaiki supaya gambar, rating, review, terjual benar
 function scrapeProductDetail(category) {
   const url = window.location.href;
   const product = { category, marketplace: 'shopee', url };
 
-  // ── Title ──
   const titleSelectors = [
     'h1',
     '[class*="qaNIZv"]',
@@ -965,8 +1286,6 @@ function scrapeProductDetail(category) {
     }
   }
 
-  // ── Gambar: prioritaskan og:image dari meta tag ──
-  // og:image paling reliable, bukan logo Shopee
   const ogImage = document.querySelector('meta[property="og:image"]');
   if (ogImage) {
     const imgContent = ogImage.getAttribute('content');
@@ -975,7 +1294,6 @@ function scrapeProductDetail(category) {
     }
   }
 
-  // Fallback: cari gambar produk yang benar
   if (!product.image) {
     const imgSelectors = [
       'img[src*="down-id.img.susercontent.com"]',
@@ -989,7 +1307,6 @@ function scrapeProductDetail(category) {
       const el = document.querySelector(sel);
       if (el) {
         const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
-        // Pastikan bukan logo dan bukan data URI
         if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo')) {
           product.image = src;
           break;
@@ -998,7 +1315,6 @@ function scrapeProductDetail(category) {
     }
   }
 
-  // ── Harga ──
   const bodyText = document.body.innerText;
   const priceMatch = bodyText.match(/Rp([\d.]+)/);
   if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
@@ -1014,7 +1330,6 @@ function scrapeProductDetail(category) {
     }
   }
 
-  // ── Terjual ──
   const soldMatch = bodyText.match(/([\d.]+)\s*terjual/i);
   if (soldMatch) {
     product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
@@ -1023,8 +1338,6 @@ function scrapeProductDetail(category) {
     if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
   }
 
-  // ── Rating & Review Count ──
-  // Cari pola "4.9 (1.2rb rating)" atau "4.9 • 1.2rb rating"
   const ratingReviewMatch = bodyText.match(/(\d+[.,]\d+)\s*(?:\(([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review)\)|[•|]\s*([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review))/i);
   if (ratingReviewMatch) {
     product.rating = parseFloat(ratingReviewMatch[1].replace(',', '.'));
@@ -1036,9 +1349,7 @@ function scrapeProductDetail(category) {
     }
   }
 
-  // Fallback: cari rating saja
   if (!product.rating) {
-    // Cari di area rating — biasa di dekat bintang
     const ratingEl = document.querySelector('[class*="rating"], [class*="Rating"]');
     if (ratingEl) {
       const rText = ratingEl.textContent;
@@ -1047,19 +1358,17 @@ function scrapeProductDetail(category) {
     }
   }
 
-  // ── Lokasi ──
   const locMatch = bodyText.match(/Dikirim dari\s*([^\n,]+)/i);
   if (locMatch) product.location = locMatch[1].trim();
 
   return product;
 }
 
-// v5: Fetch Shopee API v4 dari dalam halaman (paling akurat!)
 function fetchShopeeApiInPage(shopId, itemId) {
   const apiUrl = `https://shopee.co.id/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`;
 
   return fetch(apiUrl, {
-    credentials: 'include', // Pakai cookies dari halaman Shopee yang sedang dibuka
+    credentials: 'include',
     headers: {
       'Accept': 'application/json',
       'X-Shopee-Language': 'id',
@@ -1074,14 +1383,12 @@ function fetchShopeeApiInPage(shopId, itemId) {
 
       if (item.name) result.title = item.name;
 
-      // Gambar — paling reliable dari API
       if (item.image) {
         result.image = `https://down-id.img.susercontent.com/file/${item.image}`;
       } else if (item.images && item.images.length > 0) {
         result.image = `https://down-id.img.susercontent.com/file/${item.images[0]}`;
       }
 
-      // Harga
       const priceMin = item.price_min || item.price;
       if (priceMin) {
         const priceVal = Array.isArray(priceMin) ? priceMin[0] : priceMin;
@@ -1101,7 +1408,6 @@ function fetchShopeeApiInPage(shopId, itemId) {
         }
       }
 
-      // Rating & Review
       if (item.item_rating) {
         result.rating = item.item_rating.rating_star || 0;
         const ratingCount = item.item_rating.rating_count || [];
@@ -1110,17 +1416,301 @@ function fetchShopeeApiInPage(shopId, itemId) {
           : 0;
       }
 
-      // Terjual
       if (item.historical_sold !== undefined && item.historical_sold !== null) {
         result.soldCount = item.historical_sold;
       } else if (item.sold !== undefined && item.sold !== null) {
         result.soldCount = item.sold;
       }
 
-      // Lokasi
       if (item.shop_location) result.location = item.shop_location;
 
       return result;
     })
     .catch(() => null);
+}
+
+
+// ========== TOKOPEDIA SCRAPERS ==========
+
+// Scrape Tokopedia product detail page — runs INSIDE the Tokopedia page
+function scrapeTokopediaProduct(category) {
+  const url = window.location.href;
+  const product = { category, marketplace: 'tokopedia', url: url.split('?')[0] };
+
+  // ── Title ──
+  // Tokopedia uses various selectors for product title
+  const titleSelectors = [
+    'h1[data-testid="lblPDPDetailProductName"]',
+    'h1.css-1wtrxts',
+    'h1',
+    '[data-testid="lblPDPDetailProductName"]',
+    '.css-1wtrxts',
+    '[class*="pdp-detail"] h1',
+    '[class*="product-name"]',
+  ];
+  for (const sel of titleSelectors) {
+    const el = document.querySelector(sel);
+    if (el && el.textContent.trim().length > 3) {
+      product.title = el.textContent.trim();
+      break;
+    }
+  }
+
+  // ── Image ──
+  // Try og:image first (most reliable)
+  const ogImage = document.querySelector('meta[property="og:image"]');
+  if (ogImage) {
+    const imgContent = ogImage.getAttribute('content');
+    if (imgContent && (imgContent.includes('tokopedia.net') || imgContent.includes('cbn.net') || imgContent.includes('ktpcdn'))) {
+      product.image = imgContent;
+    }
+  }
+
+  // Fallback: find product image from page
+  if (!product.image) {
+    const imgSelectors = [
+      'img[data-testid="PDPMainImage"]',
+      'img.css-1jwf0hz',
+      'img[alt*="produk"]',
+      'img[alt*="product"]',
+      '[class*="pdp-img"] img',
+      '[class*="product-image"] img',
+      'img[src*="tokopedia.net/img/"]',
+      'img[src*="ktpcdn"]',
+    ];
+    for (const sel of imgSelectors) {
+      const el = document.querySelector(sel);
+      if (el) {
+        const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
+        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo') && src.length > 30) {
+          product.image = src;
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Price ──
+  const bodyText = document.body.innerText;
+
+  // Try structured price selectors first
+  const priceSelectors = [
+    '[data-testid="lblPDPDetailProductPrice"]',
+    '.css-1ksbit4',
+    '[class*="price"] [class*="detail"]',
+    '[class*="pdp-price"]',
+  ];
+  for (const sel of priceSelectors) {
+    const el = document.querySelector(sel);
+    if (el) {
+      const priceText = el.textContent;
+      const priceMatch = priceText.match(/Rp\s*([\d.]+)/i);
+      if (priceMatch) {
+        product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+        break;
+      }
+    }
+  }
+
+  // Fallback: regex from body text
+  if (!product.price) {
+    const priceMatch = bodyText.match(/Rp\s*([\d.]+)/i);
+    if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+  }
+
+  // ── Original Price (before discount) ──
+  const allPrices = [...bodyText.matchAll(/Rp\s*([\d.]+)/gi)];
+  if (allPrices.length > 1) {
+    const prices = allPrices.map(m => parseInt(m[1].replace(/\./g, ''), 10)).filter(p => p > 0);
+    // The highest price is usually the original price
+    const maxPrice = Math.max(...prices);
+    if (maxPrice > (product.price || 0)) {
+      product.originalPrice = maxPrice;
+      if (product.originalPrice > 0 && product.price > 0) {
+        product.discountPercent = Math.round((1 - product.price / product.originalPrice) * 100);
+      }
+    }
+  }
+
+  // ── Rating ──
+  const ratingSelectors = [
+    '[data-testid="lblPDPDetailProductRatingNumber"]',
+    'span[data-testid="lblPDPDetailProductRatingNumber"]',
+    '[class*="rating"] [class*="number"]',
+  ];
+  for (const sel of ratingSelectors) {
+    const el = document.querySelector(sel);
+    if (el) {
+      const rMatch = el.textContent.match(/(\d+[.,]\d+)/);
+      if (rMatch) {
+        product.rating = parseFloat(rMatch[1].replace(',', '.'));
+        break;
+      }
+    }
+  }
+
+  // Fallback: regex from body text
+  if (!product.rating) {
+    const ratingMatch = bodyText.match(/(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang)/i);
+    if (ratingMatch) product.rating = parseFloat(ratingMatch[1].replace(',', '.'));
+  }
+
+  // ── Review Count ──
+  const reviewSelectors = [
+    '[data-testid="lblPDPDetailProductRatingCounter"]',
+    'span[data-testid="lblPDPDetailProductRatingCounter"]',
+    'button[data-testid="lblPDPDetailProductRatingCounter"]',
+  ];
+  for (const sel of reviewSelectors) {
+    const el = document.querySelector(sel);
+    if (el) {
+      const reviewText = el.textContent;
+      const reviewMatch = reviewText.match(/([\d.]+)/);
+      if (reviewMatch) {
+        let count = reviewMatch[1].replace(/\./g, '');
+        if (reviewText.includes('rb') || reviewText.includes('ribu')) {
+          count = Math.round(parseFloat(reviewMatch[1].replace(',', '.')) * 1000);
+        }
+        product.reviewCount = parseInt(count, 10);
+        break;
+      }
+    }
+  }
+
+  // ── Sold Count ──
+  const soldMatch = bodyText.match(/([\d.]+)\s*(?:rb|ribu)?\s*terjual/i);
+  if (soldMatch) {
+    let soldStr = soldMatch[1];
+    if (soldMatch[0].includes('rb') || soldMatch[0].includes('ribu')) {
+      product.soldCount = Math.round(parseFloat(soldStr.replace(',', '.')) * 1000);
+    } else {
+      product.soldCount = parseInt(soldStr.replace(/\./g, ''), 10);
+    }
+  }
+
+  // ── Location ──
+  const locMatch = bodyText.match(/(?:Dikirim dari|Lokasi)\s*[:\-]?\s*([^\n,]+)/i);
+  if (locMatch) product.location = locMatch[1].trim().substring(0, 50);
+
+  // ── Try JSON-LD structured data (very reliable for Tokopedia) ──
+  try {
+    const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of jsonLdScripts) {
+      const jsonText = script.textContent;
+      if (jsonText.includes('Product')) {
+        const data = JSON.parse(jsonText);
+        if (data['@type'] === 'Product' || (Array.isArray(data) && data.find(d => d['@type'] === 'Product'))) {
+          const prod = Array.isArray(data) ? data.find(d => d['@type'] === 'Product') : data;
+
+          if (prod.name && (!product.title || product.title.length < 5)) product.title = prod.name;
+
+          if (prod.image) {
+            const img = Array.isArray(prod.image) ? prod.image[0] : prod.image;
+            if (img && !product.image) product.image = img;
+          }
+
+          if (prod.offers) {
+            const offers = prod.offers;
+            if (offers.price && !product.price) {
+              product.price = parseInt(String(offers.price).replace(/[^\d]/g, ''), 10);
+            }
+            if (offers.highPrice && !product.originalPrice) {
+              product.originalPrice = parseInt(String(offers.highPrice).replace(/[^\d]/g, ''), 10);
+            }
+            if (offers.priceCurrency && offers.priceCurrency !== 'IDR') {
+              // Skip non-IDR
+            }
+          }
+
+          if (prod.aggregateRating) {
+            if (prod.aggregateRating.ratingValue && !product.rating) {
+              product.rating = parseFloat(prod.aggregateRating.ratingValue);
+            }
+            if (prod.aggregateRating.reviewCount && !product.reviewCount) {
+              product.reviewCount = parseInt(prod.aggregateRating.reviewCount, 10);
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return product;
+}
+
+// Scrape Tokopedia search/listing page — runs INSIDE the page
+function scrapeTokopediaSearchPage(category) {
+  const products = [];
+
+  // Tokopedia search page product cards
+  const productCards = document.querySelectorAll('[data-testid="master-product-card"], .css-1g1gtb0, [class*="product-card"], [class*="pcv3__info"]');
+
+  for (const card of productCards) {
+    try {
+      const product = { category, marketplace: 'tokopedia' };
+
+      // Get link
+      const linkEl = card.closest('a') || card.querySelector('a');
+      if (linkEl) {
+        const href = linkEl.getAttribute('href') || '';
+        product.url = href.startsWith('/') ? 'https://www.tokopedia.com' + href : href;
+      }
+
+      if (!product.url || !product.url.includes('tokopedia.com')) continue;
+
+      // Get title
+      const titleEl = card.querySelector('[data-testid="master-product-card-name"], [class*="product-name"], [class*="pcv3__info__name"], span.css-1f4mp12');
+      if (titleEl) {
+        product.title = titleEl.textContent.trim();
+      }
+      if (!product.title || product.title.length < 3) continue;
+
+      // Get price
+      const priceEl = card.querySelector('[data-testid="master-product-card-price"], [class*="product-price"], [class*="pcv3__info__price"], span.css-1ksbit4');
+      if (priceEl) {
+        const priceText = priceEl.textContent;
+        const priceMatch = priceText.match(/Rp\s*([\d.]+)/i);
+        if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+      }
+
+      // Get image
+      const imgEl = card.querySelector('img');
+      if (imgEl) {
+        const src = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
+        if (src && !src.startsWith('data:') && src.length > 30) {
+          product.image = src;
+        }
+      }
+
+      // Get rating
+      const ratingEl = card.querySelector('[class*="rating"], [class*="pcv3__info__rating"]');
+      if (ratingEl) {
+        const rMatch = ratingEl.textContent.match(/(\d+[.,]\d+)/);
+        if (rMatch) product.rating = parseFloat(rMatch[1].replace(',', '.'));
+      }
+
+      // Get sold count
+      const text = card.textContent;
+      const soldMatch = text.match(/([\d.]+)\s*(?:rb|ribu)?\s*terjual/i);
+      if (soldMatch) {
+        if (soldMatch[0].includes('rb') || soldMatch[0].includes('ribu')) {
+          product.soldCount = Math.round(parseFloat(soldMatch[1].replace(',', '.')) * 1000);
+        } else {
+          product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
+        }
+      }
+
+      if (product.title && (product.price || product.url)) {
+        products.push(product);
+      }
+    } catch {}
+  }
+
+  // Deduplicate
+  const seen = new Set();
+  return products.filter(p => {
+    if (seen.has(p.url)) return false;
+    seen.add(p.url);
+    return true;
+  });
 }
