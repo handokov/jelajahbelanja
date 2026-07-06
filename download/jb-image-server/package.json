@@ -1,7 +1,7 @@
 {
   "name": "jb-image-server",
-  "version": "1.0.0",
-  "description": "Local image server for JB Scraper — simpan gambar Tokopedia/Shopee di lokal supaya URL stabil",
+  "version": "2.0.0",
+  "description": "Upload gambar produk Tokopedia/Shopee ke Cloudinary — URL permanen, laptop mati pun tetap bisa akses!",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
