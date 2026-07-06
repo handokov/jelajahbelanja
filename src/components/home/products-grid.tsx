@@ -112,8 +112,8 @@ export function ProductsGrid({
           </div>
 
           {/* Banner Affiliate - di bawah trending */}
-          <div className="px-4 pb-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-            <AffiliateBanner maxWidth={250} showLabel={true} />
+          <div className="px-3 pb-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+            <AffiliateBanner position="sidebar" showLabel={true} />
           </div>
         </div>
       </aside>
