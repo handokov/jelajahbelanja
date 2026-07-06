@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductCard } from "@/components/product-card";
 import { Flame } from "lucide-react";
+import { AffiliateBanner } from "@/components/affiliate-banner";
 import type { Product, ProductFilter } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -97,7 +98,7 @@ export function ProductsGrid({
             {trendingTop5.length === 0 ? (
               <p className="text-xs text-zinc-500">Belum ada data.</p>
             ) : (
-              <div className="flex flex-col gap-1 max-h-[calc(100vh-180px)] overflow-y-auto custom-scrollbar">
+              <div className="flex flex-col gap-1 max-h-[calc(100vh-320px)] overflow-y-auto custom-scrollbar">
                 {trendingTop5.map((p, i) => (
                   <ProductCard
                     key={`compact-${p.id}`}
@@ -108,6 +109,11 @@ export function ProductsGrid({
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Banner Affiliate - di bawah trending */}
+          <div className="px-4 pb-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+            <AffiliateBanner maxWidth={250} showLabel={true} />
           </div>
         </div>
       </aside>
