@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "JB Scraper",
-  "version": "9.0.0",
-  "description": "Scrape Shopee & Tokopedia → copy CSV → paste ke JB upload massal (v9.0: local image server!)",
+  "version": "10.0.0",
+  "description": "Scrape Shopee & Tokopedia → copy CSV → paste ke JB upload massal (v10.0: manual image URL + Cloudinary!)",
   "permissions": ["activeTab", "scripting", "clipboardWrite", "tabs"],
   "host_permissions": [
     "https://shopee.co.id/*",
