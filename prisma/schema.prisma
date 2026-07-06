@@ -75,3 +75,22 @@ model PromoBanner {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// Banner Affiliate - untuk AccessTrade, Shopee Affiliate, dll
+model AffiliateAd {
+  id            String   @id @default(cuid())
+  name          String                   // nama identifikasi (cth: "AccessTrade 300x250")
+  platform      String   @default("accesstrade") // accesstrade, shopee, tokopedia, tiktok, lainnya
+  href          String                   // link affiliate (target URL)
+  imgSrc        String                   // URL gambar banner
+  trackingPixel String?                  // tracking pixel URL (1x1 invisible)
+  width         Int      @default(300)  // lebar banner
+  height        Int      @default(250)  // tinggi banner
+  position      String   @default("sidebar") // sidebar, header, footer, in-content
+  order         Int      @default(0)    // urutan tampil
+  isActive      Boolean  @default(true) // aktif/nonaktif
+  startDate     DateTime?                // mulai tayang
+  endDate       DateTime?                // berakhir tayang
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

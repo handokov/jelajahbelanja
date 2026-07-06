@@ -15,6 +15,7 @@ import {
   Link2,
   ShoppingBag,
   LogOut,
+  Megaphone,
 } from "lucide-react";
 import { BulkUploadTab } from "@/components/bulk-upload-tab";
 import { SecurityTab } from "@/components/security-tab";
@@ -22,6 +23,7 @@ import { ProductsTab } from "@/components/admin/products-tab";
 import { BannersTab } from "@/components/admin/banners-tab";
 import { CategoriesTab } from "@/components/admin/categories-tab";
 import { AffiliateTab } from "@/components/admin/affiliate-tab";
+import { AffiliateAdsTab } from "@/components/admin/affiliate-ads-tab";
 
 export default function AdminPage() {
   return (
@@ -69,7 +71,7 @@ export default function AdminPage() {
       {/* Main */}
       <main className="container mx-auto px-4 max-w-5xl py-6">
         <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="grid w-full max-w-3xl grid-cols-6 h-11">
+          <TabsList className="grid w-full max-w-4xl grid-cols-7 h-11">
             <TabsTrigger value="products" className="text-sm">
               <Package className="w-4 h-4 mr-1.5" />
               Produk
@@ -82,13 +84,17 @@ export default function AdminPage() {
               <ImageLucide className="w-4 h-4 mr-1.5" />
               Banner
             </TabsTrigger>
+            <TabsTrigger value="affiliate-ads" className="text-sm">
+              <Megaphone className="w-4 h-4 mr-1.5" />
+              Iklan Affiliate
+            </TabsTrigger>
             <TabsTrigger value="categories" className="text-sm">
               <Settings2 className="w-4 h-4 mr-1.5" />
               Kategori
             </TabsTrigger>
             <TabsTrigger value="affiliate" className="text-sm">
               <Link2 className="w-4 h-4 mr-1.5" />
-              Affiliate
+              Link Affiliate
             </TabsTrigger>
             <TabsTrigger value="security" className="text-sm">
               <Shield className="w-4 h-4 mr-1.5" />
@@ -111,6 +117,10 @@ export default function AdminPage() {
 
           <TabsContent value="categories" className="space-y-4">
             <CategoriesTab />
+          </TabsContent>
+
+          <TabsContent value="affiliate-ads" className="space-y-4">
+            <AffiliateAdsTab />
           </TabsContent>
 
           <TabsContent value="affiliate" className="space-y-4">
