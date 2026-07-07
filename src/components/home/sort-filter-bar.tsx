@@ -28,17 +28,18 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "rating", label: "Rating Tertinggi" },
 ];
 
+// Text-only, no emoji (sesuai request user — clean seperti Tokopedia/Shopee)
 const MARKETPLACE_OPTIONS = [
-  { value: "shopee", label: "Shopee", emoji: "🛍️" },
-  { value: "tokopedia", label: "Tokopedia", emoji: "🟢" },
-  { value: "lazada", label: "Lazada", emoji: "💙" },
-  { value: "blibli", label: "Blibli", emoji: "🔷" },
-  { value: "bukalapak", label: "Bukalapak", emoji: "📕" },
-  { value: "zalora", label: "Zalora", emoji: "👗" },
-  { value: "sociolla", label: "Sociolla", emoji: "💄" },
-  { value: "tiktok", label: "TikTok Shop", emoji: "🎵" },
-  { value: "aliexpress", label: "AliExpress", emoji: "🔴" },
-  { value: "amazon", label: "Amazon", emoji: "📦" },
+  { value: "shopee", label: "Shopee" },
+  { value: "tokopedia", label: "Tokopedia" },
+  { value: "lazada", label: "Lazada" },
+  { value: "blibli", label: "Blibli" },
+  { value: "bukalapak", label: "Bukalapak" },
+  { value: "zalora", label: "Zalora" },
+  { value: "sociolla", label: "Sociolla" },
+  { value: "tiktok", label: "TikTok Shop" },
+  { value: "aliexpress", label: "AliExpress" },
+  { value: "amazon", label: "Amazon" },
 ];
 
 const PRICE_PRESETS = [
@@ -62,6 +63,31 @@ export function SortFilterBar({
   const [showFilter, setShowFilter] = React.useState(false);
   const [sortOpen, setSortOpen] = React.useState(false);
 
+  // Auto-hide on scroll down, show on scroll up (mobile browser pattern)
+  const [visible, setVisible] = React.useState(true);
+  const lastScrollY = React.useRef(0);
+
+  React.useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const scrollingDown = currentScrollY > lastScrollY.current;
+      const scrolledPastBar = currentScrollY > 100; // only hide after 100px scroll
+
+      if (scrollingDown && scrolledPastBar) {
+        setVisible(false);
+        // Auto-close filter panel & sort dropdown saat hide
+        setShowFilter(false);
+        setSortOpen(false);
+      } else {
+        setVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label || "Terbaru";
   const hasActiveFilter = selectedMarketplaces.length > 0 || minPrice !== null || maxPrice !== null;
 
@@ -79,7 +105,12 @@ export function SortFilterBar({
   };
 
   return (
-    <div className="sticky top-[56px] z-30 bg-background/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800 -mx-4 px-4 py-2">
+    <div
+      className={cn(
+        "sticky top-[56px] z-30 bg-background/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800 -mx-4 px-4 py-2 transition-transform duration-200",
+        visible ? "translate-y-0" : "-translate-y-[calc(100%+56px)]"
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
         {/* Result count */}
         <span className="text-xs text-zinc-500 hidden sm:inline">
@@ -152,7 +183,7 @@ export function SortFilterBar({
                 className="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 text-[10px] gap-1 cursor-pointer"
                 onClick={() => toggleMarketplace(mp)}
               >
-                {opt?.emoji} {opt?.label || mp} <X className="w-2.5 h-2.5" />
+                {opt?.label || mp} <X className="w-2.5 h-2.5" />
               </Badge>
             );
           })}
@@ -178,7 +209,7 @@ export function SortFilterBar({
       {/* Filter panel */}
       {showFilter && (
         <div className="mt-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-3">
-          {/* Marketplace filter */}
+          {/* Marketplace filter — text only, no emoji */}
           <div>
             <p className="text-xs font-semibold mb-2">Marketplace</p>
             <div className="flex flex-wrap gap-1.5">
@@ -195,7 +226,7 @@ export function SortFilterBar({
                         : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-violet-400"
                     )}
                   >
-                    {mp.emoji} {mp.label}
+                    {mp.label}
                   </button>
                 );
               })}
@@ -243,6 +274,27 @@ export function SortFilterBar({
                 className="w-full h-8 rounded-md border border-input bg-transparent px-2 text-xs"
               />
             </div>
+          </div>
+
+          {/* Apply / Close button untuk mobile UX */}
+          <div className="flex gap-2 pt-1">
+            <Button
+              size="sm"
+              className="flex-1 h-8 text-xs"
+              onClick={() => setShowFilter(false)}
+            >
+              Tampilkan {totalResults} produk
+            </Button>
+            {hasActiveFilter && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={clearAllFilters}
+              >
+                Reset
+              </Button>
+            )}
           </div>
         </div>
       )}
