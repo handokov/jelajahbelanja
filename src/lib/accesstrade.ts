@@ -17,12 +17,18 @@
  */
 
 import crypto from "crypto";
+import { getAtCredentials } from "@/lib/settings";
 
-const API_BASE = process.env.ACCESSTRADE_API_BASE || "https://gurkha.accesstrade.global";
-const USER_UID = process.env.ACCESSTRADE_USER_UID || "";
-const SECRET_KEY = process.env.ACCESSTRADE_SECRET_KEY || "";
-const COUNTRY_CODE = process.env.ACCESSTRADE_COUNTRY_CODE || "id";
-const SITE_ID = process.env.ACCESSTRADE_SITE_ID || "127377";
+// Credentials dibaca dynamically dari DB (fallback ke env vars)
+// Supaya bisa di-edit via admin UI tanpa Vercel env vars issue
+async function getCreds() {
+  return getAtCredentials();
+}
+
+// Default values (untuk fungsi sync yang tidak async)
+const API_BASE_FALLBACK = process.env.ACCESSTRADE_API_BASE || "https://gurkha.accesstrade.global";
+const COUNTRY_CODE_FALLBACK = process.env.ACCESSTRADE_COUNTRY_CODE || "id";
+const SITE_ID_FALLBACK = process.env.ACCESSTRADE_SITE_ID || "127377";
 
 // ─── JWT Generation ───
 function base64Url(obj: object): string {
@@ -33,15 +39,17 @@ function base64Url(obj: object): string {
     .replace(/\//g, "_");
 }
 
-function generateJwt(): string {
-  if (!USER_UID || !SECRET_KEY) {
-    throw new Error("ACCESSTRADE_USER_UID or ACCESSTRADE_SECRET_KEY not set");
+// Generate JWT pakai credentials dari DB (async)
+async function generateJwt(): Promise<string> {
+  const creds = await getCreds();
+  if (!creds.USER_UID || !creds.SECRET_KEY) {
+    throw new Error("ACCESSTRADE_USER_UID or ACCESSTRADE_SECRET_KEY not set. Set via admin AT Sync tab.");
   }
   const header = { alg: "HS256", typ: "JWT" };
-  const payload = { sub: USER_UID, iat: Math.floor(Date.now() / 1000) };
+  const payload = { sub: creds.USER_UID, iat: Math.floor(Date.now() / 1000) };
   const data = base64Url(header) + "." + base64Url(payload);
   const sig = crypto
-    .createHmac("sha256", SECRET_KEY)
+    .createHmac("sha256", creds.SECRET_KEY)
     .update(data)
     .digest("base64")
     .replace(/=/g, "")
@@ -65,8 +73,9 @@ async function rateLimit() {
 // ─── Generic API call ───
 async function atFetch<T>(path: string): Promise<T> {
   await rateLimit();
-  const url = API_BASE + path;
-  const jwt = generateJwt();
+  const creds = await getCreds();
+  const url = creds.API_BASE + path;
+  const jwt = await generateJwt();
 
   const res = await fetch(url, {
     headers: {
@@ -142,14 +151,16 @@ export async function getSites(): Promise<Array<{ id: number; name: string; url:
 
 /** Dapat campaign yang sudah Anda approved (affiliated) */
 export async function getAffiliatedCampaigns(): Promise<ATCampaign[]> {
-  const path = `/v1/publishers/me/sites/${SITE_ID}/campaigns/affiliated?limit=50&page=1&countryCode=${COUNTRY_CODE}`;
+  const creds = await getCreds();
+  const path = `/v1/publishers/me/sites/${creds.SITE_ID}/campaigns/affiliated?limit=50&page=1&countryCode=${creds.COUNTRY_CODE}`;
   return atFetch<ATCampaign[]>(path);
 }
 
 /** Dapat URL product feed untuk campaign tertentu */
 export async function getProductFeedUrl(campaignId: number): Promise<string | null> {
   try {
-    const path = `/v1/publishers/me/sites/${SITE_ID}/campaigns/${campaignId}/productfeed/url?countryCode=${COUNTRY_CODE}`;
+    const creds = await getCreds();
+    const path = `/v1/publishers/me/sites/${creds.SITE_ID}/campaigns/${campaignId}/productfeed/url?countryCode=${creds.COUNTRY_CODE}`;
     const result = await atFetch<ATProductFeedUrl>(path);
     return result.baseUrl || null;
   } catch {
@@ -198,9 +209,10 @@ export function detectMarketplaceFromCampaign(campaign: ATCampaign): string {
   return "shopee";
 }
 
-/** Cek apakah AT credentials sudah dikonfigurasi */
-export function isAtConfigured(): boolean {
-  return !!(USER_UID && SECRET_KEY);
+/** Cek apakah AT credentials sudah dikonfigurasi (DB atau env) */
+export async function isAtConfigured(): Promise<boolean> {
+  const creds = await getCreds();
+  return !!(creds.USER_UID && creds.SECRET_KEY);
 }
 
 // ─── Quicklink: Auto-affiliate untuk produk marketplace ───
@@ -225,7 +237,8 @@ export async function getQuicklink(campaignId: number): Promise<ATQuicklink | nu
   }
 
   try {
-    const path = `/v1/publishers/me/sites/${SITE_ID}/campaigns/${campaignId}/creatives/quicklink?countryCode=${COUNTRY_CODE}`;
+    const creds = await getCreds();
+    const path = `/v1/publishers/me/sites/${creds.SITE_ID}/campaigns/${campaignId}/creatives/quicklink?countryCode=${creds.COUNTRY_CODE}`;
     const result = await atFetch<ATQuicklink>(path);
     quicklinkCache.set(campaignId, { data: result, expires: Date.now() + QUICKLINK_CACHE_TTL });
     return result;

@@ -113,3 +113,11 @@ model ProductBadge {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+// Setting — key-value store untuk config yang bisa di-edit via admin UI
+// (cth: AT credentials, supaya tidak perlu set via Vercel env vars yang bermasalah copy-paste)
+model Setting {
+  key       String   @id                 // cth: "ACCESSTRADE_USER_UID", "ACCESSTRADE_SECRET_KEY"
+  value     String                       // value (string)
+  updatedAt DateTime @updatedAt
+}

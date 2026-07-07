@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
   if (authErr) return authErr;
 
   try {
-    if (!isAtConfigured()) {
+    if (!(await isAtConfigured())) {
       return NextResponse.json({
         success: false,
         error: "AccessTrade credentials not configured. Set ACCESSTRADE_USER_UID + ACCESSTRADE_SECRET_KEY in .env",
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    if (!isAtConfigured()) {
+    if (!(await isAtConfigured())) {
       result.errors.push("AT credentials not configured");
       result.duration = Date.now() - startTime;
       return NextResponse.json(result, { status: 500 });
