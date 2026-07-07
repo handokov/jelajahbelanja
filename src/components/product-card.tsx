@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SmartImage } from "@/components/smart-image";
 import type { Product, Marketplace } from "@/lib/types";
 import {
   formatRupiah,
@@ -303,18 +304,17 @@ export function ProductCard({ product, variant = "default", rank, badges }: Prod
     <div className="group relative flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl sm:rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
       <Link href={detailUrl} className="contents">
         <div className="relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800 cursor-pointer">
-          <img
+          <SmartImage
             src={product.image}
             alt={`${product.title} - ${product.marketplace} ${product.category} viral best seller di Indonesia`}
-            loading="lazy"
-            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+            aspectClass="w-full h-full"
           />
-          <div className="absolute top-1 left-1 sm:top-2 sm:left-2 flex flex-col gap-1">
+          <div className="absolute top-1 left-1 sm:top-2 sm:left-2 flex flex-col gap-1 z-10">
             {product.isViral && <ViralBadge />}
             <MarketplaceBadge marketplace={product.marketplace} />
           </div>
           {product.discountPercent && product.discountPercent > 0 && (
-            <Badge className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-red-500 text-white hover:bg-red-500 text-[10px] font-bold px-1.5 py-0 h-5">
+            <Badge className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-red-500 text-white hover:bg-red-500 text-[10px] font-bold px-1.5 py-0 h-5 z-10">
               −{product.discountPercent}%
             </Badge>
           )}
