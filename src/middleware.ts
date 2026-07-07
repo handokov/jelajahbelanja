@@ -21,6 +21,7 @@ const PROTECTED_API_PATTERNS = [
   { path: "/api/affiliate", methods: ["GET", "PATCH", "POST"] },
   { path: "/api/banners", methods: ["POST", "PATCH", "DELETE"] },
   { path: "/api/product-badges", methods: ["POST", "PATCH", "DELETE"] },
+  { path: "/api/at-sync", methods: ["GET", "POST"] },
   { path: "/api/bulk-upload", methods: ["POST"] },
   { path: "/api/scrape-shopee", methods: ["POST"] },
 ];

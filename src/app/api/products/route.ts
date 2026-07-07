@@ -101,6 +101,19 @@ export async function GET(req: NextRequest) {
       ? filterParam
       : "latest";
     const search = (searchParams.get("search") || "").trim().toLowerCase();
+
+    // Sort: newest | price-asc | price-desc | discount | rating | popular
+    const sort = (searchParams.get("sort") || "newest").toLowerCase();
+
+    // Price filter
+    const minPrice = searchParams.get("minPrice") ? Number(searchParams.get("minPrice")) : null;
+    const maxPrice = searchParams.get("maxPrice") ? Number(searchParams.get("maxPrice")) : null;
+
+    // Marketplace filter (comma-separated: shopee,tokopedia,...)
+    const marketplacesParam = (searchParams.get("marketplaces") || "").trim().toLowerCase();
+    const marketplaceFilter = marketplacesParam
+      ? marketplacesParam.split(",").map(m => m.trim()).filter(Boolean)
+      : [];
     
     // Pagination — default 100, max 500
     const rawLimit = parseInt(searchParams.get("limit") || "100", 10);
@@ -121,27 +134,31 @@ export async function GET(req: NextRequest) {
         ? categories.filter((c) => c.id === categoryId).map((c) => c.name)
         : []; // kosong = tidak filter berdasarkan kategori
 
+    // Build where clause dengan marketplace + price filter
+    const whereClause: any = {
+      enabled: true,
+      isHidden: { not: true },
+      ...(targetCategoryNames.length > 0
+        ? { category: { in: targetCategoryNames } }
+        : {}),
+      ...(marketplaceFilter.length > 0
+        ? { marketplace: { in: marketplaceFilter } }
+        : {}),
+    };
+    if (minPrice !== null && !isNaN(minPrice)) {
+      whereClause.price = { ...(whereClause.price || {}), gte: minPrice };
+    }
+    if (maxPrice !== null && !isNaN(maxPrice)) {
+      whereClause.price = { ...(whereClause.price || {}), lte: maxPrice };
+    }
+
     // Count total untuk pagination info
-    const totalCount = await db.shopeeProduct.count({
-      where: {
-        enabled: true,
-        isHidden: { not: true },
-        ...(targetCategoryNames.length > 0
-          ? { category: { in: targetCategoryNames } }
-          : {}),
-      },
-    });
+    const totalCount = await db.shopeeProduct.count({ where: whereClause });
 
     // Ambil produk yang enabled=true DAN isHidden bukan true (null juga ditampilkan)
     // Dengan pagination: limit + skip
     const manualRows = await db.shopeeProduct.findMany({
-      where: {
-        enabled: true,
-        isHidden: { not: true },
-        ...(targetCategoryNames.length > 0
-          ? { category: { in: targetCategoryNames } }
-          : {}),
-      },
+      where: whereClause,
       orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
       take: limit,
       skip: (page - 1) * limit,
@@ -179,6 +196,24 @@ export async function GET(req: NextRequest) {
         (a, b) => b.soldCount - a.soldCount
       );
     }
+
+    // Apply sort (override filter ordering)
+    if (sort === "price-asc") {
+      finalProducts = [...finalProducts].sort((a, b) => a.price - b.price);
+    } else if (sort === "price-desc") {
+      finalProducts = [...finalProducts].sort((a, b) => b.price - a.price);
+    } else if (sort === "discount") {
+      finalProducts = [...finalProducts].sort(
+        (a, b) => (b.discountPercent || 0) - (a.discountPercent || 0)
+      );
+    } else if (sort === "rating") {
+      finalProducts = [...finalProducts].sort(
+        (a, b) => b.rating - a.rating || b.reviewCount - a.reviewCount
+      );
+    } else if (sort === "popular") {
+      finalProducts = [...finalProducts].sort((a, b) => b.soldCount - a.soldCount);
+    }
+    // sort === "newest" → default ordering from DB (createdAt desc)
 
     return NextResponse.json<ProductsResponse>({
       products: finalProducts,

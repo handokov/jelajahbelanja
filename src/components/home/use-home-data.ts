@@ -14,6 +14,12 @@ export function useHomeData() {
   const [search, setSearch] = React.useState("");
   const [debouncedSearch, setDebouncedSearch] = React.useState("");
 
+  // Sort & filter state
+  const [sort, setSort] = React.useState<"newest" | "price-asc" | "price-desc" | "discount" | "rating" | "popular">("newest");
+  const [minPrice, setMinPrice] = React.useState<number | null>(null);
+  const [maxPrice, setMaxPrice] = React.useState<number | null>(null);
+  const [selectedMarketplaces, setSelectedMarketplaces] = React.useState<string[]>([]);
+
   // Debounce search
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -62,15 +68,19 @@ export function useHomeData() {
 
   // Products
   const productsQuery = useQuery({
-    queryKey: ["products", activeCategory, filter, debouncedSearch],
+    queryKey: ["products", activeCategory, filter, debouncedSearch, sort, minPrice, maxPrice, selectedMarketplaces.join(",")],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (activeCategory && activeCategory !== "all") {
         params.set("category", activeCategory);
       }
       params.set("filter", filter);
-      params.set("limit", "200"); // Load up to 200 produk per page
+      params.set("limit", "200");
       if (debouncedSearch) params.set("search", debouncedSearch);
+      if (sort) params.set("sort", sort);
+      if (minPrice !== null) params.set("minPrice", String(minPrice));
+      if (maxPrice !== null) params.set("maxPrice", String(maxPrice));
+      if (selectedMarketplaces.length > 0) params.set("marketplaces", selectedMarketplaces.join(","));
       const res = await fetch(`/api/products?${params.toString()}`);
       if (!res.ok) throw new Error("Gagal memuat produk");
       const json = (await res.json()) as ProductsResponse;
@@ -119,6 +129,15 @@ export function useHomeData() {
     search,
     setSearch,
     debouncedSearch,
+    // Sort & Filter
+    sort,
+    setSort,
+    minPrice,
+    setMinPrice,
+    maxPrice,
+    setMaxPrice,
+    selectedMarketplaces,
+    setSelectedMarketplaces,
     // Data
     categories,
     categoriesLoading,
