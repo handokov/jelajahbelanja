@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Zap, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+import { RefreshCw, Zap, CheckCircle2, AlertCircle, ExternalLink, Save } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -156,6 +157,9 @@ export function AtSyncTab() {
           </div>
         </div>
       </div>
+
+      {/* AT Credentials Form — set via DB, bypass Vercel env vars issue */}
+      <AtCredentialsForm />
 
       {/* Status */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-3">
@@ -412,6 +416,172 @@ export function AtSyncTab() {
           <p className="text-[10px] text-zinc-500">Duration: {(lastResult.duration / 1000).toFixed(2)}s</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// AtCredentialsForm — form untuk set AT credentials via DB
+// Bypass Vercel env vars copy-paste issue
+// ════════════════════════════════════════════════════════════════
+function AtCredentialsForm() {
+  const { toast } = useToast();
+  const [form, setForm] = React.useState({
+    USER_UID: "",
+    SECRET_KEY: "",
+    API_BASE: "https://gurkha.accesstrade.global",
+    COUNTRY_CODE: "id",
+    SITE_ID: "127377",
+  });
+  const [currentCreds, setCurrentCreds] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+
+  // Load current credentials (masked)
+  const loadCreds = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/at-settings");
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentCreds(data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadCreds();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/at-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        toast({ title: "✅ AT credentials saved ke DB" });
+        loadCreds();
+      } else {
+        toast({ title: "Gagal save", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Gagal save", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-violet-200 dark:border-violet-900/50 bg-violet-50 dark:bg-violet-900/10 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+          AT Credentials (DB-backed)
+        </h3>
+        <Button size="sm" variant="ghost" onClick={loadCreds} disabled={loading}>
+          <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
+      </div>
+      <p className="text-xs text-violet-900/70 dark:text-violet-100/70">
+        Set credentials AT di sini (disimpan di DB Neon, bukan Vercel env vars).
+        Bypass issue copy-paste Vercel dashboard yang terpotong.
+      </p>
+
+      {/* Current credentials status */}
+      {currentCreds && (
+        <div className="rounded-lg bg-white dark:bg-zinc-900 p-2.5 text-[10px] font-mono space-y-1">
+          <div className="flex justify-between">
+            <span className="text-zinc-500">USER_UID:</span>
+            <span className={currentCreds.USER_UID.includes("(not set)") ? "text-red-500" : "text-emerald-600"}>
+              {currentCreds.USER_UID}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-zinc-500">SECRET_KEY:</span>
+            <span className={currentCreds.SECRET_KEY.includes("(not set)") ? "text-red-500" : "text-emerald-600"}>
+              {currentCreds.SECRET_KEY}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-zinc-500">API_BASE:</span>
+            <span>{currentCreds.API_BASE}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-zinc-500">SITE_ID:</span>
+            <span>{currentCreds.SITE_ID}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Form */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-zinc-500">USER_UID (32 chars)</label>
+          <Input
+            placeholder="uu738972tut4t3t16s0vswssss219864"
+            value={form.USER_UID}
+            onChange={(e) => setForm({ ...form, USER_UID: e.target.value })}
+            className="h-8 text-xs font-mono"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-zinc-500">SECRET_KEY (32 chars)</label>
+          <Input
+            placeholder="p1vlmk0000i0ot01mnunwnsnkwlvuwss"
+            value={form.SECRET_KEY}
+            onChange={(e) => setForm({ ...form, SECRET_KEY: e.target.value })}
+            className="h-8 text-xs font-mono"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-zinc-500">API_BASE</label>
+          <Input
+            value={form.API_BASE}
+            onChange={(e) => setForm({ ...form, API_BASE: e.target.value })}
+            className="h-8 text-xs font-mono"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-zinc-500">COUNTRY_CODE</label>
+          <Input
+            value={form.COUNTRY_CODE}
+            onChange={(e) => setForm({ ...form, COUNTRY_CODE: e.target.value })}
+            className="h-8 text-xs font-mono"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-zinc-500">SITE_ID</label>
+          <Input
+            value={form.SITE_ID}
+            onChange={(e) => setForm({ ...form, SITE_ID: e.target.value })}
+            className="h-8 text-xs font-mono"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={handleSave} disabled={saving || (!form.USER_UID && !form.SECRET_KEY)}>
+          <Save className="w-3.5 h-3.5 mr-1" />
+          {saving ? "Saving..." : "Save ke DB"}
+        </Button>
+        {form.USER_UID && (
+          <span className={`text-[10px] ${form.USER_UID.length === 32 ? "text-emerald-600" : "text-red-500"}`}>
+            USER_UID: {form.USER_UID.length}/32 chars
+          </span>
+        )}
+        {form.SECRET_KEY && (
+          <span className={`text-[10px] ${form.SECRET_KEY.length === 32 ? "text-emerald-600" : "text-red-500"}`}>
+            SECRET_KEY: {form.SECRET_KEY.length}/32 chars
+          </span>
+        )}
+      </div>
     </div>
   );
 }

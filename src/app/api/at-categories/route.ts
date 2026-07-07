@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: NextRequest) {
   try {
-    if (!isAtConfigured()) {
+    if (!(await isAtConfigured())) {
       return NextResponse.json({
         success: false,
         error: "AccessTrade credentials not configured",
