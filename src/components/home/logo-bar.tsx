@@ -19,9 +19,9 @@ export function LogoBar() {
     <div className="sticky top-0 z-50 bg-header-gradient">
       <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-14">
         <div className="flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-all active:scale-[0.97] rounded-lg px-1 -mx-1" aria-label="Kembali ke beranda" prefetch={false}>
-            <img src="/logo.svg" alt="JB" className="w-7 h-7" draggable={false} />
-            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
+          <Link href="/" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-all active:scale-[0.97] rounded-lg px-1 -mx-1 relative z-10" aria-label="Kembali ke beranda" prefetch={false}>
+            <img src="/logo.svg" alt="JB" className="w-7 h-7 pointer-events-none" draggable={false} />
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white pointer-events-none">
               JelajahBelanja
             </h1>
           </Link>
