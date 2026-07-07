@@ -1,18 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Share2, MessageCircle, Facebook, Link2, Check } from "lucide-react";
+import { Share2, MessageCircle, Facebook, Link2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 interface ShareButtonProps {
   title: string;
-  /** URL produk (otomatis dari window.location kalau tidak diset) */
   url?: string;
   className?: string;
   variant?: "default" | "outline" | "ghost";
@@ -20,9 +14,13 @@ interface ShareButtonProps {
 }
 
 /**
- * ShareButton — share ke WhatsApp, Facebook, atau copy link.
+ * ShareButton — share ke berbagai platform.
  *
- * Pakai Web Share API kalau available (mobile native), fallback ke dropdown menu.
+ * Behavior:
+ * 1. Klik tombol → coba native Web Share API (mobile + Windows desktop)
+ *    → native share sheet muncul (WhatsApp, Telegram, Facebook, Twitter, Email, dll — banyak opsi)
+ * 2. Kalau native share tidak available (cth: Linux, browser lama) → tampilkan custom dropdown
+ *    dengan 3 opsi: WhatsApp, Facebook, Copy link
  */
 export function ShareButton({
   title,
@@ -32,8 +30,9 @@ export function ShareButton({
   size = "sm",
 }: ShareButtonProps) {
   const [copied, setCopied] = React.useState(false);
+  const [showDropdown, setShowDropdown] = React.useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // Get URL dari window.location kalau tidak diset
   const shareUrl = React.useMemo(() => {
     if (url) return url;
     if (typeof window !== "undefined") return window.location.href;
@@ -42,8 +41,20 @@ export function ShareButton({
 
   const shareText = `${title} - Lihat di JelajahBelanja`;
 
-  // Web Share API (mobile native)
-  const handleNativeShare = async () => {
+  // Click outside to close dropdown
+  React.useEffect(() => {
+    if (!showDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showDropdown]);
+
+  const handleClick = async () => {
+    // 1. Coba native Web Share API (mobile + Windows desktop)
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
@@ -51,33 +62,38 @@ export function ShareButton({
           text: shareText,
           url: shareUrl,
         });
-        return true;
-      } catch {
-        // User cancel, fallback ke dropdown
-        return false;
+        return; // sukses, tidak perlu dropdown
+      } catch (err: any) {
+        // User cancel — jangan tampilkan dropdown
+        if (err?.name === "AbortError") return;
+        // Gagal karena alasan lain → fallback ke dropdown
       }
     }
-    return false;
+    // 2. Fallback: tampilkan custom dropdown
+    setShowDropdown(!showDropdown);
   };
 
   const handleWhatsApp = () => {
     const text = encodeURIComponent(`${shareText}\n${shareUrl}`);
     window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer");
+    setShowDropdown(false);
   };
 
   const handleFacebook = () => {
     const u = encodeURIComponent(shareUrl);
-    const t = encodeURIComponent(title);
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${u}&t=${t}`, "_blank", "noopener,noreferrer");
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${u}`, "_blank", "noopener,noreferrer");
+    setShowDropdown(false);
   };
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => {
+        setCopied(false);
+        setShowDropdown(false);
+      }, 1500);
     } catch {
-      // Fallback: create temp input
       const tempInput = document.createElement("input");
       tempInput.value = shareUrl;
       document.body.appendChild(tempInput);
@@ -85,7 +101,10 @@ export function ShareButton({
       try {
         document.execCommand("copy");
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        setTimeout(() => {
+          setCopied(false);
+          setShowDropdown(false);
+        }, 1500);
       } catch {
         // silent fail
       }
@@ -93,50 +112,65 @@ export function ShareButton({
     }
   };
 
-  const handleClick = async (e: React.MouseEvent) => {
-    // Coba native share dulu (di mobile)
-    const shared = await handleNativeShare();
-    if (!shared) {
-      // Kalau gagal/cancel, biarkan dropdown terbuka (default behavior)
-    }
-  };
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant={variant}
-          size={size}
-          className={className}
-          aria-label="Share produk"
-        >
-          <Share2 className="w-3.5 h-3.5 mr-1.5" />
-          Bagikan
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onClick={handleWhatsApp} className="cursor-pointer">
-          <MessageCircle className="w-4 h-4 mr-2 text-green-600" />
-          <span className="text-sm">WhatsApp</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleFacebook} className="cursor-pointer">
-          <Facebook className="w-4 h-4 mr-2 text-blue-600" />
-          <span className="text-sm">Facebook</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleCopy} className="cursor-pointer">
-          {copied ? (
-            <>
-              <Check className="w-4 h-4 mr-2 text-emerald-600" />
-              <span className="text-sm text-emerald-600">Tersalin!</span>
-            </>
-          ) : (
-            <>
-              <Link2 className="w-4 h-4 mr-2" />
-              <span className="text-sm">Salin link</span>
-            </>
-          )}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div ref={containerRef} className="relative">
+      <Button
+        variant={variant}
+        size={size}
+        className={className}
+        onClick={handleClick}
+        aria-label="Share produk"
+        aria-expanded={showDropdown}
+      >
+        <Share2 className="w-3.5 h-3.5 mr-1.5" />
+        Bagikan
+      </Button>
+
+      {/* Custom dropdown (fallback kalau native share tidak available) */}
+      {showDropdown && (
+        <div className="absolute bottom-full right-0 mb-2 w-48 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden z-50">
+          <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+            <span className="text-xs font-semibold">Bagikan ke</span>
+            <button
+              onClick={() => setShowDropdown(false)}
+              className="text-zinc-400 hover:text-zinc-600"
+              aria-label="Tutup"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <button
+            onClick={handleWhatsApp}
+            className="w-full flex items-center px-3 py-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition text-left"
+          >
+            <MessageCircle className="w-4 h-4 mr-2.5 text-green-600" />
+            <span className="text-sm">WhatsApp</span>
+          </button>
+          <button
+            onClick={handleFacebook}
+            className="w-full flex items-center px-3 py-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition text-left"
+          >
+            <Facebook className="w-4 h-4 mr-2.5 text-blue-600" />
+            <span className="text-sm">Facebook</span>
+          </button>
+          <button
+            onClick={handleCopy}
+            className="w-full flex items-center px-3 py-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition text-left border-t border-zinc-100 dark:border-zinc-800"
+          >
+            {copied ? (
+              <>
+                <Check className="w-4 h-4 mr-2.5 text-emerald-600" />
+                <span className="text-sm text-emerald-600">Tersalin!</span>
+              </>
+            ) : (
+              <>
+                <Link2 className="w-4 h-4 mr-2.5" />
+                <span className="text-sm">Salin link</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
