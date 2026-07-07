@@ -9,6 +9,7 @@ export { CategoryChips } from "./category-chips";
 export { FilterTabs } from "./filter-tabs";
 export { SortFilterBar } from "./sort-filter-bar";
 export type { SortOption } from "./sort-filter-bar";
+export { FlashSaleSection } from "./flash-sale-section";
 export { ProductsGrid, ProductsGridSkeleton } from "./products-grid";
 export { SEOSection } from "./seo-section";
 export { BlogSection } from "./blog-section";

@@ -3,8 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronRight } from "lucide-react";
-import { LogoBar, HeroSection, StickySearchBar, SortFilterBar, ProductsGrid, SiteFooter, useHomeData } from "@/components/home";
+import { LogoBar, HeroSection, SortFilterBar, FlashSaleSection, ProductsGrid, SiteFooter, useHomeData } from "@/components/home";
 import { CategoryChips } from "@/components/home/category-chips";
+import { BackToTop } from "@/components/back-to-top";
 
 interface Props {
   category: {
@@ -18,14 +19,11 @@ interface Props {
 
 export default function CategoryPageClient({ category, allCategories }: Props) {
   const {
-    activeCategory,
     setActiveCategory,
     filter,
     setFilter,
     search,
     setSearch,
-    categories,
-    categoriesLoading,
     products,
     productsQuery,
     totalSold,
@@ -47,21 +45,6 @@ export default function CategoryPageClient({ category, allCategories }: Props) {
     setActiveCategory(category.id);
   }, [category.id, setActiveCategory]);
 
-  // Deteksi kapan hero section scroll keluar layar
-  const heroSearchRef = React.useRef<HTMLDivElement>(null);
-  const [heroVisible, setHeroVisible] = React.useState(true);
-
-  React.useEffect(() => {
-    const el = heroSearchRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setHeroVisible(entry.isIntersecting),
-      { rootMargin: "0px", threshold: 0 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* JSON-LD Breadcrumb */}
@@ -80,23 +63,15 @@ export default function CategoryPageClient({ category, allCategories }: Props) {
         }}
       />
 
-      {/* Sticky Logo Bar */}
-      <LogoBar />
+      {/* Sticky Logo Bar dengan search */}
+      <LogoBar search={search} onSearchChange={setSearch} />
 
       {/* Hero Section (compact untuk category page) */}
       <HeroSection
-        search={search}
-        onSearchChange={setSearch}
         productsCount={products.length}
         totalSold={totalSold}
-        categoriesCount={categories.length}
-        heroSearchRef={heroSearchRef}
+        categoriesCount={allCategories.length}
       />
-
-      {/* Sticky Search Bar */}
-      {!heroVisible && (
-        <StickySearchBar search={search} onSearchChange={setSearch} />
-      )}
 
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-4 max-w-7xl py-6">
@@ -127,11 +102,13 @@ export default function CategoryPageClient({ category, allCategories }: Props) {
           categories={allCategories}
           activeCategory={category.id}
           onCategoryChange={(id) => {
-            // Navigasi ke halaman kategori lain
             window.location.href = `/kategori/${id}`;
           }}
           isLoading={false}
         />
+
+        {/* Flash Sale — tampil kalau ada produk dengan diskon >= 30% */}
+        <FlashSaleSection products={products} productBadges={productBadges} />
 
         {/* Filter Tabs */}
         <div className="mb-2">
@@ -174,7 +151,7 @@ export default function CategoryPageClient({ category, allCategories }: Props) {
             isLoading={productsQuery.isLoading}
             isError={productsQuery.isError}
             onRetry={() => productsQuery.refetch()}
-            heroVisible={heroVisible}
+            heroVisible={true}
             productBadges={productBadges}
           />
         </section>
@@ -182,6 +159,9 @@ export default function CategoryPageClient({ category, allCategories }: Props) {
 
       {/* Footer */}
       <SiteFooter />
+
+      {/* Back to top button */}
+      <BackToTop />
     </div>
   );
 }

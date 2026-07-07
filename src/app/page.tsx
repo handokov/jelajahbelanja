@@ -4,17 +4,18 @@ import * as React from "react";
 import {
   LogoBar,
   HeroSection,
-  StickySearchBar,
   BannerSlider,
   CategoryChips,
   FilterTabs,
   SortFilterBar,
+  FlashSaleSection,
   ProductsGrid,
   SEOSection,
   BlogSection,
   SiteFooter,
   useHomeData,
 } from "@/components/home";
+import { BackToTop } from "@/components/back-to-top";
 
 export default function Home() {
   const {
@@ -42,21 +43,6 @@ export default function Home() {
     selectedMarketplaces,
     setSelectedMarketplaces,
   } = useHomeData();
-
-  // Deteksi kapan hero section scroll keluar layar
-  const heroSearchRef = React.useRef<HTMLDivElement>(null);
-  const [heroVisible, setHeroVisible] = React.useState(true);
-
-  React.useEffect(() => {
-    const el = heroSearchRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setHeroVisible(entry.isIntersecting),
-      { rootMargin: "0px", threshold: 0 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   // JSON-LD structured data untuk SEO (ItemList)
   const itemListJsonLd = React.useMemo(() => {
@@ -99,23 +85,15 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
       />
 
-      {/* Sticky Logo Bar */}
-      <LogoBar />
+      {/* Sticky Logo Bar dengan search */}
+      <LogoBar search={search} onSearchChange={setSearch} />
 
-      {/* Hero Section */}
+      {/* Hero Section (tagline + stats, tanpa search) */}
       <HeroSection
-        search={search}
-        onSearchChange={setSearch}
         productsCount={products.length}
         totalSold={totalSold}
         categoriesCount={categories.length}
-        heroSearchRef={heroSearchRef}
       />
-
-      {/* Sticky Search Bar (visible after hero scrolls away) */}
-      {!heroVisible && (
-        <StickySearchBar search={search} onSearchChange={setSearch} />
-      )}
 
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-4 max-w-7xl py-6">
@@ -129,6 +107,9 @@ export default function Home() {
           onCategoryChange={setActiveCategory}
           isLoading={categoriesLoading}
         />
+
+        {/* Flash Sale — tampil kalau ada produk dengan diskon >= 30% */}
+        <FlashSaleSection products={products} productBadges={productBadges} />
 
         {/* Filter Tabs */}
         <FilterTabs filter={filter} onFilterChange={setFilter} />
@@ -155,7 +136,7 @@ export default function Home() {
             isLoading={productsQuery.isLoading}
             isError={productsQuery.isError}
             onRetry={() => productsQuery.refetch()}
-            heroVisible={heroVisible}
+            heroVisible={true}
             productBadges={productBadges}
           />
         </section>
@@ -169,6 +150,9 @@ export default function Home() {
 
       {/* Footer */}
       <SiteFooter />
+
+      {/* Back to top button */}
+      <BackToTop />
     </div>
   );
 }
