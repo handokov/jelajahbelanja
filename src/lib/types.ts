@@ -8,6 +8,7 @@ export type Marketplace =
   | "lazada"
   | "aliexpress"
   | "amazon"
+  | "tiktok"
   | "mock";
 
 export interface Product {

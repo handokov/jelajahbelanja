@@ -33,6 +33,7 @@ export const VALID_MARKETPLACES: Marketplace[] = [
   "lazada",
   "aliexpress",
   "amazon",
+  "tiktok",
 ];
 
 // ─── Marketplace UI Meta ───
@@ -58,6 +59,14 @@ export const MARKETPLACE_META: Record<Marketplace, { label: string; className: s
   amazon: {
     label: "Amazon",
     className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+  },
+  tiktok: {
+    label: "TikTok Shop",
+    className: "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:bg-zinc-900",
+  },
+  mock: {
+    label: "Mock",
+    className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   },
 };
 
