@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { CategoryDTO } from "@/lib/types";
@@ -13,11 +15,12 @@ interface CategoryChipsProps {
 
 /**
  * CategoryChips — horizontal scrollable category selector.
+ * Di homepage: klik chip → navigate ke /kategori/[id] (URL clean untuk SEO).
+ * "Semua" → navigate ke homepage "/".
  */
 export function CategoryChips({
   categories,
   activeCategory,
-  onCategoryChange,
   isLoading,
 }: CategoryChipsProps) {
   if (isLoading) {
@@ -37,16 +40,14 @@ export function CategoryChips({
       <nav className="flex md:grid md:grid-cols-8 gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
         <CategoryChip
           active={activeCategory === "all"}
-          onClick={() => onCategoryChange("all")}
-          emoji="✨"
+          href="/"
           label="Semua"
         />
         {categories.map((c) => (
           <CategoryChip
             key={c.id}
             active={activeCategory === c.id}
-            onClick={() => onCategoryChange(c.id)}
-            emoji={c.emoji}
+            href={`/kategori/${c.id}`}
             label={c.name}
           />
         ))}
@@ -57,18 +58,17 @@ export function CategoryChips({
 
 function CategoryChip({
   active,
-  onClick,
+  href,
   label,
 }: {
   active: boolean;
-  onClick: () => void;
+  href: string;
   emoji?: string;
   label: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href={href}
       className={cn(
         "flex-shrink-0 inline-flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium border transition whitespace-nowrap",
         active
@@ -77,6 +77,7 @@ function CategoryChip({
       )}
     >
       {label}
-    </button>
+    </Link>
   );
 }
+
