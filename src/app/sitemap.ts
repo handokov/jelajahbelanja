@@ -17,6 +17,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/disclaimer`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
   ];
 
+  // Category pages — /kategori/{id}
+  let categoryPages: MetadataRoute.Sitemap = [];
+  try {
+    const cats = await db.category.findMany({
+      where: { enabled: true },
+      select: { id: true, name: true, updatedAt: true, order: true },
+      orderBy: { order: "asc" },
+    });
+    categoryPages = cats.map(c => ({
+      url: `${SITE_URL}/kategori/${c.id}`,
+      lastModified: c.updatedAt,
+      changeFrequency: "daily" as const,
+      priority: 0.8,
+    }));
+  } catch (err) {
+    console.error("[sitemap] Failed to fetch categories:", err);
+  }
+
   // Dynamic product pages
   let productPages: MetadataRoute.Sitemap = [];
   try {
@@ -56,5 +74,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] Failed to fetch blog:", err);
   }
 
-  return [...staticPages, ...productPages, ...blogPages];
+  return [...staticPages, ...categoryPages, ...productPages, ...blogPages];
 }
