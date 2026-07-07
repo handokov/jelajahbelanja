@@ -19,6 +19,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ShareButton } from "@/components/share-button";
 import type { Marketplace } from "@/lib/types";
 import {
   formatRupiah,
@@ -556,20 +557,28 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
         )}
       </main>
 
-      {/* Sticky Bottom — Buy button */}
+      {/* Sticky Bottom — Buy button + Share */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md px-4 py-3">
         <div className="container mx-auto max-w-5xl">
-          <Button asChild size="lg" className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold shadow-lg shadow-violet-500/25 h-12 text-base">
-            <a
-              href={product.affiliateUrl || `/beli/shopee-${product.id}`}
-              target="_blank"
-              rel="nofollow sponsored noopener noreferrer"
-            >
-              <ShoppingBag className="w-5 h-5 mr-2" />
-              {getMarketplaceMeta(product.marketplace).buyLabel}
-              <ExternalLink className="w-4 h-4 ml-2" />
-            </a>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild size="lg" className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold shadow-lg shadow-violet-500/25 h-12 text-base">
+              <a
+                href={product.affiliateUrl || `/beli/shopee-${product.id}`}
+                target="_blank"
+                rel="nofollow sponsored noopener noreferrer"
+              >
+                <ShoppingBag className="w-5 h-5 mr-2" />
+                {getMarketplaceMeta(product.marketplace).buyLabel}
+                <ExternalLink className="w-4 h-4 ml-2" />
+              </a>
+            </Button>
+            <ShareButton
+              title={product.title}
+              variant="outline"
+              size="lg"
+              className="h-12 px-4 flex-shrink-0"
+            />
+          </div>
           {product.isViral && (
             <div className="flex items-center justify-center gap-1.5 text-xs text-fuchsia-600 dark:text-fuchsia-400 mt-1.5">
               <TrendingUp className="w-3.5 h-3.5" />
