@@ -12,10 +12,14 @@ import type { Product, ProductsResponse, ProductFilter, Marketplace } from "@/li
 
 export const dynamic = "force-dynamic";
 
-/** Normalize marketplace value — handle case variations and "mock" fallback */
+/** Normalize marketplace value — handle case variations and unknown values */
 function normalizeMarketplace(raw: string): string {
   const lower = (raw || "").toLowerCase().trim();
-  if (lower === "shopee" || lower === "tokopedia" || lower === "lazada" || lower === "aliexpress" || lower === "amazon") {
+  const VALID = [
+    "shopee", "tokopedia", "lazada", "blibli", "bukalapak",
+    "zalora", "sociolla", "aliexpress", "amazon", "tiktok",
+  ];
+  if (VALID.includes(lower)) {
     return lower;
   }
   // "mock", empty, atau unknown → default ke "shopee"
