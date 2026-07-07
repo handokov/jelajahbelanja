@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ShareButton } from "@/components/share-button";
+import { RecentlyViewed } from "@/components/recently-viewed";
+import { useRecentlyViewed } from "@/hooks/use-recently-viewed";
 import type { Marketplace } from "@/lib/types";
 import {
   formatRupiah,
@@ -184,6 +186,18 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   const [typewriterDone, setTypewriterDone] = React.useState(false);
   const [recommendations, setRecommendations] = React.useState<ShopeeProduct[]>([]);
   const [recsLoading, setRecsLoading] = React.useState(false);
+
+  // Track recently viewed
+  const { addRecentlyViewed } = useRecentlyViewed();
+  React.useEffect(() => {
+    addRecentlyViewed({
+      id: product.id,
+      title: product.title,
+      image: product.image,
+      price: product.price,
+      marketplace: product.marketplace,
+    });
+  }, [product.id, product.title, product.image, product.price, product.marketplace, addRecentlyViewed]);
 
   const savings = product.originalPrice ? product.originalPrice - product.price : 0;
 
@@ -481,6 +495,9 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
             )}
           </div>
         </div>
+
+        {/* Recently Viewed — tampil di atas rekomendasi */}
+        <RecentlyViewed excludeId={product.id} limit={5} />
 
         {/* Recommended Products — full width below */}
         {(allRecs.length > 0 || recsLoading) && (
