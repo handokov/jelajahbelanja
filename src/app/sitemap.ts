@@ -1,17 +1,20 @@
 import { db } from "@/lib/db";
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://jelajahbelanja.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://jelajahbelanja.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Static pages
+  const now = new Date();
+
+  // Static pages — semua halaman non-produk
   const staticPages: MetadataRoute.Sitemap = [
-    {
-      url: SITE_URL,
-      lastModified: new Date(),
-      changeFrequency: "hourly",
-      priority: 1.0,
-    },
+    { url: SITE_URL, lastModified: now, changeFrequency: "hourly", priority: 1.0 },
+    { url: `${SITE_URL}/artikel`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    { url: `${SITE_URL}/tentang`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${SITE_URL}/kontak`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${SITE_URL}/privasi`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${SITE_URL}/syarat`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${SITE_URL}/disclaimer`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
   ];
 
   // Dynamic product pages
@@ -29,7 +32,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
 
     productPages = products.map((p) => ({
-      url: `${SITE_URL}/produk/shopee-${p.id}`,
+      url: `${SITE_URL}/produk/${p.id}`,
       lastModified: p.updatedAt,
       changeFrequency: "daily" as const,
       priority: p.isPinned || p.isViral ? 0.8 : 0.6,
@@ -38,5 +41,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] Failed to fetch products:", err);
   }
 
-  return [...staticPages, ...productPages];
+  // Blog articles
+  let blogPages: MetadataRoute.Sitemap = [];
+  try {
+    // Cek apakah ada artikel di filesystem
+    const blogSlugs = ["cara-aman-belanja-online-shopee", "produk-viral-tiktok-worth-it", "rahasia-diskon-shopee"];
+    blogPages = blogSlugs.map((slug) => ({
+      url: `${SITE_URL}/artikel/${slug}`,
+      lastModified: now,
+      changeFrequency: "monthly" as const,
+      priority: 0.5,
+    }));
+  } catch (err) {
+    console.error("[sitemap] Failed to fetch blog:", err);
+  }
+
+  return [...staticPages, ...productPages, ...blogPages];
 }

@@ -319,8 +319,52 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   // Combine related (from DB) + recommendations (from API)
   const allRecs = recommendations.length > 0 ? recommendations : related;
 
+  // JSON-LD Product schema untuk SEO (Google rich results)
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.title,
+    image: [product.image],
+    description: `${product.title} - ${product.marketplace} ${product.category}. Harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(product.price)}${product.location ? ` · Lokasi: ${product.location}` : ""}`,
+    sku: product.id,
+    brand: { "@type": "Brand", name: product.marketplace },
+    offers: {
+      "@type": "Offer",
+      url: product.affiliateUrl || product.url,
+      priceCurrency: "IDR",
+      price: product.price,
+      availability: "https://schema.org/InStock",
+      itemCondition: "https://schema.org/NewCondition",
+    },
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: product.rating,
+      reviewCount: product.reviewCount,
+    },
+  };
+
+  // JSON-LD Breadcrumb
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://jelajahbelanja.com" },
+      { "@type": "ListItem", position: 2, name: product.category, item: `https://jelajahbelanja.com/?category=${product.category}` },
+      { "@type": "ListItem", position: 3, name: product.title.slice(0, 60) },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* JSON-LD structured data untuk SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       {/* Sticky top bar */}
       <header className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
         <div className="container mx-auto px-4 max-w-5xl flex items-center justify-between h-12">
