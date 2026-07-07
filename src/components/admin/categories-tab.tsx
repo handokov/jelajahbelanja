@@ -53,6 +53,9 @@ export function CategoriesTab() {
   const [form, setForm] = React.useState<CreateCategoryInput>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = React.useState<CategoryDTO | null>(null);
   const [resetConfirmOpen, setResetConfirmOpen] = React.useState(false);
+  const [showAtCategories, setShowAtCategories] = React.useState(false);
+  const [atCategories, setAtCategories] = React.useState<any[]>([]);
+  const [atCategoriesLoading, setAtCategoriesLoading] = React.useState(false);
 
   // ─── Query ───
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
@@ -218,8 +221,24 @@ export function CategoriesTab() {
             <Input id="cat-lazada" placeholder="elektronik" value={form.lazadaCat ?? ""} onChange={(e) => setForm({ ...form, lazadaCat: e.target.value })} />
           </div>
           <div className="flex flex-col gap-1.5 md:col-span-2">
-            <Label htmlFor="cat-accesstrade" className="text-xs">Accesstrade Categories (pisahkan dengan koma)</Label>
+            <Label htmlFor="cat-accesstrade" className="text-xs flex items-center gap-1.5">
+              Accesstrade Categories (pisahkan dengan koma)
+              <a
+                href="/api/at-categories"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-violet-600 hover:underline"
+                onClick={(e) => { e.preventDefault(); setShowAtCategories(true); }}
+              >
+                (lihat kategori AT yang tersedia)
+              </a>
+            </Label>
             <Input id="cat-accesstrade" placeholder="Mobile & Gadgets,Computers & Accessories" value={form.accesstradeCat ?? ""} onChange={(e) => setForm({ ...form, accesstradeCat: e.target.value })} />
+            <p className="text-[10px] text-zinc-500">
+              Kategori AT untuk auto-mapping saat sync produk dari AccessTrade API.
+              Kategori AT utama: E-COMMERCE, TRAVEL and LEISURE, FINANCIAL SERVICES, ONLINE SERVICES, GAMES.
+              Kategori produk AT: Women's Fashion, Mobile &amp; Gadgets, Beauty, Home &amp; Living, dll.
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cat-amazon" className="text-xs">Amazon Node (opsional)</Label>
@@ -311,6 +330,97 @@ export function CategoriesTab() {
           <AlertDialogFooter>
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction onClick={() => resetMutation.mutate()}>Reset</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AT Categories info dialog */}
+      <AlertDialog open={showAtCategories} onOpenChange={setShowAtCategories}>
+        <AlertDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kategori AccessTrade yang Tersedia</AlertDialogTitle>
+            <AlertDialogDescription>
+              Kategori dari campaign AccessTrade yang sudah Anda approved. Pakai nama ini di field "Accesstrade Categories" untuk auto-mapping produk saat sync.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="mb-3"
+              disabled={atCategoriesLoading}
+              onClick={async () => {
+                setAtCategoriesLoading(true);
+                try {
+                  const res = await fetch("/api/at-categories");
+                  const data = await res.json();
+                  setAtCategories(data.categories || []);
+                } catch (err) {
+                  toast({ title: "Gagal fetch kategori AT", variant: "destructive" });
+                } finally {
+                  setAtCategoriesLoading(false);
+                }
+              }}
+            >
+              {atCategoriesLoading ? "Memuat..." : "Fetch dari AccessTrade"}
+            </Button>
+
+            {atCategories.length > 0 ? (
+              <div className="space-y-2">
+                {atCategories.map((cat: any) => (
+                  <div key={cat.name} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-2.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-semibold">{cat.name}</span>
+                      <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 text-[10px]">
+                        {cat.campaignCount} campaign
+                      </Badge>
+                    </div>
+                    {cat.examples && cat.examples.length > 0 && (
+                      <p className="text-[10px] text-zinc-500">
+                        Contoh: {cat.examples.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-zinc-500">
+                Klik "Fetch dari AccessTrade" untuk load kategori live dari API AT.
+              </p>
+            )}
+
+            {/* Reference kategori produk AT (dari dokumentasi) */}
+            <div className="mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+              <p className="text-xs font-semibold mb-1.5">Kategori Produk AT (untuk product feed):</p>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  "Women's Fashion", "Men's Fashion", "Muslim Fashion", "Kids Fashion",
+                  "Mobile & Gadgets", "Computers & Accessories", "Electronic Accessories",
+                  "Cameras & Drones", "Smart Devices", "Watches",
+                  "Beauty", "Health", "Health & Personal Care",
+                  "Home & Living", "Home Appliances", "Pets", "Food & Beverages",
+                  "Groceries", "Books & Stationery", "Gaming",
+                  "Sports & Outdoors", "Mom & Baby", "Toys & Games", "Kids & Baby",
+                  "Automotive", "Travel & Luggage", "Jewelry & Accessories",
+                ].map(cat => (
+                  <Badge key={cat} className="bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 text-[9px] cursor-pointer hover:bg-violet-100 hover:text-violet-700"
+                    onClick={() => {
+                      const current = form.accesstradeCat || "";
+                      const newVal = current ? `${current},${cat}` : cat;
+                      setForm({ ...form, accesstradeCat: newVal });
+                    }}
+                  >
+                    + {cat}
+                  </Badge>
+                ))}
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-2">
+                Klik badge untuk tambahkan ke field "Accesstrade Categories" di form.
+              </p>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Tutup</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
