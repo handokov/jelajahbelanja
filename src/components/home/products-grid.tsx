@@ -4,11 +4,11 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductCard } from "@/components/product-card";
-import { Flame } from "lucide-react";
+import { Flame, Loader2, ChevronDown } from "lucide-react";
 import { AffiliateBanner } from "@/components/affiliate-banner";
 import type { Product, ProductFilter } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 
 export interface ProductBadge {
   id: string;
@@ -84,6 +84,19 @@ export function ProductsGrid({
   heroVisible,
   productBadges = [],
 }: ProductsGridProps) {
+  // Infinite scroll state
+  const PAGE_SIZE = 24;
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset displayCount saat products berubah (filter/sort/search baru)
+  useEffect(() => {
+    // Pattern valid: reset pagination state when source data changes
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDisplayCount(PAGE_SIZE);
+  }, [products]);
+
   // Build grid items dengan iklan tersisip random — compute SEBELUM early return
   // (hooks must be called in same order every render)
   const gridProducts = products.filter(
@@ -93,6 +106,32 @@ export function ProductsGrid({
     () => buildGridWithAds(gridProducts, productBadges),
     [gridProducts, productBadges]
   );
+
+  // Slice untuk infinite scroll
+  const visibleItems = gridItems.slice(0, displayCount);
+  const hasMore = displayCount < gridItems.length;
+
+  // IntersectionObserver untuk auto-load
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore) {
+          setLoadingMore(true);
+          // Simulate small delay for UX feedback
+          setTimeout(() => {
+            setDisplayCount((c) => Math.min(c + PAGE_SIZE, gridItems.length));
+            setLoadingMore(false);
+          }, 200);
+        }
+      },
+      { rootMargin: "200px" } // trigger 200px before sentinel visible
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, gridItems.length]);
 
   if (isLoading) return <ProductsGridSkeleton />;
   if (isError) {
@@ -134,7 +173,7 @@ export function ProductsGrid({
         )}
         {/* Mobile 2 cols, Desktop 3 cols. Iklan in-content span full width. */}
         <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4">
-          {gridItems.map((item, idx) => {
+          {visibleItems.map((item, idx) => {
             if (item.type === "ad") {
               return (
                 <div
@@ -159,6 +198,44 @@ export function ProductsGrid({
             );
           })}
         </div>
+
+        {/* Infinite scroll sentinel + Load More button */}
+        {hasMore && (
+          <>
+            <div ref={sentinelRef} className="h-4" aria-hidden />
+            <div className="flex flex-col items-center gap-2 py-4">
+              {loadingMore ? (
+                <div className="flex items-center gap-2 text-sm text-zinc-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Memuat produk lainnya...
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setLoadingMore(true);
+                    setTimeout(() => {
+                      setDisplayCount((c) => Math.min(c + PAGE_SIZE, gridItems.length));
+                      setLoadingMore(false);
+                    }, 200);
+                  }}
+                  className="gap-1"
+                >
+                  Muat lagi ({gridItems.length - displayCount} produk)
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* End of results indicator */}
+        {!hasMore && gridItems.length > PAGE_SIZE && (
+          <div className="text-center py-4 text-xs text-zinc-400">
+            ✓ Semua {gridItems.length} produk sudah ditampilkan
+          </div>
+        )}
       </div>
 
       {/* Sidebar trending - desktop only */}
