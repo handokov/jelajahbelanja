@@ -16,10 +16,12 @@ import {
   ShoppingBag,
   LogOut,
   Megaphone,
+  Zap,
 } from "lucide-react";
 import { BulkUploadTab } from "@/components/bulk-upload-tab";
 import { SecurityTab } from "@/components/security-tab";
 import { ProductsTab } from "@/components/admin/products-tab";
+import { AtSyncTab } from "@/components/admin/at-sync-tab";
 import { BannersTab } from "@/components/admin/banners-tab";
 import { CategoriesTab } from "@/components/admin/categories-tab";
 import { AffiliateTab } from "@/components/admin/affiliate-tab";
@@ -71,10 +73,14 @@ export default function AdminPage() {
       {/* Main */}
       <main className="container mx-auto px-4 max-w-5xl py-6">
         <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="grid w-full max-w-4xl grid-cols-7 h-11">
+          <TabsList className="grid w-full max-w-4xl grid-cols-8 h-11">
             <TabsTrigger value="products" className="text-sm">
               <Package className="w-4 h-4 mr-1.5" />
               Produk
+            </TabsTrigger>
+            <TabsTrigger value="at-sync" className="text-sm">
+              <Zap className="w-4 h-4 mr-1.5" />
+              AT Sync
             </TabsTrigger>
             <TabsTrigger value="bulk-upload" className="text-sm">
               <FileSpreadsheet className="w-4 h-4 mr-1.5" />
@@ -105,6 +111,10 @@ export default function AdminPage() {
           {/* Tab contents — each self-contained with its own queries/mutations/state */}
           <TabsContent value="products" className="space-y-4">
             <ProductsTab />
+          </TabsContent>
+
+          <TabsContent value="at-sync" className="space-y-4">
+            <AtSyncTab />
           </TabsContent>
 
           <TabsContent value="bulk-upload" className="space-y-4">

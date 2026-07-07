@@ -8,6 +8,7 @@ import {
   BannerSlider,
   CategoryChips,
   FilterTabs,
+  SortFilterBar,
   ProductsGrid,
   SEOSection,
   BlogSection,
@@ -32,6 +33,14 @@ export default function Home() {
     trendingTop5,
     featuredProduct,
     productBadges,
+    sort,
+    setSort,
+    minPrice,
+    setMinPrice,
+    maxPrice,
+    setMaxPrice,
+    selectedMarketplaces,
+    setSelectedMarketplaces,
   } = useHomeData();
 
   // Deteksi kapan hero section scroll keluar layar
@@ -123,6 +132,18 @@ export default function Home() {
 
         {/* Filter Tabs */}
         <FilterTabs filter={filter} onFilterChange={setFilter} />
+
+        {/* Sort & Advanced Filter Bar */}
+        <SortFilterBar
+          sort={sort}
+          onSortChange={setSort}
+          minPrice={minPrice}
+          maxPrice={maxPrice}
+          onPriceChange={(min, max) => { setMinPrice(min); setMaxPrice(max); }}
+          selectedMarketplaces={selectedMarketplaces}
+          onMarketplacesChange={setSelectedMarketplaces}
+          totalResults={products.length}
+        />
 
         {/* Products Grid + Trending Sidebar */}
         <section aria-label="Daftar produk viral Indonesia" className="mb-12">
