@@ -58,12 +58,11 @@ export function CategoryChips({
 function CategoryChip({
   active,
   onClick,
-  emoji,
   label,
 }: {
   active: boolean;
   onClick: () => void;
-  emoji: string;
+  emoji?: string;
   label: string;
 }) {
   return (
@@ -71,13 +70,12 @@ function CategoryChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex-shrink-0 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium border transition",
+        "flex-shrink-0 inline-flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium border transition whitespace-nowrap",
         active
           ? "bg-primary text-primary-foreground border-primary shadow-sm"
           : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-primary/40 hover:text-primary"
       )}
     >
-      <span aria-hidden>{emoji}</span>
       {label}
     </button>
   );
