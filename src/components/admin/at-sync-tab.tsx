@@ -97,6 +97,39 @@ export function AtSyncTab() {
     },
   });
 
+  // Auto-affiliate mutation (untuk produk Shopee yang belum punya affiliate URL AT)
+  const [lastAffResult, setLastAffResult] = React.useState<any>(null);
+  const affiliateMutation = useMutation({
+    mutationFn: async (opts: { dryRun?: boolean }) => {
+      const res = await fetch("/api/at-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "affiliate-shopee",
+          dryRun: opts.dryRun,
+        }),
+      });
+      if (!res.ok) throw new Error("Gagal affiliate");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setLastAffResult(data);
+      if (data.success) {
+        toast({
+          title: data.dryRun
+            ? `Preview: ${data.scanned} produk Shopee siap di-affiliate`
+            : `✅ ${data.updated} produk Shopee dapat affiliate URL AT!`,
+        });
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+      } else {
+        toast({ title: "Affiliate gagal", variant: "destructive" });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: err.message || "Gagal affiliate", variant: "destructive" });
+    },
+  });
+
   return (
     <div className="space-y-4">
       {/* Info Banner */}
@@ -223,6 +256,95 @@ export function AtSyncTab() {
         {syncMutation.isPending && (
           <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-3 text-xs text-blue-700 dark:text-blue-300">
             ⏳ Syncing... Mohon tunggu. Bisa makan 1-3 menit tergantung jumlah campaign & produk.
+          </div>
+        )}
+      </div>
+
+      {/* Auto-Affiliate Shopee Section */}
+      <div className="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 p-4 space-y-3">
+        <div className="flex items-start gap-2">
+          <Zap className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+              Auto-Affiliate Produk Shopee
+            </h3>
+            <p className="text-xs text-amber-900/70 dark:text-amber-100/70 mt-1">
+              Scan semua produk Shopee yang belum punya affiliate URL AccessTrade → generate otomatis pakai AT Quicklink.
+              Setiap klik "Beli Sekarang" akan tercatat di AT → komisi masuk.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => affiliateMutation.mutate({ dryRun: true })}
+            disabled={affiliateMutation.isPending || !status?.success}
+            className="border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-300"
+          >
+            <Zap className="w-3.5 h-3.5 mr-1" />
+            Preview (cek berapa produk)
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => affiliateMutation.mutate({ dryRun: false })}
+            disabled={affiliateMutation.isPending || !status?.success}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            {affiliateMutation.isPending ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Zap className="w-3.5 h-3.5 mr-1" />
+                Affiliate Shopee Sekarang
+              </>
+            )}
+          </Button>
+        </div>
+
+        {affiliateMutation.isPending && (
+          <div className="rounded-lg bg-amber-100 dark:bg-amber-900/30 p-2 text-xs text-amber-700 dark:text-amber-300">
+            ⏳ Generating affiliate URLs... Mohon tunggu.
+          </div>
+        )}
+
+        {/* Affiliate Result */}
+        {lastAffResult && (
+          <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-zinc-900 p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              {lastAffResult.success ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              ) : (
+                <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+              )}
+              <span className="text-xs font-semibold">Hasil Auto-Affiliate Shopee</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div>
+                <p className="text-zinc-500 text-[10px]">Scanned</p>
+                <p className="font-bold">{lastAffResult.scanned}</p>
+              </div>
+              <div>
+                <p className="text-zinc-500 text-[10px]">Updated</p>
+                <p className="font-bold text-emerald-600">{lastAffResult.updated}</p>
+              </div>
+              <div>
+                <p className="text-zinc-500 text-[10px]">Skipped</p>
+                <p className="font-bold text-zinc-400">{lastAffResult.skipped}</p>
+              </div>
+            </div>
+            {lastAffResult.errors && lastAffResult.errors.length > 0 && (
+              <div className="text-[10px] text-red-600">
+                {lastAffResult.errors.length} error(s)
+              </div>
+            )}
+            <p className="text-[10px] text-zinc-500">
+              Duration: {(lastAffResult.duration / 1000).toFixed(2)}s
+            </p>
           </div>
         )}
       </div>

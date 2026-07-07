@@ -202,3 +202,109 @@ export function detectMarketplaceFromCampaign(campaign: ATCampaign): string {
 export function isAtConfigured(): boolean {
   return !!(USER_UID && SECRET_KEY);
 }
+
+// ─── Quicklink: Auto-affiliate untuk produk marketplace ───
+
+export interface ATQuicklink {
+  affiliateLink: string;
+  trackingTemplate: string;
+  finalUrl: string;
+  landingUrl: string;
+}
+
+/** Cache quicklink per campaign (1 jam) supaya tidak fetch berulang */
+const quicklinkCache = new Map<number, { data: ATQuicklink | null; expires: number }>();
+const QUICKLINK_CACHE_TTL = 60 * 60 * 1000; // 1 jam
+
+/** Dapat quicklink (affiliate link generator) untuk campaign tertentu */
+export async function getQuicklink(campaignId: number): Promise<ATQuicklink | null> {
+  // Cek cache
+  const cached = quicklinkCache.get(campaignId);
+  if (cached && Date.now() < cached.expires) {
+    return cached.data;
+  }
+
+  try {
+    const path = `/v1/publishers/me/sites/${SITE_ID}/campaigns/${campaignId}/creatives/quicklink?countryCode=${COUNTRY_CODE}`;
+    const result = await atFetch<ATQuicklink>(path);
+    quicklinkCache.set(campaignId, { data: result, expires: Date.now() + QUICKLINK_CACHE_TTL });
+    return result;
+  } catch {
+    quicklinkCache.set(campaignId, { data: null, expires: Date.now() + QUICKLINK_CACHE_TTL });
+    return null;
+  }
+}
+
+/** Map marketplace → campaign ID yang punya quicklink (di-cache saat first fetch) */
+let shopeeCampaignId: number | null = null;
+
+/** Cari campaign Shopee dari affiliated list, return ID-nya */
+async function findShopeeCampaignId(): Promise<number | null> {
+  if (shopeeCampaignId !== null) return shopeeCampaignId;
+  try {
+    const campaigns = await getAffiliatedCampaigns();
+    const shopeeCampaign = campaigns.find(c => {
+      const name = (c.name || "").toLowerCase();
+      return name.includes("shopee");
+    });
+    shopeeCampaignId = shopeeCampaign?.id || null;
+    return shopeeCampaignId;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Generate affiliate URL AccessTrade untuk produk Shopee.
+ *
+ * Pattern: AT quicklink + `?url=<encoded shopee product url>`
+ * AT akan redirect ke product URL dengan affiliate tracking otomatis.
+ *
+ * Contoh:
+ *   Input:  https://shopee.co.id/product/123456
+ *   Output: https://atid.me/00qynk002qa9?url=https%3A%2F%2Fshopee.co.id%2Fproduct%2F123456
+ *
+ * Kalau quicklink tidak tersedia atau URL bukan Shopee, return null.
+ */
+export async function generateShopeeAffiliateUrl(productUrl: string): Promise<string | null> {
+  if (!productUrl) return null;
+
+  // Validasi: harus URL Shopee
+  const lowerUrl = productUrl.toLowerCase();
+  const isShopeeUrl =
+    lowerUrl.includes("shopee.co.id") ||
+    lowerUrl.includes("shopee.com") ||
+    lowerUrl.includes("shope.ee") ||
+    lowerUrl.includes("atid.me"); // shortlink AT sendiri
+
+  if (!isShopeeUrl) return null;
+
+  // Kalau sudah punya affiliate URL AT (atid.me), skip — sudah ter-affiliate
+  if (lowerUrl.includes("atid.me")) return productUrl;
+
+  // Cari campaign Shopee
+  const campaignId = await findShopeeCampaignId();
+  if (!campaignId) return null;
+
+  // Dapat quicklink base
+  const quicklink = await getQuicklink(campaignId);
+  if (!quicklink?.affiliateLink) return null;
+
+  // Generate deep link: quicklink + ?url=<encoded product url>
+  const baseAffiliateLink = quicklink.affiliateLink;
+  const separator = baseAffiliateLink.includes("?") ? "&" : "?";
+  return `${baseAffiliateLink}${separator}url=${encodeURIComponent(productUrl)}`;
+}
+
+/**
+ * Generate affiliate URL untuk marketplace apa saja.
+ * Untuk sekarang hanya Shopee yang supported (campaign approved + quicklink available).
+ * Tokopedia, TikTok, dll — quicklink belum available di account ini.
+ */
+export async function generateAffiliateUrl(productUrl: string, marketplace: string): Promise<string | null> {
+  if (marketplace === "shopee") {
+    return generateShopeeAffiliateUrl(productUrl);
+  }
+  // Marketplace lain: return null (tidak ada quicklink available)
+  return null;
+}

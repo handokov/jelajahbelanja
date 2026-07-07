@@ -7,6 +7,7 @@ import {
   fetchProductFeed,
   detectMarketplaceFromCampaign,
   isAtConfigured,
+  generateShopeeAffiliateUrl,
   type ATProduct,
 } from "@/lib/accesstrade";
 
@@ -144,8 +145,79 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
+    const action = body.action || "sync"; // "sync" | "affiliate-shopee"
     const maxProductsPerCampaign = Number(body.maxPerCampaign) || 50;
     const dryRun = !!body.dryRun;
+
+    // ─── Action: affiliate-shopee ───
+    // Scan semua produk Shopee yang belum punya affiliate URL AT → update dengan quicklink
+    if (action === "affiliate-shopee") {
+      const startTimeAff = Date.now();
+      const affResult = {
+        success: false,
+        action: "affiliate-shopee",
+        scanned: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [] as string[],
+        duration: 0,
+      };
+
+      try {
+        // Ambil semua produk Shopee yang belum punya affiliate URL AT (atid.me)
+        const shopeeProducts = await db.shopeeProduct.findMany({
+          where: {
+            marketplace: "shopee",
+            enabled: true,
+            OR: [
+              { affiliateUrl: null },
+              { affiliateUrl: "" },
+              { affiliateUrl: { not: { contains: "atid.me" } } },
+            ],
+          },
+          select: { id: true, url: true, title: true, affiliateUrl: true },
+        });
+        affResult.scanned = shopeeProducts.length;
+
+        if (dryRun) {
+          affResult.success = true;
+          affResult.duration = Date.now() - startTimeAff;
+          return NextResponse.json(affResult);
+        }
+
+        for (const product of shopeeProducts) {
+          try {
+            const affiliateUrl = await generateShopeeAffiliateUrl(product.url);
+            if (affiliateUrl) {
+              await db.shopeeProduct.update({
+                where: { id: product.id },
+                data: {
+                  affiliateUrl,
+                  lastScrapedAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              });
+              affResult.updated++;
+            } else {
+              affResult.skipped++;
+            }
+          } catch (err: any) {
+            affResult.errors.push(`Product ${product.id}: ${err.message}`);
+            affResult.skipped++;
+          }
+        }
+
+        affResult.success = true;
+        affResult.duration = Date.now() - startTimeAff;
+        return NextResponse.json(affResult);
+      } catch (err: any) {
+        affResult.errors.push(err.message);
+        affResult.duration = Date.now() - startTimeAff;
+        return NextResponse.json(affResult, { status: 500 });
+      }
+    }
+
+    // ─── Action: sync (default) ───
 
     const campaigns = await getAffiliatedCampaigns();
     result.campaignsChecked = campaigns.length;
