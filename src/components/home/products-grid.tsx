@@ -8,6 +8,18 @@ import { Flame } from "lucide-react";
 import { AffiliateBanner } from "@/components/affiliate-banner";
 import type { Product, ProductFilter } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useMemo } from "react";
+
+export interface ProductBadge {
+  id: string;
+  label: string;
+  emoji?: string | null;
+  bgColor: string;
+  textColor: string;
+  marketplaces: string;
+  order: number;
+  isActive: boolean;
+}
 
 interface ProductsGridProps {
   products: Product[];
@@ -18,6 +30,44 @@ interface ProductsGridProps {
   isError: boolean;
   onRetry: () => void;
   heroVisible: boolean;
+  productBadges?: ProductBadge[];
+}
+
+/**
+ * Insert iklan in-content setiap N produk secara random.
+ * Hasil array berisi elemen: { type: 'product', product } | { type: 'ad' }
+ */
+type GridItem =
+  | { type: "product"; product: Product; badges: ProductBadge[] }
+  | { type: "ad"; adId: string };
+
+function buildGridWithAds(
+  products: Product[],
+  badges: ProductBadge[]
+): GridItem[] {
+  if (products.length === 0) return [];
+
+  const items: GridItem[] = [];
+  // Sisipkan iklan setiap 6-8 produk (random interval, biar natural)
+  // Mulai dari posisi ke-6 (index 5) supaya tidak ganggu featured/first
+  let nextAdAt = 6 + Math.floor(Math.random() * 3); // 6-8
+  let adCounter = 0;
+
+  products.forEach((p, idx) => {
+    const productBadges = badges.filter((b) => {
+      const mps = b.marketplaces.split(",").map((m) => m.trim().toLowerCase());
+      return mps.includes(p.marketplace.toLowerCase());
+    });
+    items.push({ type: "product", product: p, badges: productBadges });
+
+    // Cek apakah saatnya sisip iklan
+    if (idx + 1 === nextAdAt && idx + 1 < products.length) {
+      items.push({ type: "ad", adId: `ad-${adCounter++}` });
+      nextAdAt = idx + 1 + 6 + Math.floor(Math.random() * 3); // 6-8 produk berikutnya
+    }
+  });
+
+  return items;
 }
 
 /**
@@ -32,7 +82,18 @@ export function ProductsGrid({
   isError,
   onRetry,
   heroVisible,
+  productBadges = [],
 }: ProductsGridProps) {
+  // Build grid items dengan iklan tersisip random — compute SEBELUM early return
+  // (hooks must be called in same order every render)
+  const gridProducts = products.filter(
+    (p) => p.id !== featuredProduct?.id || filter === "latest"
+  );
+  const gridItems = useMemo(
+    () => buildGridWithAds(gridProducts, productBadges),
+    [gridProducts, productBadges]
+  );
+
   if (isLoading) return <ProductsGridSkeleton />;
   if (isError) {
     return (
@@ -65,18 +126,38 @@ export function ProductsGrid({
             key={`featured-${featuredProduct.id}`}
             product={featuredProduct}
             variant="featured"
+            badges={productBadges.filter((b) => {
+              const mps = b.marketplaces.split(",").map((m) => m.trim().toLowerCase());
+              return mps.includes(featuredProduct.marketplace.toLowerCase());
+            })}
           />
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {products
-            .filter((p) => p.id !== featuredProduct?.id || filter === "latest")
-            .map((p) => (
+        {/* Mobile 2 cols, Desktop 3 cols. Iklan in-content span full width. */}
+        <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4">
+          {gridItems.map((item, idx) => {
+            if (item.type === "ad") {
+              return (
+                <div
+                  key={item.adId}
+                  className="col-span-2 xl:col-span-3 my-2"
+                >
+                  <AffiliateBanner
+                    position="in-content"
+                    showLabel={true}
+                    className="w-full"
+                  />
+                </div>
+              );
+            }
+            return (
               <ProductCard
-                key={`default-${p.id}`}
-                product={p}
+                key={`default-${item.product.id}`}
+                product={item.product}
                 variant="default"
+                badges={item.badges}
               />
-            ))}
+            );
+          })}
         </div>
       </div>
 
@@ -123,14 +204,14 @@ export function ProductsGrid({
 
 export function ProductsGridSkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4">
       {Array.from({ length: 9 }).map((_, i) => (
         <div
           key={i}
           className="flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden"
         >
           <Skeleton className="w-full aspect-square" />
-          <div className="p-3 flex flex-col gap-2">
+          <div className="p-2 sm:p-3 flex flex-col gap-2">
             <Skeleton className="h-3 w-1/3" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-2/3" />

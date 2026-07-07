@@ -31,6 +31,7 @@ export default function Home() {
     totalSold,
     trendingTop5,
     featuredProduct,
+    productBadges,
   } = useHomeData();
 
   // Deteksi kapan hero section scroll keluar layar
@@ -134,6 +135,7 @@ export default function Home() {
             isError={productsQuery.isError}
             onRetry={() => productsQuery.refetch()}
             heroVisible={heroVisible}
+            productBadges={productBadges}
           />
         </section>
 

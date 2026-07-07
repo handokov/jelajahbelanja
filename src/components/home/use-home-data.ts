@@ -97,6 +97,19 @@ export function useHomeData() {
     return [...products].sort((a, b) => b.viralScore - a.viralScore)[0];
   }, [products, filter]);
 
+  // Product badges (active only, fetched once for all marketplaces)
+  const badgesQuery = useQuery({
+    queryKey: ["active-product-badges"],
+    queryFn: async () => {
+      const res = await fetch("/api/product-badges?active=true");
+      if (!res.ok) return [];
+      const json = await res.json();
+      return json.badges as any[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const productBadges = badgesQuery.data ?? [];
+
   return {
     // State
     activeCategory,
@@ -116,5 +129,6 @@ export function useHomeData() {
     totalSold,
     trendingTop5,
     featuredProduct,
+    productBadges,
   };
 }
