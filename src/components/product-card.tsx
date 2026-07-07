@@ -66,6 +66,22 @@ const MARKETPLACE_META: Record<Marketplace, { label: string; className: string }
     label: "Lazada",
     className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-100",
   },
+  blibli: {
+    label: "Blibli",
+    className: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 hover:bg-sky-100",
+  },
+  bukalapak: {
+    label: "Bukalapak",
+    className: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300 hover:bg-rose-100",
+  },
+  zalora: {
+    label: "Zalora",
+    className: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300 hover:bg-pink-100",
+  },
+  sociolla: {
+    label: "Sociolla",
+    className: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 hover:bg-fuchsia-100",
+  },
   aliexpress: {
     label: "AliExpress",
     className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 hover:bg-red-100",
