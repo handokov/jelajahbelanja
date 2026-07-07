@@ -142,7 +142,7 @@ export function SortFilterBar({
       </div>
 
       {/* Row 2: Marketplace horizontal scroll chips — compact, langsung tampil */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1">
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4">
         {MARKETPLACE_OPTIONS.map(mp => {
           const checked = selectedMarketplaces.includes(mp.value);
           return (

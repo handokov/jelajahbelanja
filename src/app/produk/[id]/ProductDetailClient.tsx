@@ -344,10 +344,22 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
       {/* Sticky top bar */}
       <header className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
         <div className="container mx-auto px-4 max-w-5xl flex items-center justify-between h-12">
-          <Link href="/" className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:text-violet-600 dark:hover:text-violet-400 transition">
+          <button
+            onClick={() => {
+              // Kembali ke page sebelumnya (history back)
+              // Fallback ke home kalau tidak ada history (user langsung buka detail page)
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                window.history.back();
+              } else {
+                window.location.href = "/";
+              }
+            }}
+            className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:text-violet-600 dark:hover:text-violet-400 transition cursor-pointer"
+            aria-label="Kembali ke halaman sebelumnya"
+          >
             <ArrowLeft className="w-5 h-5" />
             <span className="text-sm font-medium">Kembali</span>
-          </Link>
+          </button>
         </div>
       </header>
 
