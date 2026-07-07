@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { NewsletterSignup } from "@/components/newsletter-signup";
 
 /**
- * SiteFooter — footer dengan navigasi, deskripsi, dan affiliate disclosure.
+ * SiteFooter — footer dengan navigasi, newsletter signup, dan affiliate disclosure.
  */
 export function SiteFooter() {
   return (
@@ -18,6 +19,11 @@ export function SiteFooter() {
             Platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan
             Lazada.
           </p>
+        </div>
+
+        {/* Newsletter signup — sebelum navigation links */}
+        <div className="mb-6 max-w-md mx-auto md:mx-0">
+          <NewsletterSignup />
         </div>
 
         {/* Navigation links */}
