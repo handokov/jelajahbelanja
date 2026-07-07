@@ -361,6 +361,10 @@ const MARKETPLACE_OPTIONS: { value: string; label: string; emoji: string }[] = [
   { value: "shopee", label: "Shopee", emoji: "🛍️" },
   { value: "tokopedia", label: "Tokopedia", emoji: "🟢" },
   { value: "lazada", label: "Lazada", emoji: "💙" },
+  { value: "blibli", label: "Blibli", emoji: "🔷" },
+  { value: "bukalapak", label: "Bukalapak", emoji: "📕" },
+  { value: "zalora", label: "Zalora", emoji: "👗" },
+  { value: "sociolla", label: "Sociolla", emoji: "💄" },
   { value: "aliexpress", label: "AliExpress", emoji: "🔴" },
   { value: "amazon", label: "Amazon", emoji: "📦" },
   { value: "tiktok", label: "TikTok Shop", emoji: "🎵" },
@@ -373,6 +377,7 @@ function ProductBadgesSection() {
   const [badgeForm, setBadgeForm] = React.useState<ProductBadgeFormInput>(EMPTY_BADGE);
   const [editingBadgeId, setEditingBadgeId] = React.useState<string | null>(null);
   const [deleteBadgeTarget, setDeleteBadgeTarget] = React.useState<any>(null);
+  const [customMarketplaceInput, setCustomMarketplaceInput] = React.useState("");
 
   // ─── Query ───
   const { data: badgesData, isLoading: badgesLoading } = useQuery({
@@ -448,6 +453,17 @@ function ProductBadgesSection() {
     }));
   };
 
+  const addCustomMarketplace = () => {
+    const val = customMarketplaceInput.trim().toLowerCase().replace(/\s+/g, "");
+    if (!val) return;
+    if (badgeForm.marketplaces.includes(val)) {
+      toast({ title: `${val} sudah ada di daftar` });
+      return;
+    }
+    setBadgeForm((prev) => ({ ...prev, marketplaces: [...prev.marketplaces, val] }));
+    setCustomMarketplaceInput("");
+  };
+
   return (
     <>
       {/* Info */}
@@ -489,7 +505,7 @@ function ProductBadgesSection() {
             </div>
           </div>
           <div className="md:col-span-2">
-            <Label className="text-xs">Marketplace Tujuan *</Label>
+            <Label className="text-xs">Marketplace Tujuan * (pilih atau tulis sendiri)</Label>
             <div className="flex flex-wrap gap-2 mt-1">
               {MARKETPLACE_OPTIONS.map((mp) => {
                 const checked = badgeForm.marketplaces.includes(mp.value);
@@ -509,6 +525,37 @@ function ProductBadgesSection() {
                 );
               })}
             </div>
+            {/* Custom marketplace input */}
+            <div className="mt-2 flex gap-2">
+              <Input
+                placeholder="...atau tulis marketplace lain (cth: jdid, elevenia)"
+                value={customMarketplaceInput}
+                onChange={(e) => setCustomMarketplaceInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCustomMarketplace();
+                  }
+                }}
+                className="flex-1"
+              />
+              <Button type="button" size="sm" variant="outline" onClick={addCustomMarketplace} disabled={!customMarketplaceInput.trim()}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Tambah
+              </Button>
+            </div>
+            {/* Tampilkan custom marketplaces yang sudah ditambah */}
+            {badgeForm.marketplaces.filter((m) => !MARKETPLACE_OPTIONS.find((o) => o.value === m)).length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {badgeForm.marketplaces
+                  .filter((m) => !MARKETPLACE_OPTIONS.find((o) => o.value === m))
+                  .map((m) => (
+                    <span key={m} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-[10px]">
+                      🏷️ {m}
+                      <button type="button" onClick={() => toggleMarketplace(m)} className="ml-1 hover:text-red-600">×</button>
+                    </span>
+                  ))}
+              </div>
+            )}
             {badgeForm.marketplaces.length === 0 && (
               <p className="text-[10px] text-red-500 mt-1">Pilih minimal 1 marketplace</p>
             )}
