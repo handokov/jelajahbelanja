@@ -80,6 +80,26 @@ const MARKETPLACE_META: Record<string, { label: string; className: string; buyLa
     className: "bg-blue-100 text-blue-800",
     buyLabel: "Beli di Lazada",
   },
+  blibli: {
+    label: "Blibli",
+    className: "bg-sky-100 text-sky-800",
+    buyLabel: "Beli di Blibli",
+  },
+  bukalapak: {
+    label: "Bukalapak",
+    className: "bg-rose-100 text-rose-800",
+    buyLabel: "Beli di Bukalapak",
+  },
+  zalora: {
+    label: "Zalora",
+    className: "bg-pink-100 text-pink-800",
+    buyLabel: "Beli di Zalora",
+  },
+  sociolla: {
+    label: "Sociolla",
+    className: "bg-fuchsia-100 text-fuchsia-800",
+    buyLabel: "Beli di Sociolla",
+  },
   aliexpress: {
     label: "AliExpress",
     className: "bg-red-100 text-red-800",
@@ -90,11 +110,20 @@ const MARKETPLACE_META: Record<string, { label: string; className: string; buyLa
     className: "bg-yellow-100 text-yellow-800",
     buyLabel: "Beli di Amazon",
   },
+  tiktok: {
+    label: "TikTok Shop",
+    className: "bg-zinc-900 text-white",
+    buyLabel: "Beli di TikTok Shop",
+  },
 };
 
 function getMarketplaceMeta(marketplace: string) {
-  return MARKETPLACE_META[marketplace] ?? MARKETPLACE_META.shopee;
-  }
+  return MARKETPLACE_META[marketplace] ?? {
+    label: marketplace.charAt(0).toUpperCase() + marketplace.slice(1),
+    className: "bg-zinc-100 text-zinc-800",
+    buyLabel: `Beli di ${marketplace.charAt(0).toUpperCase() + marketplace.slice(1)}`,
+  };
+}
 
 /* ─── Simple Recommendation Card ─── */
 function RecCard({ product }: { product: ShopeeProduct }) {
@@ -182,7 +211,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
         location: product.location,
         category: product.category,
         isViral: product.isViral,
-        marketplace: "shopee",
+        marketplace: product.marketplace || "shopee",
         soldPerDay: 0,
         timestamp: product.createdAt,
         viralScore: 0,
