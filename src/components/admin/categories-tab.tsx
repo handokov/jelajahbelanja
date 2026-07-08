@@ -441,14 +441,38 @@ function CategoryMapper() {
   const [mappings, setMappings] = React.useState<Record<string, string>>({});
   const [applying, setApplying] = React.useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["category-mapper"],
     queryFn: async () => {
       const res = await fetch("/api/category-mapper");
       if (!res.ok) throw new Error("Gagal load");
       return res.json();
     },
+    retry: 1,
   });
+
+  // Error state — jangan crash halaman
+  if (isError) {
+    return (
+      <div className="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 p-4">
+        <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">
+          🗂️ Category Mapper
+        </h3>
+        <p className="text-xs text-amber-900/70 dark:text-amber-100/70">
+          Gagal memuat data kategori. Coba refresh halaman atau cek koneksi.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-2"
+          onClick={() => queryClient.invalidateQueries({ queryKey: ["category-mapper"] })}
+        >
+          <RefreshCw className="w-3.5 h-3.5 mr-1" />
+          Coba Lagi
+        </Button>
+      </div>
+    );
+  }
 
   const categories: Array<{ name: string; count: number; suggestion: string }> = data?.categories || [];
   const mainCats: string[] = data?.mainCategories || [];
