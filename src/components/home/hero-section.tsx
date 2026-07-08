@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Search, Flame, ShoppingBag, ShieldCheck } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { Flame, ShoppingBag, ShieldCheck } from "lucide-react";
+import { SearchAutocomplete } from "@/components/search-autocomplete";
 
 interface HeroSectionProps {
   search: string;
@@ -15,7 +14,7 @@ interface HeroSectionProps {
 }
 
 /**
- * HeroSection — tagline, stats chips, dan search bar.
+ * HeroSection — tagline, stats chips, dan search bar dengan autocomplete.
  */
 export function HeroSection({
   search,
@@ -53,22 +52,14 @@ export function HeroSection({
           </div>
         </div>
 
-        {/* Search bar */}
-        <div ref={heroSearchRef} className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/70 pointer-events-none" />
-          <Input
-            type="search"
-            placeholder="Cari produk viral: earbuds, serum vitamin c, kaos oversize..."
+        {/* Search bar dengan autocomplete */}
+        <div ref={heroSearchRef}>
+          <SearchAutocomplete
             value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            aria-label="Cari produk viral"
-            className={cn(
-              "h-10 md:h-11 pl-10 pr-4 text-sm",
-              "bg-white/15 backdrop-blur-md border border-white/20",
-              "text-white placeholder-white/70",
-              "focus:bg-white/25 focus:border-white/40",
-              "rounded-xl"
-            )}
+            onChange={onSearchChange}
+            onSearch={onSearchChange}
+            placeholder="Cari produk viral: earbuds, serum vitamin c, kaos oversize..."
+            variant="dark"
           />
         </div>
       </div>

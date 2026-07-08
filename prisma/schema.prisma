@@ -6,6 +6,9 @@ generator client {
 }
 
 datasource db {
+  // Production (Vercel) uses Neon PostgreSQL. Sandbox local dev also uses Neon
+  // (shared with production). To switch back to local SQLite for offline dev,
+  // change provider to "sqlite" and set DATABASE_URL=file:./db/custom.db
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
@@ -56,6 +59,7 @@ model ShopeeProduct {
   notes           String?  // catatan admin
   marketplace     String   @default("shopee")
   enabled         Boolean  @default(true)
+  lastScrapedAt   DateTime?               // timestamp terakhir scrape (production-only field)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -93,4 +97,27 @@ model AffiliateAd {
   endDate       DateTime?                // berakhir tayang
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// ProductBadge — banner kecil di bawah foto produk, per marketplace
+// Contoh: "Flash Sale" (merah) untuk shopee+tiktok, "Promo Guncang 7.7" (hijau) untuk tokopedia
+model ProductBadge {
+  id           String   @id @default(cuid())
+  label        String                    // teks badge, cth: "Flash Sale", "Promo Guncang 7.7"
+  emoji        String?                   // emoji opsional di depan label, cth: "🔥", "🚚"
+  bgColor      String   @default("#ef4444") // warna background (hex)
+  textColor    String   @default("#ffffff") // warna text (hex)
+  marketplaces String   @default("shopee")  // comma-separated: shopee,tokopedia,lazada,aliexpress,amazon,tiktok
+  order        Int      @default(0)       // urutan tampil (kecil = depan)
+  isActive     Boolean  @default(true)    // tampilkan / sembunyikan
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Setting — key-value store untuk config yang bisa di-edit via admin UI
+// (cth: AT credentials, supaya tidak perlu set via Vercel env vars yang bermasalah copy-paste)
+model Setting {
+  key       String   @id                 // cth: "ACCESSTRADE_USER_UID", "ACCESSTRADE_SECRET_KEY"
+  value     String                       // value (string)
+  updatedAt DateTime @updatedAt
 }

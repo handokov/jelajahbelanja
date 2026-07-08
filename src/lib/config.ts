@@ -31,8 +31,13 @@ export const VALID_MARKETPLACES: Marketplace[] = [
   "shopee",
   "tokopedia",
   "lazada",
+  "blibli",
+  "bukalapak",
+  "zalora",
+  "sociolla",
   "aliexpress",
   "amazon",
+  "tiktok",
 ];
 
 // ─── Marketplace UI Meta ───
@@ -51,6 +56,22 @@ export const MARKETPLACE_META: Record<Marketplace, { label: string; className: s
     label: "Lazada",
     className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   },
+  blibli: {
+    label: "Blibli",
+    className: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
+  },
+  bukalapak: {
+    label: "Bukalapak",
+    className: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  },
+  zalora: {
+    label: "Zalora",
+    className: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300",
+  },
+  sociolla: {
+    label: "Sociolla",
+    className: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+  },
   aliexpress: {
     label: "AliExpress",
     className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
@@ -58,6 +79,14 @@ export const MARKETPLACE_META: Record<Marketplace, { label: string; className: s
   amazon: {
     label: "Amazon",
     className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+  },
+  tiktok: {
+    label: "TikTok Shop",
+    className: "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:bg-zinc-900",
+  },
+  mock: {
+    label: "Mock",
+    className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   },
 };
 

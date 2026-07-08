@@ -78,7 +78,13 @@ export const MARKETPLACE_OPTIONS = [
   { value: "shopee", label: "Shopee" },
   { value: "tokopedia", label: "Tokopedia" },
   { value: "lazada", label: "Lazada" },
+  { value: "blibli", label: "Blibli" },
+  { value: "bukalapak", label: "Bukalapak" },
+  { value: "zalora", label: "Zalora" },
+  { value: "sociolla", label: "Sociolla" },
   { value: "aliexpress", label: "AliExpress" },
+  { value: "amazon", label: "Amazon" },
+  { value: "tiktok", label: "TikTok Shop" },
 ];
 
 export const AFFILIATE_INFO: Array<{

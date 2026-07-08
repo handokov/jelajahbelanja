@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { CategoryDTO } from "@/lib/types";
@@ -13,11 +15,12 @@ interface CategoryChipsProps {
 
 /**
  * CategoryChips — horizontal scrollable category selector.
+ * Di homepage: klik chip → navigate ke /kategori/[id] (URL clean untuk SEO).
+ * "Semua" → navigate ke homepage "/".
  */
 export function CategoryChips({
   categories,
   activeCategory,
-  onCategoryChange,
   isLoading,
 }: CategoryChipsProps) {
   if (isLoading) {
@@ -37,16 +40,14 @@ export function CategoryChips({
       <nav className="flex md:grid md:grid-cols-8 gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
         <CategoryChip
           active={activeCategory === "all"}
-          onClick={() => onCategoryChange("all")}
-          emoji="✨"
+          href="/"
           label="Semua"
         />
         {categories.map((c) => (
           <CategoryChip
             key={c.id}
             active={activeCategory === c.id}
-            onClick={() => onCategoryChange(c.id)}
-            emoji={c.emoji}
+            href={`/kategori/${c.id}`}
             label={c.name}
           />
         ))}
@@ -57,28 +58,26 @@ export function CategoryChips({
 
 function CategoryChip({
   active,
-  onClick,
-  emoji,
+  href,
   label,
 }: {
   active: boolean;
-  onClick: () => void;
-  emoji: string;
+  href: string;
+  emoji?: string;
   label: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href={href}
       className={cn(
-        "flex-shrink-0 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium border transition",
+        "flex-shrink-0 inline-flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium border transition whitespace-nowrap",
         active
           ? "bg-primary text-primary-foreground border-primary shadow-sm"
           : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-primary/40 hover:text-primary"
       )}
     >
-      <span aria-hidden>{emoji}</span>
       {label}
-    </button>
+    </Link>
   );
 }
+

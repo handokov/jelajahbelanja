@@ -13,12 +13,14 @@ import {
   ShieldCheck,
   ShoppingBag,
   Shirt,
-  Share2,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ShareButton } from "@/components/share-button";
+import { RecentlyViewed } from "@/components/recently-viewed";
+import { useRecentlyViewed } from "@/hooks/use-recently-viewed";
 import type { Marketplace } from "@/lib/types";
 import {
   formatRupiah,
@@ -80,6 +82,26 @@ const MARKETPLACE_META: Record<string, { label: string; className: string; buyLa
     className: "bg-blue-100 text-blue-800",
     buyLabel: "Beli di Lazada",
   },
+  blibli: {
+    label: "Blibli",
+    className: "bg-sky-100 text-sky-800",
+    buyLabel: "Beli di Blibli",
+  },
+  bukalapak: {
+    label: "Bukalapak",
+    className: "bg-rose-100 text-rose-800",
+    buyLabel: "Beli di Bukalapak",
+  },
+  zalora: {
+    label: "Zalora",
+    className: "bg-pink-100 text-pink-800",
+    buyLabel: "Beli di Zalora",
+  },
+  sociolla: {
+    label: "Sociolla",
+    className: "bg-fuchsia-100 text-fuchsia-800",
+    buyLabel: "Beli di Sociolla",
+  },
   aliexpress: {
     label: "AliExpress",
     className: "bg-red-100 text-red-800",
@@ -90,11 +112,20 @@ const MARKETPLACE_META: Record<string, { label: string; className: string; buyLa
     className: "bg-yellow-100 text-yellow-800",
     buyLabel: "Beli di Amazon",
   },
+  tiktok: {
+    label: "TikTok Shop",
+    className: "bg-zinc-900 text-white",
+    buyLabel: "Beli di TikTok Shop",
+  },
 };
 
 function getMarketplaceMeta(marketplace: string) {
-  return MARKETPLACE_META[marketplace] ?? MARKETPLACE_META.shopee;
-  }
+  return MARKETPLACE_META[marketplace] ?? {
+    label: marketplace.charAt(0).toUpperCase() + marketplace.slice(1),
+    className: "bg-zinc-100 text-zinc-800",
+    buyLabel: `Beli di ${marketplace.charAt(0).toUpperCase() + marketplace.slice(1)}`,
+  };
+}
 
 /* ─── Simple Recommendation Card ─── */
 function RecCard({ product }: { product: ShopeeProduct }) {
@@ -155,7 +186,18 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   const [typewriterDone, setTypewriterDone] = React.useState(false);
   const [recommendations, setRecommendations] = React.useState<ShopeeProduct[]>([]);
   const [recsLoading, setRecsLoading] = React.useState(false);
-  const [shareCopied, setShareCopied] = React.useState(false);
+
+  // Track recently viewed
+  const { addRecentlyViewed } = useRecentlyViewed();
+  React.useEffect(() => {
+    addRecentlyViewed({
+      id: product.id,
+      title: product.title,
+      image: product.image,
+      price: product.price,
+      marketplace: product.marketplace,
+    });
+  }, [product.id, product.title, product.image, product.price, product.marketplace, addRecentlyViewed]);
 
   const savings = product.originalPrice ? product.originalPrice - product.price : 0;
 
@@ -182,7 +224,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
         location: product.location,
         category: product.category,
         isViral: product.isViral,
-        marketplace: "shopee",
+        marketplace: product.marketplace || "shopee",
         soldPerDay: 0,
         timestamp: product.createdAt,
         viralScore: 0,
@@ -250,60 +292,74 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
     return () => clearInterval(interval);
   }, [aiExplanation]);
 
-  async function handleShare() {
-    const shareUrl = window.location.href;
-    const shareTitle = product.title;
-    const shareText = `Cek produk viral ini! ${shareTitle} — Rp ${product.price.toLocaleString("id-ID")}`;
-
-    // 1. Coba native Share API (mobile: buka share sheet WhatsApp/Telegram/dll)
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
-        return;
-      } catch (err: any) {
-        // User cancel share sheet — gak perlu error
-        if (err?.name === "AbortError") return;
-        // Kalau gagal, fallback ke clipboard
-      }
-    }
-
-    // 2. Fallback: copy link ke clipboard
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
-    } catch {
-      // 3. Fallback terakhir: pakai execCommand
-      const textarea = document.createElement("textarea");
-      textarea.value = shareUrl;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
-    }
-  }
-
   // Combine related (from DB) + recommendations (from API)
   const allRecs = recommendations.length > 0 ? recommendations : related;
 
+  // JSON-LD Product schema untuk SEO (Google rich results)
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.title,
+    image: [product.image],
+    description: `${product.title} - ${product.marketplace} ${product.category}. Harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(product.price)}${product.location ? ` · Lokasi: ${product.location}` : ""}`,
+    sku: product.id,
+    brand: { "@type": "Brand", name: product.marketplace },
+    offers: {
+      "@type": "Offer",
+      url: product.affiliateUrl || product.url,
+      priceCurrency: "IDR",
+      price: product.price,
+      availability: "https://schema.org/InStock",
+      itemCondition: "https://schema.org/NewCondition",
+    },
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: product.rating,
+      reviewCount: product.reviewCount,
+    },
+  };
+
+  // JSON-LD Breadcrumb
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://jelajahbelanja.com" },
+      { "@type": "ListItem", position: 2, name: product.category, item: `https://jelajahbelanja.com/?category=${product.category}` },
+      { "@type": "ListItem", position: 3, name: product.title.slice(0, 60) },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* JSON-LD structured data untuk SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       {/* Sticky top bar */}
       <header className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
         <div className="container mx-auto px-4 max-w-5xl flex items-center justify-between h-12">
-          <Link href="/" className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:text-violet-600 dark:hover:text-violet-400 transition">
+          <button
+            onClick={() => {
+              // Kembali ke page sebelumnya (history back)
+              // Fallback ke home kalau tidak ada history (user langsung buka detail page)
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                window.history.back();
+              } else {
+                window.location.href = "/";
+              }
+            }}
+            className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:text-violet-600 dark:hover:text-violet-400 transition cursor-pointer"
+            aria-label="Kembali ke halaman sebelumnya"
+          >
             <ArrowLeft className="w-5 h-5" />
             <span className="text-sm font-medium">Kembali</span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleShare}>
-              {shareCopied ? <ShieldCheck className="w-4 h-4 text-emerald-500" /> : <Share2 className="w-4 h-4" />}
-            </Button>
-          </div>
+          </button>
         </div>
       </header>
 
@@ -452,6 +508,9 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
           </div>
         </div>
 
+        {/* Recently Viewed — tampil di atas rekomendasi */}
+        <RecentlyViewed excludeId={product.id} limit={5} />
+
         {/* Recommended Products — full width below */}
         {(allRecs.length > 0 || recsLoading) && (
           <div className="mb-6">
@@ -483,20 +542,28 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
         )}
       </main>
 
-      {/* Sticky Bottom — Buy button */}
+      {/* Sticky Bottom — Buy button + Share */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md px-4 py-3">
         <div className="container mx-auto max-w-5xl">
-          <Button asChild size="lg" className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold shadow-lg shadow-violet-500/25 h-12 text-base">
-            <a
-              href={product.affiliateUrl || `/beli/shopee-${product.id}`}
-              target="_blank"
-              rel="nofollow sponsored noopener noreferrer"
-            >
-              <ShoppingBag className="w-5 h-5 mr-2" />
-              {getMarketplaceMeta(product.marketplace).buyLabel}
-              <ExternalLink className="w-4 h-4 ml-2" />
-            </a>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild size="lg" className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold shadow-lg shadow-violet-500/25 h-12 text-base">
+              <a
+                href={product.affiliateUrl || `/beli/shopee-${product.id}`}
+                target="_blank"
+                rel="nofollow sponsored noopener noreferrer"
+              >
+                <ShoppingBag className="w-5 h-5 mr-2" />
+                {getMarketplaceMeta(product.marketplace).buyLabel}
+                <ExternalLink className="w-4 h-4 ml-2" />
+              </a>
+            </Button>
+            <ShareButton
+              title={product.title}
+              variant="outline"
+              size="lg"
+              className="h-12 px-4 flex-shrink-0"
+            />
+          </div>
           {product.isViral && (
             <div className="flex items-center justify-center gap-1.5 text-xs text-fuchsia-600 dark:text-fuchsia-400 mt-1.5">
               <TrendingUp className="w-3.5 h-3.5" />
