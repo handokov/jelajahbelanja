@@ -548,7 +548,7 @@ function CategoryMapper() {
                   <select
                     value={mapped || ""}
                     onChange={(e) => setMappings(prev => ({ ...prev, [c.name]: e.target.value }))}
-                    className="text-xs h-7 rounded border border-zinc-200 dark:border-zinc-700 bg-transparent px-1.5 flex-shrink-0 w-32"
+                    className="text-xs h-7 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-1.5 flex-shrink-0 w-32"
                   >
                     <option value="">— Pilih —</option>
                     {mainCats.map(mc => (
