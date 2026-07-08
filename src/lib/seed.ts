@@ -101,6 +101,39 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     lazadaCat: "otomotif",
     accesstradeCat: "Automotive",
   },
+  {
+    name: "Travel",
+    emoji: "✈️",
+    keywords: "travel,hotel,tiket pesawat,penginapan,villa,liburan,wisata,traveloka,klook",
+    amazonNode: null,
+    aliexpressCat: null,
+    shopeeCat: null,
+    tokopediaCat: null,
+    lazadaCat: null,
+    accesstradeCat: "TRAVEL and LEISURE",
+  },
+  {
+    name: "Keuangan",
+    emoji: "💳",
+    keywords: "keuangan,asuransi,kartu kredit,pinjaman,paylater,investasi,kpr,multifinance",
+    amazonNode: null,
+    aliexpressCat: null,
+    shopeeCat: null,
+    tokopediaCat: null,
+    lazadaCat: null,
+    accesstradeCat: "FINANCIAL SERVICES",
+  },
+  {
+    name: "Layanan Online",
+    emoji: "💻",
+    keywords: "layanan online,subscription,software,vpn,cloud hosting,domain,ai tools,rukita",
+    amazonNode: null,
+    aliexpressCat: null,
+    shopeeCat: null,
+    tokopediaCat: null,
+    lazadaCat: null,
+    accesstradeCat: "ONLINE SERVICES",
+  },
 ];
 
 // In-memory lock untuk mencegah race condition antar request pertama
@@ -138,8 +171,42 @@ export async function ensureCategoriesSeeded(): Promise<void> {
       } else {
         // Update existing categories yang belum punya accesstradeCat
         const existing = await db.category.findMany();
+        const existingNames = new Set(existing.map(c => c.name));
+
+        // Add kategori baru yang belum ada di DB (cth: Travel, Keuangan, Layanan Online)
+        let addedCount = 0;
+        for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
+          const c = DEFAULT_CATEGORIES[i];
+          if (!existingNames.has(c.name)) {
+            try {
+              await db.category.create({
+                data: {
+                  name: c.name,
+                  emoji: c.emoji,
+                  keywords: c.keywords,
+                  amazonNode: c.amazonNode ?? null,
+                  aliexpressCat: c.aliexpressCat ?? null,
+                  shopeeCat: c.shopeeCat ?? null,
+                  tokopediaCat: c.tokopediaCat ?? null,
+                  lazadaCat: c.lazadaCat ?? null,
+                  accesstradeCat: c.accesstradeCat ?? null,
+                  order: i,
+                  enabled: true,
+                },
+              });
+              addedCount++;
+            } catch (err) {
+              // Skip kalau sudah ada (race condition)
+            }
+          }
+        }
+        if (addedCount > 0) {
+          console.log(`[seed] Added ${addedCount} new default categories`);
+        }
+
+        // Update existing yang belum punya accesstradeCat
         for (const cat of existing) {
-          if (cat.accesstradeCat) continue; // sudah ada
+          if (cat.accesstradeCat) continue;
           const defaultCat = DEFAULT_CATEGORIES.find(d => d.name === cat.name);
           if (defaultCat?.accesstradeCat) {
             await db.category.update({

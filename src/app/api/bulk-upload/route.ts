@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { detectMarketplaceFromUrl } from "@/lib/utils";
 
 /**
  * POST /api/bulk-upload
  * Upload massal produk dari file CSV (format JB).
- * 
+ *
  * Kolom wajib: title, url, image, price, category
  * Kolom opsional: originalPrice, discountPercent, rating, reviewCount, soldCount, location, marketplace, affiliateUrl, notes
  * Maks 500 produk per request.
- * 
- * Optimasi: Menggunakan createMany() untuk bulk insert (1 query vs 500 query).
+ *
+ * Auto-detect: Kalau kolom marketplace kosong, otomatis detect dari URL produk
+ * (blibli.com → blibli, tokopedia.com → tokopedia, shopee.co.id → shopee, dll).
+ * Support shortlink affiliate: invl.me, atid.me, shope.ee (akan di-decode).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -87,6 +90,12 @@ export async function POST(req: NextRequest) {
       }
 
       // Collect valid data for batch insert
+      // Auto-detect marketplace dari URL kalau CSV tidak specify (atau specify "shopee" default)
+      const csvMarketplace = (row.marketplace || "").toLowerCase().trim();
+      const detectedMarketplace = csvMarketplace && csvMarketplace !== "shopee"
+        ? csvMarketplace  // CSV specify non-shopee → pakai itu
+        : detectMarketplaceFromUrl(row.url);  // kosong/shopee → detect dari URL
+
       validData.push({
         title: row.title,
         url: row.url,
@@ -99,7 +108,7 @@ export async function POST(req: NextRequest) {
         soldCount: row.soldcount ? parseInt(row.soldcount, 10) || 0 : 0,
         location: row.location || null,
         category: row.category,
-        marketplace: (row.marketplace || "shopee").toLowerCase(),
+        marketplace: detectedMarketplace,
         affiliateUrl: row.affiliateurl || null,
         notes: row.notes || null,
         isViral: false,

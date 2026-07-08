@@ -6,8 +6,13 @@ export type Marketplace =
   | "shopee"
   | "tokopedia"
   | "lazada"
+  | "blibli"
+  | "bukalapak"
+  | "zalora"
+  | "sociolla"
   | "aliexpress"
   | "amazon"
+  | "tiktok"
   | "mock";
 
 export interface Product {

@@ -19,13 +19,23 @@ export function LogoBar() {
     <div className="sticky top-0 z-50 bg-header-gradient">
       <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-14">
         <div className="flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-all active:scale-[0.97] rounded-lg px-1 -mx-1 relative z-10" aria-label="Kembali ke beranda" prefetch={false}>
-            <img src="/logo.svg" alt="JB" className="w-7 h-7 pointer-events-none" draggable={false} />
+          <Link
+            href="/"
+            className="flex items-center gap-2 cursor-pointer pointer-events-auto relative z-10 hover:opacity-90 transition"
+            aria-label="Kembali ke beranda JelajahBelanja"
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+              if (window.location.search) {
+                window.location.href = "/";
+              }
+            }}
+          >
+            <img src="/logo.svg" alt="JelajahBelanja logo" className="w-7 h-7 pointer-events-none select-none" />
             <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white pointer-events-none">
               JelajahBelanja
             </h1>
           </Link>
-          <Badge className="ml-1 bg-white/20 text-white border-white/30 hover:bg-white/20 text-[9px]">
+          <Badge className="ml-1 bg-white/20 text-white border-white/30 hover:bg-white/20 text-[9px] pointer-events-none">
             Beta
           </Badge>
         </div>
