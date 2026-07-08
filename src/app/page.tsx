@@ -16,6 +16,7 @@ import {
   useHomeData,
 } from "@/components/home";
 import { BackToTop } from "@/components/back-to-top";
+import { RecentlyViewed } from "@/components/recently-viewed";
 
 export default function Home() {
   const {
@@ -107,6 +108,9 @@ export default function Home() {
           onCategoryChange={setActiveCategory}
           isLoading={categoriesLoading}
         />
+
+        {/* Recently Viewed — tampil kalau user pernah lihat produk */}
+        <RecentlyViewed limit={5} />
 
         {/* Flash Sale — tampil kalau ada produk dengan diskon >= 30% */}
         <FlashSaleSection products={products} productBadges={productBadges} />
