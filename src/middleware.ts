@@ -91,6 +91,21 @@ export async function middleware(req: NextRequest) {
   // === 3. Security headers ===
   const response = NextResponse.next();
 
+  // CORS headers untuk Chrome extension (JB Scraper)
+  // Chrome extension origin: chrome-extension://xxx
+  const origin = req.headers.get("origin") || "";
+  if (origin.startsWith("chrome-extension://")) {
+    response.headers.set("Access-Control-Allow-Origin", origin);
+    response.headers.set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    response.headers.set("Access-Control-Max-Age", "86400");
+  }
+
+  // Handle OPTIONS preflight request langsung (early return)
+  if (req.method === "OPTIONS" && origin.startsWith("chrome-extension://")) {
+    return new NextResponse(null, { status: 204, headers: response.headers });
+  }
+
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
