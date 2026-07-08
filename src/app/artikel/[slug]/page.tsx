@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { blogArticles, getArticleBySlug, getAllArticleSlugs } from "@/lib/blog-data";
+import { db } from "@/lib/db";
 import { Clock, ArrowLeft, Tag } from "lucide-react";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -16,34 +17,88 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-export function generateStaticParams() {
-  return getAllArticleSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  const staticSlugs = getAllArticleSlugs().map((slug) => ({ slug }));
+  // Dynamic DB articles akan di-handle runtime (dynamicParams = true)
+  return staticSlugs;
 }
+
+export const dynamicParams = true;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const article = getArticleBySlug(slug);
-  if (!article) return { title: "Artikel Tidak Ditemukan" };
+  // Cek static dulu
+  const staticArticle = getArticleBySlug(slug);
+  if (staticArticle) {
+    return {
+      title: staticArticle.title,
+      description: staticArticle.metaDescription,
+      keywords: staticArticle.tags,
+      openGraph: {
+        title: staticArticle.title,
+        description: staticArticle.metaDescription,
+        type: "article",
+        publishedTime: staticArticle.publishedAt,
+        modifiedTime: staticArticle.updatedAt,
+        authors: [staticArticle.author],
+        tags: staticArticle.tags,
+      },
+    };
+  }
 
-  return {
-    title: article.title,
-    description: article.metaDescription,
-    keywords: article.tags,
-    openGraph: {
-      title: article.title,
-      description: article.metaDescription,
-      type: "article",
-      publishedTime: article.publishedAt,
-      modifiedTime: article.updatedAt,
-      authors: [article.author],
-      tags: article.tags,
-    },
-  };
+  // Cek DB
+  try {
+    const dbArticle = await db.blogArticle.findUnique({ where: { slug } });
+    if (dbArticle) {
+      return {
+        title: dbArticle.title,
+        description: dbArticle.metaDescription,
+        keywords: dbArticle.tags ? dbArticle.tags.split(",").map(t => t.trim()) : [],
+        openGraph: {
+          title: dbArticle.title,
+          description: dbArticle.metaDescription,
+          type: "article",
+          publishedTime: dbArticle.publishedAt.toISOString(),
+        },
+      };
+    }
+  } catch {
+    // DB belum ready
+  }
+
+  return { title: "Artikel Tidak Ditemukan" };
 }
 
 export default async function ArtikelDetailPage({ params }: Props) {
   const { slug } = await params;
-  const article = getArticleBySlug(slug);
+
+  // Cek static dulu
+  let article = getArticleBySlug(slug);
+
+  // Kalau tidak ada di static, cek DB
+  if (!article) {
+    try {
+      const dbArticle = await db.blogArticle.findUnique({ where: { slug } });
+      if (dbArticle) {
+        article = {
+          slug: dbArticle.slug,
+          title: dbArticle.title,
+          excerpt: dbArticle.excerpt,
+          category: dbArticle.category,
+          readTime: dbArticle.readTime,
+          publishedAt: dbArticle.publishedAt.toISOString().slice(0, 10),
+          updatedAt: dbArticle.updatedAt.toISOString().slice(0, 10),
+          author: dbArticle.author,
+          tags: dbArticle.tags ? dbArticle.tags.split(",").map(t => t.trim()) : [],
+          metaDescription: dbArticle.metaDescription,
+          content: dbArticle.content,
+        };
+      }
+    } catch {
+      // DB belum ready
+    }
+  }
+
   if (!article) notFound();
 
   // Find related articles (same category, excluding current)

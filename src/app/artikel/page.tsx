@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { blogArticles } from "@/lib/blog-data";
+import { db } from "@/lib/db";
 import { Clock, ArrowRight, BookOpen, Tag } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -32,7 +33,49 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Affiliate Guide": "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
 };
 
-export default function ArtikelPage() {
+export default async function ArtikelPage() {
+  // Fetch AI-generated articles from DB
+  let dbArticles: Array<{
+    slug: string;
+    title: string;
+    excerpt: string;
+    category: string;
+    readTime: string;
+    publishedAt: Date;
+    tags: string;
+  }> = [];
+  try {
+    dbArticles = await db.blogArticle.findMany({
+      where: { isPublished: true },
+      orderBy: { publishedAt: "desc" },
+      select: { slug: true, title: true, excerpt: true, category: true, readTime: true, publishedAt: true, tags: true },
+    });
+  } catch {
+    // DB belum ready, skip
+  }
+
+  // Combine: DB articles + static articles
+  const allArticles = [
+    ...dbArticles.map(a => ({
+      slug: a.slug,
+      title: a.title,
+      excerpt: a.excerpt,
+      category: a.category,
+      readTime: a.readTime,
+      publishedAt: a.publishedAt.toISOString().slice(0, 10),
+      tags: a.tags ? a.tags.split(",").map(t => t.trim()) : [],
+    })),
+    ...blogArticles.map(a => ({
+      slug: a.slug,
+      title: a.title,
+      excerpt: a.excerpt,
+      category: a.category,
+      readTime: a.readTime,
+      publishedAt: a.publishedAt,
+      tags: a.tags,
+    })),
+  ];
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
@@ -56,7 +99,7 @@ export default function ArtikelPage() {
 
       {/* Article List */}
       <div className="container mx-auto px-4 max-w-4xl py-8 space-y-6">
-        {blogArticles.map((article) => (
+        {allArticles.map((article) => (
           <Link
             key={article.slug}
             href={`/artikel/${article.slug}`}
