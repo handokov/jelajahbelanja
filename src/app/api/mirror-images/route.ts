@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { checkAuth } from "@/lib/admin-auth";
-import { v2 as cloudinary } from "cloudinary";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 menit
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 // Marketplaces dengan image yang bisa expired
 const EXPIRING_DOMAINS = [
@@ -35,10 +27,19 @@ const EXPIRING_DOMAINS = [
 
 function isExpiringImage(url: string): boolean {
   const lower = url.toLowerCase();
-  // Cloudinary already mirrored
   if (lower.includes("cloudinary.com")) return false;
-  // Check if from expiring domains
   return EXPIRING_DOMAINS.some(d => lower.includes(d));
+}
+
+// Dynamic import Cloudinary (avoid Turbopack build issues)
+async function getCloudinary() {
+  const cloudinary = (await import("cloudinary")).v2;
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+  return cloudinary;
 }
 
 // GET: status — berapa produk perlu mirror
@@ -108,6 +109,7 @@ export async function POST(req: NextRequest) {
 
     for (const product of needMirror) {
       try {
+        const cloudinary = await getCloudinary();
         // Generate public_id dari product ID (unique, stable)
         const publicId = `jb-products/mirror/${product.id}`;
 
