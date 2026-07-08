@@ -4,7 +4,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Zap, CheckCircle2, AlertCircle, ExternalLink, Save } from "lucide-react";
+import { RefreshCw, Zap, CheckCircle2, AlertCircle, ExternalLink, Save, ImageIcon } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -100,6 +100,44 @@ export function AtSyncTab() {
 
   // Auto-affiliate mutation (untuk produk Shopee yang belum punya affiliate URL AT)
   const [lastAffResult, setLastAffResult] = React.useState<any>(null);
+  const [mirrorStatus, setMirrorStatus] = React.useState<any>(null);
+  const [mirrorResult, setMirrorResult] = React.useState<any>(null);
+
+  // Mirror status query
+  const { refetch: refetchMirror } = useQuery({
+    queryKey: ["mirror-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/mirror-images");
+      if (!res.ok) throw new Error("Gagal");
+      return res.json();
+    },
+    enabled: false,
+  });
+
+  const mirrorMutation = useMutation({
+    mutationFn: async (opts: { dryRun?: boolean }) => {
+      const res = await fetch("/api/mirror-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 50, dryRun: opts.dryRun }),
+      });
+      if (!res.ok) throw new Error("Gagal mirror");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setMirrorResult(data);
+      if (data.success) {
+        toast({ title: `✅ ${data.mirrored} image berhasil disimpan ke Cloudinary!` });
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+      } else {
+        toast({ title: "Mirror selesai dengan error", variant: "destructive" });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: err.message || "Gagal mirror", variant: "destructive" });
+    },
+  });
+
   const affiliateMutation = useMutation({
     mutationFn: async (opts: { dryRun?: boolean }) => {
       const res = await fetch("/api/at-sync", {
@@ -349,6 +387,92 @@ export function AtSyncTab() {
             <p className="text-[10px] text-zinc-500">
               Duration: {(lastAffResult.duration / 1000).toFixed(2)}s
             </p>
+          </div>
+        )}
+      </div>
+
+      {/* Image Mirror Section — anti-expired Tokopedia images */}
+      <div className="rounded-2xl border border-sky-200 dark:border-sky-900/50 bg-sky-50 dark:bg-sky-900/10 p-4 space-y-3">
+        <div className="flex items-start gap-2">
+          <ImageIcon className="w-4 h-4 text-sky-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-sky-900 dark:text-sky-100">
+              📸 Mirror Image ke Cloudinary
+            </h3>
+            <p className="text-xs text-sky-900/70 dark:text-sky-100/70 mt-1">
+              Image dari Tokopedia expired dalam 24-48 jam. Fitur ini download image → simpan ke Cloudinary (permanent).
+              Tiap malam cron auto-mirror 20 image. Bisa juga trigger manual di sini.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-sky-300 text-sky-700 hover:bg-sky-100 dark:border-sky-800 dark:text-sky-300"
+            onClick={async () => {
+              const res = await refetchMirror();
+              setMirrorStatus(res.data);
+            }}
+          >
+            <ImageIcon className="w-3.5 h-3.5 mr-1" />
+            Cek Status
+          </Button>
+          <Button
+            size="sm"
+            className="bg-sky-600 hover:bg-sky-700 text-white"
+            onClick={() => mirrorMutation.mutate({ dryRun: false })}
+            disabled={mirrorMutation.isPending}
+          >
+            {mirrorMutation.isPending ? (
+              <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" /> Mirroring...</>
+            ) : (
+              <><ImageIcon className="w-3.5 h-3.5 mr-1" /> Mirror 50 Image Sekarang</>
+            )}
+          </Button>
+        </div>
+
+        {/* Mirror status */}
+        {mirrorStatus && (
+          <div className="rounded-lg bg-white dark:bg-zinc-900 p-2.5 text-xs space-y-1">
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Total produk:</span>
+              <span className="font-bold">{mirrorStatus.total}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Perlu mirror:</span>
+              <span className="font-bold text-sky-600">{mirrorStatus.needMirror}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Sudah di Cloudinary:</span>
+              <span className="font-bold text-emerald-600">{mirrorStatus.alreadyMirrored}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Mirror result */}
+        {mirrorResult && (
+          <div className="rounded-lg border border-sky-300 dark:border-sky-800 bg-white dark:bg-zinc-900 p-3 text-xs space-y-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="font-semibold">Hasil Mirror</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-zinc-500 text-[10px]">Mirrored</p>
+                <p className="font-bold text-emerald-600">{mirrorResult.mirrored}</p>
+              </div>
+              <div>
+                <p className="text-zinc-500 text-[10px]">Skipped</p>
+                <p className="font-bold text-zinc-400">{mirrorResult.skipped}</p>
+              </div>
+              <div>
+                <p className="text-zinc-500 text-[10px]">Failed</p>
+                <p className="font-bold text-red-500">{mirrorResult.failed}</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-zinc-500">Duration: {(mirrorResult.duration / 1000).toFixed(1)}s</p>
           </div>
         )}
       </div>
