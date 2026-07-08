@@ -6,6 +6,7 @@ import { ArrowLeft, ChevronRight } from "lucide-react";
 import { LogoBar, HeroSection, SortFilterBar, FlashSaleSection, ProductsGrid, SiteFooter, useHomeData } from "@/components/home";
 import { CategoryChips } from "@/components/home/category-chips";
 import { BackToTop } from "@/components/back-to-top";
+import { RecentlyViewed } from "@/components/recently-viewed";
 
 interface Props {
   category: {
@@ -106,6 +107,9 @@ export default function CategoryPageClient({ category, allCategories }: Props) {
           }}
           isLoading={false}
         />
+
+        {/* Recently Viewed — tampil kalau user pernah lihat produk */}
+        <RecentlyViewed limit={5} />
 
         {/* Flash Sale — tampil kalau ada produk dengan diskon >= 30% */}
         <FlashSaleSection products={products} productBadges={productBadges} />
