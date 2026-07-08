@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Mail, MessageCircle, Instagram, Clock, Send } from "lucide-react";
+import { Mail, Instagram, Clock, Send } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Kontak Kami",
@@ -59,19 +59,21 @@ export default function KontakPage() {
           </a>
 
           <a
-            href="https://wa.me/6289622565076"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-fuchsia-300 dark:hover:border-fuchsia-700 transition-all"
+            href="mailto:hello@jelajahbelanja.com"
+            className="group p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-fuchsia-300 dark:hover:border-fuchsia-700 transition-all sm:col-span-2"
           >
-            <MessageCircle className="w-8 h-8 text-fuchsia-500 mb-3" />
-            <h2 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-1">WhatsApp</h2>
-            <p className="text-sm text-fuchsia-600 dark:text-fuchsia-400 group-hover:underline">
-              0896-2256-5076
-            </p>
-            <p className="text-xs text-zinc-500 mt-2">
-              Untuk bantuan cepat dan laporan masalah
-            </p>
+            <div className="flex items-start gap-4">
+              <Mail className="w-8 h-8 text-fuchsia-500 shrink-0" />
+              <div>
+                <h2 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Email (Utama)</h2>
+                <p className="text-sm text-fuchsia-600 dark:text-fuchsia-400 group-hover:underline">
+                  hello@jelajahbelanja.com
+                </p>
+                <p className="text-xs text-zinc-500 mt-2">
+                  Hubungi JB via email untuk pertanyaan, saran, kerja sama, atau laporan masalah. Respons 1-2 hari kerja.
+                </p>
+              </div>
+            </div>
           </a>
 
           <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
