@@ -121,3 +121,22 @@ model Setting {
   value     String                       // value (string)
   updatedAt DateTime @updatedAt
 }
+
+// BlogArticle — artikel blog yang di-generate AI (auto monthly) atau manual
+model BlogArticle {
+  id              String   @id @default(cuid())
+  slug            String   @unique        // URL slug, cth: "10-produk-fashion-viral-tiktok-2025"
+  title           String                  // judul artikel
+  excerpt         String                  // ringkasan (untuk preview)
+  category        String   @default("Tips Belanja") // kategori
+  readTime        String   @default("5 menit")     // estimasi baca
+  author          String   @default("Tim JelajahBelanja")
+  tags            String   @default("")             // comma-separated
+  metaDescription String                  // untuk SEO meta tag
+  content         String                  // HTML content
+  isPublished     Boolean  @default(true)
+  isAiGenerated   Boolean  @default(false) // true kalau di-generate AI
+  publishedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
