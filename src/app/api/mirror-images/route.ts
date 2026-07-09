@@ -26,17 +26,19 @@ function isExpiringImage(url: string): boolean {
 async function uploadToCloudinary(imageUrl: string, publicId: string): Promise<string | null> {
   try {
     const timestamp = Math.floor(Date.now() / 1000);
-    const signatureStr = `folder=jb-products/mirror&public_id=${publicId}&timestamp=${timestamp}${API_SECRET}`;
+    // Signature harus include SEMUA params yang dikirim (kecuali file, api_key, signature)
+    // Sort alphabetically: folder, overwrite, public_id, timestamp
+    const signatureStr = `folder=jb-products/mirror&overwrite=false&public_id=${publicId}&timestamp=${timestamp}${API_SECRET}`;
     const signature = crypto.createHash("sha1").update(signatureStr).digest("hex");
 
     const formData = new FormData();
     formData.append("file", imageUrl);
     formData.append("public_id", publicId);
     formData.append("folder", "jb-products/mirror");
+    formData.append("overwrite", "false");
     formData.append("timestamp", String(timestamp));
     formData.append("api_key", API_KEY!);
     formData.append("signature", signature);
-    formData.append("overwrite", "false");
 
     const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
       method: "POST",
@@ -45,15 +47,18 @@ async function uploadToCloudinary(imageUrl: string, publicId: string): Promise<s
 
     if (!res.ok) {
       const text = await res.text();
-      if (text.includes("already exists") || text.includes("Resource exists")) {
+      // Kalau sudah ada, return URL langsung
+      if (text.includes("already exists") || text.includes("Resource exists") || text.includes("file_name already")) {
         return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/jb-products/mirror/${publicId}`;
       }
+      console.error("[mirror] Upload error:", text.slice(0, 200));
       return null;
     }
 
     const data = await res.json();
     return data.secure_url || null;
-  } catch {
+  } catch (err) {
+    console.error("[mirror] Exception:", err);
     return null;
   }
 }
