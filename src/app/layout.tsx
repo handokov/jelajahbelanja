@@ -13,7 +13,7 @@ const interSans = Inter({
   display: "swap",
 });
 
-const SITE_URL = "https://jelajahbelanja.com";
+const SITE_URL = "https://www.jelajahbelanja.com";
 const SITE_NAME = "JelajahBelanja";
 const SITE_DESCRIPTION =
   "JelajahBelanja adalah platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada. Temukan produk viral 24 jam, best seller mingguan, dan diskon terbesar hari ini.";

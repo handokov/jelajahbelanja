@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import type { MetadataRoute } from "next";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://jelajahbelanja.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.jelajahbelanja.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
