@@ -137,7 +137,52 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ product: toProduct(created) });
+    // === Auto-mirror image ke Cloudinary (anti-expired Tokopedia) ===
+    // Image URL masih fresh saat upload — mirror SEKARANG sebelum expired
+    const imageUrl = body.image.trim();
+    const expiringDomains = ["tokopedia-static.net", "p16-images", "p19-images", "p20-images", "p21-images", "p22-images", "p23-images", "p24-images", "p25-images", "p26-images", "p27-images", "p28-images", "p29-images", "p30-images"];
+    const shouldMirror = !imageUrl.includes("cloudinary.com") && expiringDomains.some(d => imageUrl.toLowerCase().includes(d));
+
+    if (shouldMirror && process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+      try {
+        const crypto = await import("crypto");
+        const timestamp = Math.floor(Date.now() / 1000);
+        const signatureStr = `folder=jb-products/mirror&overwrite=false&public_id=${created.id}&timestamp=${timestamp}${process.env.CLOUDINARY_API_SECRET}`;
+        const signature = crypto.createHash("sha1").update(signatureStr).digest("hex");
+
+        const formData = new FormData();
+        formData.append("file", imageUrl);
+        formData.append("public_id", created.id);
+        formData.append("folder", "jb-products/mirror");
+        formData.append("overwrite", "false");
+        formData.append("timestamp", String(timestamp));
+        formData.append("api_key", process.env.CLOUDINARY_API_KEY);
+        formData.append("signature", signature);
+
+        const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (uploadRes.ok) {
+          const data = await uploadRes.json();
+          if (data.secure_url) {
+            await db.shopeeProduct.update({
+              where: { id: created.id },
+              data: { image: data.secure_url, updatedAt: new Date() },
+            });
+            console.log(`[shopee-products POST] Image mirrored to Cloudinary for product ${created.id}`);
+          }
+        }
+      } catch (mirrorErr) {
+        // Kalau mirror gagal, tetap simpan URL asli — jangan block upload
+        console.error("[shopee-products POST] Mirror failed:", mirrorErr);
+      }
+    }
+
+    // Return updated product (kalau image sudah di-mirror, return yang baru)
+    const finalProduct = await db.shopeeProduct.findUnique({ where: { id: created.id } });
+    return NextResponse.json({ product: finalProduct ? toProduct(finalProduct) : toProduct(created) });
   } catch (err) {
     console.error("[api/shopee-products POST] Error:", err);
     return NextResponse.json({ error: "Gagal membuat produk" }, { status: 500 });
