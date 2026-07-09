@@ -1,28 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { checkAuth } from "@/lib/admin-auth";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // 5 menit
+export const maxDuration = 300;
 
-// Marketplaces dengan image yang bisa expired
+const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
+const API_KEY = process.env.CLOUDINARY_API_KEY;
+const API_SECRET = process.env.CLOUDINARY_API_SECRET;
+
 const EXPIRING_DOMAINS = [
-  "tokopedia-static.net",
-  "tokopedia-link",
-  "ta.tokopedia.com",
-  "p16-images",
-  "p19-images",
-  "p20-images",
-  "p21-images",
-  "p22-images",
-  "p23-images",
-  "p24-images",
-  "p25-images",
-  "p26-images",
-  "p27-images",
-  "p28-images",
-  "p29-images",
-  "p30-images",
+  "tokopedia-static.net", "tokopedia-link", "ta.tokopedia.com",
+  "p16-images", "p19-images", "p20-images", "p21-images",
+  "p22-images", "p23-images", "p24-images", "p25-images",
+  "p26-images", "p27-images", "p28-images", "p29-images", "p30-images",
 ];
 
 function isExpiringImage(url: string): boolean {
@@ -31,18 +23,41 @@ function isExpiringImage(url: string): boolean {
   return EXPIRING_DOMAINS.some(d => lower.includes(d));
 }
 
-// Dynamic import Cloudinary (avoid Turbopack build issues)
-async function getCloudinary() {
-  const cloudinary = (await import("cloudinary")).v2;
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-  return cloudinary;
+async function uploadToCloudinary(imageUrl: string, publicId: string): Promise<string | null> {
+  try {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signatureStr = `folder=jb-products/mirror&public_id=${publicId}&timestamp=${timestamp}${API_SECRET}`;
+    const signature = crypto.createHash("sha1").update(signatureStr).digest("hex");
+
+    const formData = new FormData();
+    formData.append("file", imageUrl);
+    formData.append("public_id", publicId);
+    formData.append("folder", "jb-products/mirror");
+    formData.append("timestamp", String(timestamp));
+    formData.append("api_key", API_KEY!);
+    formData.append("signature", signature);
+    formData.append("overwrite", "false");
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      if (text.includes("already exists") || text.includes("Resource exists")) {
+        return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/jb-products/mirror/${publicId}`;
+      }
+      return null;
+    }
+
+    const data = await res.json();
+    return data.secure_url || null;
+  } catch {
+    return null;
+  }
 }
 
-// GET: status — berapa produk perlu mirror
 export async function GET(req: NextRequest) {
   const authErr = await checkAuth(req);
   if (authErr) return authErr;
@@ -50,7 +65,7 @@ export async function GET(req: NextRequest) {
   try {
     const products = await db.shopeeProduct.findMany({
       where: { enabled: true },
-      select: { id: true, image: true, marketplace: true, title: true },
+      select: { id: true, image: true, marketplace: true },
     });
 
     const needMirror = products.filter(p => p.image && isExpiringImage(p.image));
@@ -69,37 +84,27 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: mirror images to Cloudinary
 export async function POST(req: NextRequest) {
   const authErr = await checkAuth(req);
   if (authErr) return authErr;
 
   const startTime = Date.now();
   const result = {
-    success: true,
-    scanned: 0,
-    mirrored: 0,
-    failed: 0,
-    skipped: 0,
-    errors: [] as string[],
-    duration: 0,
+    success: true, scanned: 0, mirrored: 0, failed: 0, skipped: 0,
+    errors: [] as string[], duration: 0,
   };
 
   try {
     const body = await req.json().catch(() => ({}));
-    const limit = Number(body.limit) || 50; // max 50 per run
+    const limit = Number(body.limit) || 50;
     const dryRun = !!body.dryRun;
 
-    // Cari produk dengan image dari Tokopedia (yang bisa expired)
     const products = await db.shopeeProduct.findMany({
       where: { enabled: true },
       select: { id: true, image: true, title: true, marketplace: true },
     });
 
-    const needMirror = products
-      .filter(p => p.image && isExpiringImage(p.image))
-      .slice(0, limit);
-
+    const needMirror = products.filter(p => p.image && isExpiringImage(p.image)).slice(0, limit);
     result.scanned = needMirror.length;
 
     if (dryRun) {
@@ -109,58 +114,25 @@ export async function POST(req: NextRequest) {
 
     for (const product of needMirror) {
       try {
-        const cloudinary = await getCloudinary();
-        // Generate public_id dari product ID (unique, stable)
-        const publicId = `jb-products/mirror/${product.id}`;
-
-        // Cek apakah sudah ada di Cloudinary (skip upload)
-        try {
-          const existing = await cloudinary.api.resource(publicId);
-          // Sudah ada — update DB kalau URL belum match
-          const cloudUrl = existing.secure_url;
-          if (product.image !== cloudUrl) {
-            await db.shopeeProduct.update({
-              where: { id: product.id },
-              data: { image: cloudUrl, updatedAt: new Date() },
-            });
-            result.mirrored++;
-          } else {
-            result.skipped++;
-          }
-          continue;
-        } catch {
-          // Belum ada — proceed to upload
+        const cloudUrl = await uploadToCloudinary(product.image, product.id);
+        if (cloudUrl) {
+          await db.shopeeProduct.update({
+            where: { id: product.id },
+            data: { image: cloudUrl, updatedAt: new Date() },
+          });
+          result.mirrored++;
+        } else {
+          result.failed++;
+          if (result.errors.length < 10) result.errors.push(`${product.title?.slice(0, 30)}: upload failed`);
         }
-
-        // Upload ke Cloudinary dari URL (Cloudinary fetch langsung)
-        const uploadResult = await cloudinary.uploader.upload(product.image, {
-          public_id: publicId,
-          folder: "jb-products/mirror",
-          overwrite: false,
-          resource_type: "image",
-          // Auto-convert ke WebP untuk ukuran lebih kecil
-          fetch_format: "auto",
-          quality: "auto",
-        });
-
-        // Update DB dengan Cloudinary URL
-        await db.shopeeProduct.update({
-          where: { id: product.id },
-          data: { image: uploadResult.secure_url, updatedAt: new Date() },
-        });
-        result.mirrored++;
       } catch (err: any) {
         result.failed++;
-        if (result.errors.length < 10) {
-          result.errors.push(`${product.title?.slice(0, 30)}: ${err.message?.slice(0, 100)}`);
-        }
+        if (result.errors.length < 10) result.errors.push(`${product.title?.slice(0, 30)}: ${err.message?.slice(0, 80)}`);
       }
-
-      // Small delay antar upload (rate limit Cloudinary)
       await new Promise(r => setTimeout(r, 200));
     }
 
-    result.success = result.failed === 0 || result.mirrored > 0;
+    result.success = result.mirrored > 0 || result.failed === 0;
     result.duration = Date.now() - startTime;
     return NextResponse.json(result);
   } catch (err: any) {
