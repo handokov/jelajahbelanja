@@ -19,7 +19,7 @@ import type { Marketplace } from "@/lib/types";
 const VERCEL_URL = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL;
 export const SITE_URL = VERCEL_URL
   ? (VERCEL_URL.startsWith("http") ? VERCEL_URL : `https://${VERCEL_URL}`)
-  : "https://jelajahbelanja.com";
+  : "https://www.jelajahbelanja.com";
 export const SITE_NAME = "JelajahBelanja";
 export const SITE_DESCRIPTION =
   "JelajahBelanja adalah platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada. Temukan produk viral 24 jam, best seller mingguan, dan diskon terbesar hari ini.";
