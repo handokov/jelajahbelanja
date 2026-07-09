@@ -43,6 +43,7 @@ export default function Home() {
     setMaxPrice,
     selectedMarketplaces,
     setSelectedMarketplaces,
+    totalProducts,
   } = useHomeData();
 
   // JSON-LD structured data untuk SEO (ItemList)
@@ -91,7 +92,7 @@ export default function Home() {
 
       {/* Hero Section (tagline + stats, tanpa search) */}
       <HeroSection
-        productsCount={products.length}
+        productsCount={totalProducts}
         totalSold={totalSold}
         categoriesCount={categories.length}
       />
@@ -127,7 +128,7 @@ export default function Home() {
           onPriceChange={(min, max) => { setMinPrice(min); setMaxPrice(max); }}
           selectedMarketplaces={selectedMarketplaces}
           onMarketplacesChange={setSelectedMarketplaces}
-          totalResults={products.length}
+          totalResults={totalProducts}
         />
 
         {/* Products Grid + Trending Sidebar */}

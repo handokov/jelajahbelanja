@@ -91,6 +91,7 @@ export function useHomeData() {
 
   const products: Product[] = productsQuery.data?.products ?? [];
   const source = productsQuery.data?.source ?? "live";
+  const totalProducts = productsQuery.data?.total ?? products.length;
 
   const totalSold = React.useMemo(
     () => products.reduce((sum, p) => sum + p.soldCount, 0),
@@ -145,6 +146,7 @@ export function useHomeData() {
     products,
     productsQuery,
     source,
+    totalProducts,
     totalSold,
     trendingTop5,
     featuredProduct,
