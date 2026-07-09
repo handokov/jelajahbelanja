@@ -98,7 +98,7 @@ export default function Home() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 container mx-auto px-4 max-w-7xl py-6">
+      <main className="flex-1 container mx-auto px-4 max-w-[1400px] py-6">
         {/* Banner Slider */}
         <BannerSlider banners={activeBanners} />
 
