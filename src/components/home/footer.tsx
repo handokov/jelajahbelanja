@@ -7,7 +7,7 @@ import { NewsletterSignup } from "@/components/newsletter-signup";
 export function SiteFooter() {
   return (
     <footer className="bg-header-gradient text-white mt-auto">
-      <div className="container mx-auto px-4 max-w-7xl py-6">
+      <div className="container mx-auto px-4 max-w-[1400px] py-6">
         {/* Top row: logo + description */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-sm mb-4">
           <div className="flex items-center gap-2">

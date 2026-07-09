@@ -75,7 +75,7 @@ export default function CategoryPageClient({ category, allCategories }: Props) {
       />
 
       {/* Main Content */}
-      <main className="flex-1 container mx-auto px-4 max-w-7xl py-6">
+      <main className="flex-1 container mx-auto px-4 max-w-[1400px] py-6">
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-1.5 text-xs text-zinc-500">
           <Link href="/" className="hover:text-violet-600 flex items-center gap-1">

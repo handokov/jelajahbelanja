@@ -23,7 +23,7 @@ export function LogoBar({ search = "", onSearchChange }: LogoBarProps) {
 
   return (
     <div className="sticky top-0 z-50 bg-header-gradient">
-      <div className="container mx-auto px-4 max-w-7xl flex items-center gap-2 md:gap-3 h-14">
+      <div className="container mx-auto px-4 max-w-[1400px] flex items-center gap-2 md:gap-3 h-14">
         {/* Logo */}
         <Link
           href="/"

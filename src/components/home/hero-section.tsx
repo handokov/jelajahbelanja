@@ -19,7 +19,7 @@ export function HeroSection({
 }: HeroSectionProps) {
   return (
     <div className="bg-header-gradient text-white">
-      <div className="container mx-auto px-4 py-4 md:py-6 max-w-7xl">
+      <div className="container mx-auto px-4 py-4 md:py-6 max-w-[1400px]">
         {/* Hero tagline + stats */}
         <h2 className="text-lg md:text-2xl font-bold mb-1 leading-tight">
           Produk Viral & Best Seller Indonesia Hari Ini
