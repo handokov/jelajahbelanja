@@ -6,6 +6,20 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Slugify — convert nama kategori ke URL-friendly slug.
+ * "Fashion Wanita" → "fashion-wanita"
+ * "Home & Living" → "home-living"
+ */
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "") // hapus karakter khusus
+    .replace(/[\s_-]+/g, "-") // spasi/underscore → dash
+    .replace(/^-+|-+$/g, ""); // hapus dash di awal/akhir
+}
+
+/**
  * Detect marketplace dari URL produk.
  * Mendukung: shopee, tokopedia, lazada, blibli, bukalapak, zalora, sociolla,
  * aliexpress, amazon, tiktok.

@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, slugify } from "@/lib/utils";
 import type { CategoryDTO } from "@/lib/types";
 
 interface CategoryChipsProps {
@@ -47,7 +47,7 @@ export function CategoryChips({
           <CategoryChip
             key={c.id}
             active={activeCategory === c.id}
-            href={`/kategori/${c.id}`}
+            href={`/kategori/${slugify(c.name)}`}
             label={c.name}
           />
         ))}
