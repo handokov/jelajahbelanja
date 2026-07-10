@@ -23,7 +23,6 @@ import {
   Pencil,
   Save,
   Plus,
-  RefreshCw,
   X,
   Trash2,
   Settings2,
@@ -191,9 +190,6 @@ export function CategoriesTab() {
 
   return (
     <>
-      {/* Category Mapper — bulk remap product categories */}
-      <CategoryMapper />
-
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
         <div className="flex items-center gap-2 mb-4">
           {editingId ? <Pencil className="w-4 h-4 text-fuchsia-600" /> : <Plus className="w-4 h-4 text-fuchsia-600" />}
@@ -429,153 +425,5 @@ export function CategoriesTab() {
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════
-// CategoryMapper — bulk remap product categories ke kategori utama
-// ════════════════════════════════════════════════════════════════
-function CategoryMapper() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [mappings, setMappings] = React.useState<Record<string, string>>({});
-  const [applying, setApplying] = React.useState(false);
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["category-mapper"],
-    queryFn: async () => {
-      const res = await fetch("/api/category-mapper");
-      if (!res.ok) throw new Error("Gagal load");
-      return res.json();
-    },
-    retry: 1,
-  });
-
-  // Error state — jangan crash halaman
-  if (isError) {
-    return (
-      <div className="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 p-4">
-        <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">
-          🗂️ Category Mapper
-        </h3>
-        <p className="text-xs text-amber-900/70 dark:text-amber-100/70">
-          Gagal memuat data kategori. Coba refresh halaman atau cek koneksi.
-        </p>
-        <Button
-          size="sm"
-          variant="outline"
-          className="mt-2"
-          onClick={() => queryClient.invalidateQueries({ queryKey: ["category-mapper"] })}
-        >
-          <RefreshCw className="w-3.5 h-3.5 mr-1" />
-          Coba Lagi
-        </Button>
-      </div>
-    );
-  }
-
-  const categories: Array<{ name: string; count: number; suggestion: string }> = data?.categories || [];
-  const mainCats: string[] = data?.mainCategories || [];
-
-  // Init mappings dengan suggestions
-  React.useEffect(() => {
-    if (categories.length > 0 && Object.keys(mappings).length === 0) {
-      const init: Record<string, string> = {};
-      categories.forEach(c => {
-        if (c.suggestion) init[c.name] = c.suggestion;
-      });
-      setMappings(init);
-    }
-  }, [categories, mappings]);
-
-  const handleApplyAll = async () => {
-    setApplying(true);
-    let totalUpdated = 0;
-    for (const [from, to] of Object.entries(mappings)) {
-      if (!to || from === to) continue;
-      try {
-        const res = await fetch("/api/category-mapper", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fromCategory: from, toCategory: to }),
-        });
-        const data = await res.json();
-        if (data.success) totalUpdated += data.updated;
-      } catch {
-        // skip
-      }
-    }
-    setApplying(false);
-    toast({ title: `✅ ${totalUpdated} produk berhasil di-remap!` });
-    queryClient.invalidateQueries({ queryKey: ["category-mapper"] });
-    queryClient.invalidateQueries({ queryKey: ["products"] });
-    setMappings({});
-  };
-
-  const unmapped = categories.filter(c => !mappings[c.name] || mappings[c.name] === c.name);
-
-  return (
-    <div className="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-          🗂️ Category Mapper — Kelompokkan Produk
-        </h3>
-        <Button size="sm" variant="ghost" onClick={() => queryClient.invalidateQueries({ queryKey: ["category-mapper"] })}>
-          <RefreshCw className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-      <p className="text-xs text-amber-900/70 dark:text-amber-100/70">
-        Remap kategori produk yang berantakan ke kategori utama. Auto-suggestion sudah diisi — tinggal cek dan klik "Apply All".
-      </p>
-
-      {isLoading ? (
-        <p className="text-xs text-zinc-500">Memuat...</p>
-      ) : unmapped.length === 0 && Object.keys(mappings).length > 0 ? (
-        <p className="text-xs text-emerald-600">✅ Semua kategori sudah ter-map!</p>
-      ) : (
-        <>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {categories.map((c) => {
-              const mapped = mappings[c.name];
-              const isSame = mapped === c.name;
-              return (
-                <div key={c.name} className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-medium">{c.name}</span>
-                    <span className="text-[10px] text-zinc-500 ml-1">({c.count} produk)</span>
-                  </div>
-                  <span className="text-zinc-400 text-xs">→</span>
-                  <select
-                    value={mapped || ""}
-                    onChange={(e) => setMappings(prev => ({ ...prev, [c.name]: e.target.value }))}
-                    className="text-xs h-7 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-1.5 flex-shrink-0 w-32"
-                  >
-                    <option value="">— Pilih —</option>
-                    {mainCats.map(mc => (
-                      <option key={mc} value={mc}>{mc}</option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2 pt-1">
-            <Button
-              size="sm"
-              onClick={handleApplyAll}
-              disabled={applying || Object.keys(mappings).filter(k => mappings[k] && mappings[k] !== k).length === 0}
-              className="bg-amber-600 hover:bg-amber-700 text-white"
-            >
-              {applying ? (
-                <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" /> Applying...</>
-              ) : (
-                <>✅ Apply All ({Object.keys(mappings).filter(k => mappings[k] && mappings[k] !== k).length} kategori)</>
-              )}
-            </Button>
-          </div>
-        </>
-      )}
-    </div>
   );
 }
