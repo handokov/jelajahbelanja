@@ -5,7 +5,7 @@ import { Sparkles, Star, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, productSlug } from "@/lib/utils";
 import { SmartImage } from "@/components/smart-image";
 import type { Product, Marketplace } from "@/lib/types";
 import {
@@ -171,7 +171,7 @@ function PriceBlock({
 
 export function ProductCard({ product, variant = "default", rank, badges }: ProductCardProps) {
   // Link ke halaman detail produk
-  const detailUrl = `/produk/${product.id}`;
+  const detailUrl = `/produk/${productSlug(product.title, product.id)}`;
   // Link beli langsung (shortlink / affiliate)
   const buyUrl = product.id.startsWith("shopee-")
     ? `/beli/${product.id}`

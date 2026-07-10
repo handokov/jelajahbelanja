@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import type { MetadataRoute } from "next";
-import { slugify } from "@/lib/utils";
+import { slugify, productSlug } from "@/lib/utils";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.jelajahbelanja.com";
 
@@ -43,6 +43,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       where: { enabled: true, isHidden: { not: true } },
       select: {
         id: true,
+        title: true,
         updatedAt: true,
         isPinned: true,
         isViral: true,
@@ -51,7 +52,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
 
     productPages = products.map((p) => ({
-      url: `${SITE_URL}/produk/${p.id}`,
+      url: `${SITE_URL}/produk/${productSlug(p.title, p.id)}`,
       lastModified: p.updatedAt,
       changeFrequency: "daily" as const,
       priority: p.isPinned || p.isViral ? 0.8 : 0.6,

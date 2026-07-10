@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Clock, X } from "lucide-react";
 import { useRecentlyViewed } from "@/hooks/use-recently-viewed";
 import { formatRupiah } from "@/lib/format";
+import { productSlug } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 interface RecentlyViewedProps {
@@ -70,7 +71,7 @@ export function RecentlyViewed({ excludeId, limit = 5, showClear = true }: Recen
         {items.map((item) => (
           <Link
             key={item.id}
-            href={`/produk/${item.id}`}
+            href={`/produk/${productSlug(item.title, item.id)}`}
             className="flex-shrink-0 w-[140px] group"
           >
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
