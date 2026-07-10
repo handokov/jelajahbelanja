@@ -146,52 +146,6 @@ export async function GET(req: NextRequest) {
       result.errors.push(`Affiliate error: ${err.message}`);
     }
 
-    // === Step 3: Mirror Tokopedia images to Cloudinary (anti-expired) ===
-    try {
-      const { v2: cloudinary } = await import("cloudinary");
-      cloudinary.config({
-        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-        api_key: process.env.CLOUDINARY_API_KEY,
-        api_secret: process.env.CLOUDINARY_API_SECRET,
-      });
-
-      const expiringDomains = ["tokopedia-static.net", "p16-images", "p19-images", "p20-images", "p21-images", "p22-images", "p23-images", "p24-images", "p25-images", "p26-images", "p27-images", "p28-images", "p29-images", "p30-images"];
-      const needMirror = await db.shopeeProduct.findMany({
-        where: { enabled: true, image: { contains: "tokopedia" } },
-        select: { id: true, image: true },
-        take: 20, // max 20 per cron run
-      });
-
-      const filtered = needMirror.filter(p => p.image && !p.image.includes("cloudinary.com") && expiringDomains.some(d => p.image.toLowerCase().includes(d)));
-      result.steps.push(`Mirror: ${filtered.length} images need Cloudinary`);
-
-      let mirrored = 0;
-      for (const product of filtered) {
-        try {
-          const publicId = `jb-products/mirror/${product.id}`;
-          const uploadResult = await cloudinary.uploader.upload(product.image, {
-            public_id: publicId,
-            folder: "jb-products/mirror",
-            overwrite: false,
-            resource_type: "image",
-            fetch_format: "auto",
-            quality: "auto",
-          });
-          await db.shopeeProduct.update({
-            where: { id: product.id },
-            data: { image: uploadResult.secure_url, updatedAt: new Date() },
-          });
-          mirrored++;
-          await new Promise(r => setTimeout(r, 200));
-        } catch {
-          // skip individual errors
-        }
-      }
-      if (mirrored > 0) result.steps.push(`Mirror: ${mirrored} images saved to Cloudinary`);
-    } catch (err: any) {
-      result.errors.push(`Mirror error: ${err.message}`);
-    }
-
     result.duration = Date.now() - startTime;
     result.success = result.errors.length === 0 || result.productsAffiliated > 0;
 

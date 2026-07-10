@@ -3,7 +3,6 @@
  */
 export { LogoBar } from "./logo-bar";
 export { HeroSection } from "./hero-section";
-export { StickySearchBar } from "./sticky-search-bar";
 export { BannerSlider } from "./banner-slider";
 export { CategoryChips } from "./category-chips";
 export { FilterTabs } from "./filter-tabs";

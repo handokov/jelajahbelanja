@@ -25,8 +25,6 @@ const PROTECTED_API_PATTERNS = [
   { path: "/api/at-sync", methods: ["GET", "POST"] },
   { path: "/api/at-settings", methods: ["GET", "POST"] },
   { path: "/api/at-debug", methods: ["GET"] },
-  { path: "/api/category-mapper", methods: ["GET", "POST"] },
-  { path: "/api/mirror-images", methods: ["GET", "POST"] },
   { path: "/api/bulk-upload", methods: ["POST"] },
   { path: "/api/scrape-shopee", methods: ["POST"] },
 ];
