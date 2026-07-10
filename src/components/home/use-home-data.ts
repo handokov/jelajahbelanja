@@ -14,8 +14,8 @@ export function useHomeData() {
   const [search, setSearch] = React.useState("");
   const [debouncedSearch, setDebouncedSearch] = React.useState("");
 
-  // Sort & filter state
-  const [sort, setSort] = React.useState<"newest" | "price-asc" | "price-desc" | "discount" | "rating" | "popular">("newest");
+  // Sort & filter state — default "daily-mix" (acak stabil per hari, adil untuk semua produk)
+  const [sort, setSort] = React.useState<"daily-mix" | "newest" | "price-asc" | "price-desc" | "discount" | "rating" | "popular">("daily-mix");
   const [minPrice, setMinPrice] = React.useState<number | null>(null);
   const [maxPrice, setMaxPrice] = React.useState<number | null>(null);
   const [selectedMarketplaces, setSelectedMarketplaces] = React.useState<string[]>([]);

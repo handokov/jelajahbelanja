@@ -102,8 +102,9 @@ export async function GET(req: NextRequest) {
       : "latest";
     const search = (searchParams.get("search") || "").trim().toLowerCase();
 
-    // Sort: newest | price-asc | price-desc | discount | rating | popular
-    const sort = (searchParams.get("sort") || "newest").toLowerCase();
+    // Sort: daily-mix | newest | price-asc | price-desc | discount | rating | popular
+    // daily-mix = acak stabil per hari (seeded random pakai tanggal hari ini)
+    const sort = (searchParams.get("sort") || "daily-mix").toLowerCase();
 
     // Price filter
     const minPrice = searchParams.get("minPrice") ? Number(searchParams.get("minPrice")) : null;
@@ -166,6 +167,9 @@ export async function GET(req: NextRequest) {
 
     const manualProducts: Product[] = manualRows.map(dbRowToProduct);
 
+    // Track ID produk pinned supaya sort "daily-mix" bisa pisahkan (pinned tetap di atas)
+    const pinnedIds = new Set(manualRows.filter(r => r.isPinned).map(r => r.id));
+
     // Inject affiliate URL ke setiap produk
     const tags = await getAffiliateTags();
     const withAffiliate: Product[] = manualProducts.map((p) => ({
@@ -198,7 +202,35 @@ export async function GET(req: NextRequest) {
     }
 
     // Apply sort (override filter ordering)
-    if (sort === "price-asc") {
+    if (sort === "daily-mix") {
+      // ─── Daily Mix: acak stabil per hari ───
+      // Pakai tanggal hari ini (YYYY-MM-DD) sebagai seed → semua user lihat urutan sama
+      // sepanjang hari yang sama. Besok pagi → urutan berubah (acak ulang).
+      // Produk pinned tetap di atas (admin kontrol), sisanya diacak stabil.
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const seed = dateStr
+        .split("")
+        .reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 7);
+      // PRNG sederhana (mulberry32) — deterministic dari seed tanggal
+      let prngState = seed >>> 0;
+      const nextRand = () => {
+        prngState = (prngState + 0x6D2B79F5) >>> 0;
+        let t = prngState;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+      // Pisahkan pinned (tetap di atas, urut createdAt desc) dari sisanya (diacak)
+      const pinned = finalProducts
+        .filter(p => pinnedIds.has(p.id))
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const nonPinned = finalProducts.filter(p => !pinnedIds.has(p.id));
+      // Assign random number ke tiap produk non-pinned, lalu sort by random number
+      const withRandom = nonPinned.map(p => ({ p, r: nextRand() }));
+      withRandom.sort((a, b) => a.r - b.r);
+      finalProducts = [...pinned, ...withRandom.map(x => x.p)];
+    } else if (sort === "price-asc") {
       finalProducts = [...finalProducts].sort((a, b) => a.price - b.price);
     } else if (sort === "price-desc") {
       finalProducts = [...finalProducts].sort((a, b) => b.price - a.price);
