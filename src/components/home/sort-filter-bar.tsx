@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-export type SortOption = "newest" | "price-asc" | "price-desc" | "discount" | "rating" | "popular";
+export type SortOption = "daily-mix" | "newest" | "price-asc" | "price-desc" | "discount" | "rating" | "popular";
 
 interface SortFilterBarProps {
   sort: SortOption;
@@ -20,6 +20,7 @@ interface SortFilterBarProps {
 }
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "daily-mix", label: "Acak Harian" },
   { value: "newest", label: "Terbaru" },
   { value: "popular", label: "Terlaris" },
   { value: "price-asc", label: "Harga Termurah" },
@@ -63,7 +64,7 @@ export function SortFilterBar({
   const [priceFilterOpen, setPriceFilterOpen] = React.useState(false);
   const [sortOpen, setSortOpen] = React.useState(false);
 
-  const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label || "Terbaru";
+  const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label || "Acak Harian";
   const hasActiveFilter = selectedMarketplaces.length > 0 || minPrice !== null || maxPrice !== null;
   const priceActive = minPrice !== null || maxPrice !== null;
 
