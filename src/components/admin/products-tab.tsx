@@ -960,13 +960,12 @@ export function ProductsTab() {
                 let ok = 0;
                 for (const id of ids) {
                   try {
-                    const res = await fetch(`/api/shopee-products?id=${id}`, {
+                    const res = await fetch(`/api/shopee-products`, {
                       method: "PATCH",
                       headers: {
                         "Content-Type": "application/json",
-                        "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_SECRET || ""}`,
                       },
-                      body: JSON.stringify({ category: bulkMoveCategory }),
+                      body: JSON.stringify({ id, category: bulkMoveCategory }),
                       credentials: "include",
                     });
                     if (res.ok) ok++;
@@ -976,7 +975,7 @@ export function ProductsTab() {
                 setShowBulkMoveCategory(false);
                 setBulkMoveCategory("");
                 clearSelection();
-                queryClient.invalidateQueries({ queryKey: ["products"] });
+                queryClient.invalidateQueries({ queryKey: ["admin-products"] });
               }}
               disabled={!bulkMoveCategory}
               className="bg-violet-600 hover:bg-violet-700"
