@@ -75,6 +75,9 @@ export function ProductsTab() {
   const [deleteConfirmText, setDeleteConfirmText] = React.useState("");
   const [showBulkMoveCategory, setShowBulkMoveCategory] = React.useState(false);
   const [bulkMoveCategory, setBulkMoveCategory] = React.useState("");
+  const [filterCategory, setFilterCategory] = React.useState("");
+  const [filterMarketplace, setFilterMarketplace] = React.useState("");
+  const [searchQuery, setSearchQuery] = React.useState("");
 
   // ─── Queries ───
   const { data: categoriesData } = useQuery({
@@ -349,8 +352,20 @@ export function ProductsTab() {
     });
   }
 
-  const products = productsData ?? [];
+  const allProducts = productsData ?? [];
   const categories = categoriesData ?? [];
+
+  // Apply filters (category, marketplace, search)
+  const products = allProducts.filter((p: any) => {
+    if (filterCategory && p.category !== filterCategory) return false;
+    if (filterMarketplace && p.marketplace?.toLowerCase() !== filterMarketplace.toLowerCase()) return false;
+    if (searchQuery && !p.title?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
+
+  // Get unique categories from products for filter dropdown
+  const uniqueCategories = Array.from(new Set(allProducts.map((p: any) => p.category).filter(Boolean))).sort();
+
   const allSelected = products.length > 0 && selectedIds.size === products.length;
 
   return (
@@ -519,6 +534,53 @@ export function ProductsTab() {
 
       {/* Product list */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+        {/* Filter Bar */}
+        <div className="flex flex-wrap items-center gap-2 mb-4 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
+          <span className="text-xs font-semibold text-zinc-500">FILTER:</span>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="h-8 rounded-md border border-input bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-2 text-xs"
+          >
+            <option value="">Semua Kategori ({allProducts.length})</option>
+            {uniqueCategories.map((cat: string) => (
+              <option key={cat} value={cat}>{cat} ({allProducts.filter((p: any) => p.category === cat).length})</option>
+            ))}
+          </select>
+          <select
+            value={filterMarketplace}
+            onChange={(e) => setFilterMarketplace(e.target.value)}
+            className="h-8 rounded-md border border-input bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-2 text-xs"
+          >
+            <option value="">Semua Marketplace</option>
+            <option value="shopee">Shopee</option>
+            <option value="tokopedia">Tokopedia</option>
+            <option value="tiktok">TikTok</option>
+            <option value="blibli">Blibli</option>
+            <option value="lazada">Lazada</option>
+          </select>
+          <input
+            type="text"
+            placeholder="Cari judul produk..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 rounded-md border border-input bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-2 text-xs flex-1 min-w-[150px]"
+          />
+          {(filterCategory || filterMarketplace || searchQuery) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs text-zinc-500"
+              onClick={() => { setFilterCategory(""); setFilterMarketplace(""); setSearchQuery(""); }}
+            >
+              ✕ Reset
+            </Button>
+          )}
+          <span className="text-xs text-zinc-400 ml-auto">
+            {products.length} dari {allProducts.length} produk
+          </span>
+        </div>
+
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-sm">
             Daftar Produk ({products.length})
