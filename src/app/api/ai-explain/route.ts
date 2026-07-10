@@ -5,127 +5,17 @@ export const dynamic = "force-dynamic";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
-// ─── BANK JAJANAN INDONESIA ───
-const BANK_JAJANAN = `
-BANK JAJANAN (pilih yang harganya ≤ harga produk, jangan sebut yang lebih mahal):
-- 0-10rb: es teh 5rb, gorengan 2rb, ciki 2rb
-- 10-25rb: seblak 15rb, kopi susu 18rb, ayam geprek 20rb, boba 22rb
-- 25-50rb: mixue 25rb, mie gacoan 30rb, burger 35rb, rice bowl 40rb
-- 50-100rb: starbucks 55rb, pizza 75rb, steak 85rb, ayce 99rb
-- 100-300rb: nongkrong cafe 150rb, dinner 200rb, buffet 250rb
-`;
-
-// ─── PERSONA DEFINITIONS ───
-interface Persona {
-  name: string;
-  description: string;
-  emoji: string;
-  rules: string;
-}
-
-function detectPersona(category: string): Persona {
-  const cat = (category || "").toLowerCase();
-
-  if (cat.includes("fashion") || cat.includes("beauty") || cat.includes("kosmetik") || cat.includes("skincare") || cat.includes("makeup")) {
-    return {
-      name: "bestie_centil",
-      description: `Gen Z abis. Sapaan "Bestieee/Cil", emoji 😭✨💅🏻🛒, kata "auto", "literally", "cheat code", "nggak kaleng-kaleng".`,
-      emoji: "😭✨💅🏻🛒",
-      rules: "",
-    };
-  }
-  if (cat.includes("home") || cat.includes("rumah") || cat.includes("dapur") || cat.includes("mainan") || cat.includes("anak")) {
-    return {
-      name: "emak_centil",
-      description: `Centil keibuan. Sapaan "Bun/Say", emoji 💅🏻✨🏃‍♀️, kata "hemat waktu", "anak happy", "dompet aman".`,
-      emoji: "💅🏻✨🏃‍♀️",
-      rules: "",
-    };
-  }
-  if (cat.includes("elektronik") || cat.includes("gaming") || cat.includes("gadget") || cat.includes("mobile")) {
-    return {
-      name: "bro_centil",
-      description: `Centil 50%. Sapaan "Bro/Sis/Gan", emoji 🔥⚡🛒, kata "worth it parah", "nggak nyesel", "bass nendang". Bahas spek tapi bahasa tongkrongan.`,
-      emoji: "🔥⚡🛒",
-      rules: "",
-    };
-  }
-  if (cat.includes("otomotif") || cat.includes("perkakas") || cat.includes("sparepart") || cat.includes("kelistrikan") || cat.includes("oli")) {
-    return {
-      name: "bapak_teknis",
-      description: `NOL CENTIL. Sapaan "Gan/Bro", emoji MAXIMAL 1 (🔧 atau ⚙️), to the point, sebut ukuran/bahan/garansi.`,
-      emoji: "🔧",
-      rules: `BAPAK_TEKNIS: NOL emoji centil (DILARANG 😭✨💅🏻🛒). Hanya 1 emoji 🔧 atau ⚙️. Gaya tegas, informatif, seperti mekanik.`,
-    };
-  }
-  return {
-    name: "juragan_centil",
-    description: `Centil versi cuan. Sapaan "Bos/Bestie juragan", emoji 💰📈💅🏻, kata "naikin omset", "harga pabrik", "literally cuan".`,
-    emoji: "💰📈💅🏻",
-    rules: "",
-  };
-}
-
-// ─── TEMPLATE MANUAL (Layer 3 fallback — always works) ───
-function generateTemplate(product: any, persona: Persona): { explanation: string; outfitTips: string } {
-  const { title, price, rating, reviewCount, discountPercent, category, marketplace } = product;
-  const isBapakTeknis = persona.name === "bapak_teknis";
-  const harga = `Rp ${price.toLocaleString("id-ID")}`;
-  const ratingStr = reviewCount > 0 ? `Rating ${rating} dari ${reviewCount.toLocaleString("id-ID")} review` : "masih fresh, bisa jadi first buyer";
-  const diskonStr = discountPercent > 0 ? `Diskon ${discountPercent}%!` : "";
-
-  if (isBapakTeknis) {
-    return {
-      explanation: `Gan, ${title.slice(0, 60)}. ${diskonStr} Harga ${harga}, ${ratingStr}. Cek link bawah 🔧`,
-      outfitTips: "",
-    };
-  }
-
-  const greeting = persona.name === "bestie_centil" ? "Bestieee" : persona.name === "emak_centil" ? "Bun" : persona.name === "bro_centil" ? "Bro" : "Bos";
-  const emoji = persona.emoji.split(" ")[0];
-
-  return {
-    explanation: `${greeting} ${emoji} ${title.slice(0, 50)} ini worth it banget! ${diskonStr} Harga ${harga}, ${ratingStr}. Stok ghoib, buruan cek link bawah! ${emoji}`,
-    outfitTips: "",
-  };
-}
-
-// ─── BUILD PROMPT ───
-function buildPrompt(product: any, persona: Persona): { system: string; user: string } {
-  const isBapakTeknis = persona.name === "bapak_teknis";
-  const harga = product.price.toLocaleString("id-ID");
-
-  const system = `Kamu adalah "${persona.name}" — ${persona.description}
-
-${BANK_JAJANAN}
-
-Aturan:
-1. Sapa khas persona + heboh masalah relate
-2. Spill produk + 2 fitur utama paling nendang (dari nama produk saja, jangan karang)
-3. Harga dibandingin dengan jajanan dari BANK JAJANAN di atas. PILIH yang harganya ≤ Rp ${harga}. Jangan sebut jajanan yang lebih mahal dari produk.
-4. Data rating jujur. Kalau 0 review tulis "masih fresh, bisa jadi first buyer"
-5. Urgensi FOMO: "stok ghoib", "diskon", "keburu habis"
-6. CTA: "Cek link bawah" + 1 emoji${isBapakTeknis ? ' (hanya 🔧 atau ⚙️, DILARANG 😭✨💅🏻🛒)' : ''}
-7. Max 90 kata
-8. DILARANG: bohong, klaim medis, karang fitur yang tidak ada di data produk
-9. Tulis dalam Bahasa Indonesia, teks biasa (tidak ada markdown)
-${persona.rules ? persona.rules : ''}`;
-
-  const userMessage = `Data produk:
-- Nama: ${product.title}
-- Harga: Rp ${harga}
-- Rating: ${product.rating} (${product.reviewCount > 0 ? product.reviewCount.toLocaleString("id-ID") + " review" : "masih fresh, bisa jadi first buyer"})
-- Diskon: ${product.discountPercent > 0 ? product.discountPercent + "%" : "tidak ada"}
-- Terjual: ${product.soldCount > 0 ? product.soldCount.toLocaleString("id-ID") : "baru launching"}
-- Marketplace: ${product.marketplace}
-- Kategori: ${product.category}
-
-Tulis sekarang:`;
-
-  return { system, user: userMessage };
-}
-
-// ─── MAIN HANDLER ───
+/**
+ * POST /api/ai-explain
+ *
+ * AI Personal Stylist & Sales — menjelaskan produk + rekomendasi outfit pelengkap.
+ * Menggunakan Groq + Meta Llama 4 untuk respons super cepat.
+ * Fallback ke z-ai-web-dev-sdk kalau GROQ_API_KEY belum di-set.
+ *
+ * Body: { product: { title, price, originalPrice, discountPercent, rating,
+ *         reviewCount, soldCount, marketplace, category, location, isViral } }
+ * Response: { explanation: string, outfitTips: string }
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -138,88 +28,130 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Auto-detect persona dari kategori
-    const persona = detectPersona(product.category || "");
-    const { system, user } = buildPrompt(product, persona);
+    const systemPrompt = `Kamu adalah "JB" — AI Personal Stylist & Sales dari JelajahBelanja. Kamu BUKAN sekedar reviewer, kamu seorang personal stylist yang PINTAR MENJUAL. Tujuanmu: bikin user beli PRODUK + OUTFIT PELANGKAP, bukan cuma 1 item.
 
-    // === Layer 1: Groq Llama 4 ===
+Gaya bahasa kamu:
+1. SANTAI & GEMES — pakai bahasa Indonesia sehari-hari, kayak ngobrol sama temen ("nih", "banget", "fyeuh", "gila sih", "cocok banget")
+2. JUJUR tapi PERSUASIF — sebut kekurangan kecil, tapi selalu arahkan ke keputusan beli
+3. FAKTA DULU — sebut data (rating, terjual, diskon) sebagai social proof
+4. OUTFIT STYLING — WAJIB kasih rekomendasi outfit lengkap yang cocok dengan produk ini
+5. CROSS-SELL NATURAL — rekomendasi pelengkap harus terasa natural, kayak temen yang ngasih saksi, bukan sales yang maksa
+
+BAGIAN 1: REVIEW PRODUK (maks 120 kata)
+- Greeting punchy 1 kalimat
+- Kenapa produk ini worth it (2-3 poin dengan data)
+- 1 kekurangan kecil (biar keliatan jujur)
+- Verdict: "Worth it buat..."
+
+BAGIAN 2: OUTFIT REKOMENDASI (maks 80 kata)
+- Rekomendasikan 2-3 item pelengkap yang cocok dipadukan
+- Contoh: kalau produk sepatu sneakers → rekomendasikan celana jeans/koel + kaos oversized/hoodie
+- Sebutkan ESTIMASI HARGA range (mis. "celana jeans Rp 100-200rb" atau "hoodie Rp 150-250rb")
+- Buat terasa kayak "outfit of the day" yang lagi trending
+- WAJIB sebut "Lihat rekomendasi JB di bawah ya!" di akhir
+
+PENTING:
+- Tulis dalam Bahasa Indonesia
+- Total maks 200 kata
+- JANGAN pakai markdown formatting (##, **, *, dll) — tulis teks biasa saja
+- Jangan tulis "sebagai AI"
+- Jangan sebut brand spesifik (Nike, Adidas, dll) — cukup jenis item
+- Rekomendasi outfit harus masuk akal & sesuai harga produk (kalau produk Rp 100rb, jangan rekomendasi item Rp 1jt)
+- Pisahkan BAGIAN 1 dan BAGIAN 2 dengan baris kosong + "---" + baris kosong
+- Maks 4 emoji total`;
+
+    const priceInfo = product.originalPrice
+      ? `Harga: Rp ${product.price.toLocaleString("id-ID")} (asli Rp ${product.originalPrice.toLocaleString("id-ID")}, diskon ${product.discountPercent}%)`
+      : `Harga: Rp ${product.price.toLocaleString("id-ID")}`;
+
+    const viralInfo = product.isViral ? "Produk ini VIRAL (masuk top 25% viral score)." : "";
+    const soldInfo = product.soldCount ? `Terjual: ${product.soldCount.toLocaleString("id-ID")} unit.` : "";
+    const ratingInfo = product.rating ? `Rating: ${product.rating}/5 dari ${product.reviewCount?.toLocaleString("id-ID") ?? "banyak"} review.` : "";
+    const locationInfo = product.location ? `Lokasi seller: ${product.location}.` : "";
+
+    const userMessage = `Jelaskan produk ini + kasih rekomendasi outfit pelengkap:
+
+Nama: ${product.title}
+Kategori: ${product.category}
+Marketplace: ${product.marketplace}
+${priceInfo}
+${ratingInfo}
+${soldInfo}
+${locationInfo}
+${viralInfo}
+
+Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang cocok + estimasi harga.`;
+
+    // === Try Groq API first (Llama 4) ===
     const apiKey = process.env.GROQ_API_KEY;
+
     if (apiKey) {
-      try {
-        const groqResponse = await fetch(GROQ_API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: MODEL,
-            messages: [
-              { role: "system", content: system },
-              { role: "user", content: user },
-            ],
-            max_tokens: 256,
-            temperature: 0.4,
-            top_p: 0.9,
-          }),
-        });
-
-        if (groqResponse.ok) {
-          const groqData = await groqResponse.json();
-          const content: string | undefined = groqData.choices?.[0]?.message?.content;
-
-          if (content && content.trim().length > 20) {
-            return NextResponse.json({
-              explanation: content.trim(),
-              outfitTips: "",
-              persona: persona.name,
-              source: "groq",
-            });
-          }
-        } else {
-          console.error("[api/ai-explain] Groq error:", groqResponse.status);
-        }
-      } catch (groqErr) {
-        console.error("[api/ai-explain] Groq exception:", groqErr);
-      }
-    }
-
-    // === Layer 2: z-ai-web-dev-sdk ===
-    try {
-      const ZAI = (await import("z-ai-web-dev-sdk")).default;
-      const zai = await ZAI.create();
-
-      const completion = await zai.chat.completions.create({
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-        thinking: { type: "disabled" },
+      const groqResponse = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+          max_tokens: 512,
+          temperature: 0.7,
+          top_p: 0.9,
+        }),
       });
 
-      const content = completion.choices[0]?.message?.content;
+      if (groqResponse.ok) {
+        const groqData = await groqResponse.json();
+        const fullResponse: string | undefined = groqData.choices?.[0]?.message?.content;
 
-      if (content && content.trim().length > 20) {
-        return NextResponse.json({
-          explanation: content.trim(),
-          outfitTips: "",
-          persona: persona.name,
-          source: "z-ai",
-        });
+        if (fullResponse) {
+          // Split response into review and outfit tips
+          const separator = "---";
+          const parts = fullResponse.split(separator);
+          const explanation = parts[0]?.trim() || fullResponse;
+          const outfitTips = parts[1]?.trim() || "";
+
+          return NextResponse.json({ explanation, outfitTips });
+        }
+      } else {
+        const errText = await groqResponse.text();
+        console.error("[api/ai-explain] Groq API error:", groqResponse.status, errText);
+        // Fall through to z-ai fallback
       }
-    } catch (zaiErr) {
-      console.error("[api/ai-explain] z-ai exception:", zaiErr);
     }
 
-    // === Layer 3: Template manual (always works) ===
-    console.log("[api/ai-explain] Using template fallback");
-    const template = generateTemplate(product, persona);
-    return NextResponse.json({
-      explanation: template.explanation,
-      outfitTips: template.outfitTips,
-      persona: persona.name,
-      source: "template",
+    // === Fallback: z-ai-web-dev-sdk ===
+    console.log("[api/ai-explain] Falling back to z-ai-web-dev-sdk");
+    const ZAI = (await import("z-ai-web-dev-sdk")).default;
+    const zai = await ZAI.create();
+
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: "assistant", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      thinking: { type: "disabled" },
     });
+
+    const fullResponse = completion.choices[0]?.message?.content;
+
+    if (!fullResponse) {
+      return NextResponse.json(
+        { error: "AI tidak bisa menjelaskan produk ini" },
+        { status: 500 }
+      );
+    }
+
+    const separator = "---";
+    const parts = fullResponse.split(separator);
+    const explanation = parts[0]?.trim() || fullResponse;
+    const outfitTips = parts[1]?.trim() || "";
+
+    return NextResponse.json({ explanation, outfitTips });
   } catch (err) {
     console.error("[api/ai-explain] Error:", err);
     return NextResponse.json(
