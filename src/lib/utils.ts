@@ -20,6 +20,37 @@ export function slugify(text: string): string {
 }
 
 /**
+ * Product Slug — buat URL produk pendek + SEO friendly.
+ * Ambil 4 kata pertama dari nama + 8 karakter pertama dari ID.
+ *
+ * "Havana Sepatu Sneakers Tali Simpel Kulit Wanita Korea" + "cmra2vybf0006l404k9asi7ms"
+ * → "havana-sepatu-sneakers-tali-cmra2vyb"
+ *
+ * Backwards compatible: URL lama (full ID) tetap jalan.
+ */
+export function productSlug(name: string, id: string): string {
+  const words = slugify(name).split("-").slice(0, 4).join("-");
+  const shortId = id.slice(0, 8);
+  return `${words}-${shortId}`;
+}
+
+/**
+ * Extract full product ID dari URL slug.
+ * "havana-sepatu-sneakers-tali-cmra2vyb" → cari produk yang ID-nya start dengan "cmra2vyb"
+ * Kalau slug = full ID (URL lama), return langsung.
+ */
+export function extractProductId(slug: string): string {
+  // Kalau slug = full ID (25+ karakter, format cuid), return langsung
+  if (slug.length >= 20 && /^[a-z0-9]+$/i.test(slug)) {
+    return slug;
+  }
+  // Ambil 8 karakter terakhir setelah dash terakhir
+  const parts = slug.split("-");
+  const shortId = parts[parts.length - 1];
+  return shortId;
+}
+
+/**
  * Detect marketplace dari URL produk.
  * Mendukung: shopee, tokopedia, lazada, blibli, bukalapak, zalora, sociolla,
  * aliexpress, amazon, tiktok.

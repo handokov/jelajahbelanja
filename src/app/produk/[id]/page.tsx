@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
+import { extractProductId } from "@/lib/utils";
 import ProductDetailClient from "./ProductDetailClient";
 import ProductError from "./error";
 
@@ -10,10 +11,24 @@ interface Props {
 
 // React.cache() deduplikasi DB query dalam 1 request
 // Jadi generateMetadata + ProductPage share hasil yang sama, gak query 2x
-const getProduct = cache(async (id: string) => {
+const getProduct = cache(async (slug: string) => {
   try {
-    const dbId = id.startsWith("shopee-") ? id.replace("shopee-", "") : id;
-    return await db.shopeeProduct.findUnique({ where: { id: dbId } });
+    // Extract short ID dari slug
+    const shortId = extractProductId(slug);
+
+    // Coba by full ID dulu (URL lama)
+    let product = await db.shopeeProduct.findUnique({ where: { id: slug } });
+
+    // Kalau tidak ketemu, cari by short ID (startsWith)
+    if (!product && shortId.length >= 8) {
+      const products = await db.shopeeProduct.findMany({
+        where: { id: { startsWith: shortId } },
+        take: 1,
+      });
+      product = products[0] || null;
+    }
+
+    return product;
   } catch (err) {
     console.error("[ProductPage] DB error in getProduct:", err);
     return null;
