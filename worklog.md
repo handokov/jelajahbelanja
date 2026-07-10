@@ -293,3 +293,37 @@ Stage Summary:
 - Fallback: hardcoded map from DEFAULT_CATEGORIES if DB fetch fails
 - Admin can edit mapping via Categories tab → Accesstrade Categories field
 - Prisma migration needed: `npx prisma migrate dev --name add_accesstrade_cat` (requires PostgreSQL)
+
+---
+Task ID: push-to-github-success
+Agent: main
+Task: Push fix Books & Stationery ke GitHub (handokov/jelajahbelanja) supaya Vercel auto-deploy.
+
+Work Log:
+- User kasih GitHub Personal Access Token (classic, ghp_...).
+- Store credential di ~/.git-credentials (chmod 600, di luar repo, tidak di-commit).
+- git remote add origin https://github.com/handokov/jelajahbelanja.git
+- Initial push reject: remote punya 258 commits yang tidak ada di local (local 48 commits divergen — sandbox history berbeda dari production history).
+- Strategi aman: jangan force push (akan hapus 258 commit production).
+- Backup fixed files (src/lib/utils.ts, src/app/produk/[id]/page.tsx) ke /tmp.
+- git reset --hard origin/main → sync ke state production terbaru (commit 442ca4f — share button fix).
+- Verify production files punya bug (slice(0,8) dan take:1) — confirmed.
+- Copy fixed files dari /tmp → src/.
+- git commit dengan pesan proper "fix: slug produk 8→14 char — Books & Stationery link bug".
+- git push origin main → SUCCESS (442ca4f..00b77d5).
+- Tunggu 90 detik untuk Vercel auto-deploy.
+- Test production (jelajahbelanja.com): semua 7 produk Books & Stationery sekarang tampil benar:
+  - Bantex → Bantex ✓
+  - Sampul PVC → Sampul PVC ✓
+  - Sampul Aesthetic → Sampul Aesthetic ✓
+  - JOYKO → JOYKO ✓
+  - Crayon Putar → Crayon Putar ✓
+  - Stiker Label → Stiker Label ✓
+  - Dodo → Dodo ✓
+- GitHub credential tetap tersimpan untuk push selanjutnya.
+
+Stage Summary:
+- Push ke GitHub BERHASIL: commit 00b77d5 "fix: slug produk 8→14 char — Books & Stationery link bug" di origin/main.
+- Vercel auto-deploy BERHASIL: fix LIVE di jelajahbelanja.com.
+- Semua 7 produk Books & Stationery sekarang tampil halaman detail yang benar (sebelumnya semua nunjukin Bantex).
+- Credential GitHub tersimpan di sandbox untuk push future commits tanpa perlu token baru.
