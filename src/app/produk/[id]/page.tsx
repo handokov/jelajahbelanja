@@ -1,7 +1,7 @@
 import { cache } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { extractProductId } from "@/lib/utils";
+import { extractProductId, productSlug, slugify } from "@/lib/utils";
 import ProductDetailClient from "./ProductDetailClient";
 import ProductError from "./error";
 
@@ -9,41 +9,77 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
-// React.cache() deduplikasi DB query dalam 1 request
-// Jadi generateMetadata + ProductPage share hasil yang sama, gak query 2x
+/**
+ * Lookup produk dari URL slug dengan collision-safe matching.
+ *
+ * BUG LAMA: shortId cuma 8 char (timestamp saja). Produk yang di-insert dalam
+ * batch sama (cth: 7 produk Books & Stationery) punya 8-char prefix identik →
+ * findMany({ startsWith, take: 1 }) selalu return produk yang sama (Bantex).
+ * Akibatnya: SEMUA produk di kategori Books & Stationery detail page-nya nge-link
+ * ke "Bantex Buku Tulis".
+ *
+ * FIX:
+ * 1. URL BARU pakai 14-char shortId (0 collision di DB production).
+ * 2. URL LAMA (8-char, sudah di-share / ter-index Google) tetap jalan:
+ *    - findMany tanpa take:1 → ambil SEMUA match
+ *    - Kalau multiple match → disambiguasi pakai title portion di slug
+ *    - Kalau ketemu produk yang benar → redirect ke URL 14-char baru (canonical)
+ */
 const getProduct = cache(async (slug: string) => {
   try {
-    // Extract short ID dari slug
+    // 1. Coba exact match by full ID (URL paling lama: /produk/<full-cuid>)
+    const exact = await db.shopeeProduct.findUnique({ where: { id: slug } });
+    if (exact) return { product: exact, needsRedirect: false };
+
+    // 2. Extract shortId dari slug (bisa 8 atau 14 char)
     const shortId = extractProductId(slug);
+    if (shortId.length < 8) return { product: null, needsRedirect: false };
 
-    // Coba by full ID dulu (URL lama)
-    let product = await db.shopeeProduct.findUnique({ where: { id: slug } });
+    // 3. Cari SEMUA produk yang ID-nya start dengan shortId (tanpa take:1!)
+    const products = await db.shopeeProduct.findMany({
+      where: { id: { startsWith: shortId } },
+    });
 
-    // Kalau tidak ketemu, cari by short ID (startsWith)
-    if (!product && shortId.length >= 8) {
-      const products = await db.shopeeProduct.findMany({
-        where: { id: { startsWith: shortId } },
-        take: 1,
-      });
-      product = products[0] || null;
+    if (products.length === 0) return { product: null, needsRedirect: false };
+
+    // 4. Kalau cuma 1 match → langsung pakai (URL 14-char baru, unik)
+    if (products.length === 1) {
+      return { product: products[0], needsRedirect: true };
     }
 
-    return product;
+    // 5. Multiple matches (URL 8-char lama yang tabrakan) → disambiguasi pakai title.
+    //    Slug format: {slugify-4-kata-pertama-title}-{shortId}
+    //    Jadi title portion = slug tanpa segmen shortId terakhir.
+    const slugParts = slug.split("-");
+    slugParts.pop(); // hapus shortId
+    const slugTitlePart = slugParts.join("-");
+
+    // Cari produk yang slugify(4 kata pertama title)-nya cocok dengan slugTitlePart.
+    // Kalau TIDAK ada yang cocok (URL malformed / title produk sudah diedit) → return null
+    // (404) lebih baik daripada tunjukin produk salah ke user.
+    const matched = products.find((p) => {
+      const productTitleSlug = slugify(p.title).split("-").slice(0, 4).join("-");
+      return productTitleSlug === slugTitlePart;
+    });
+
+    if (!matched) return { product: null, needsRedirect: false };
+    return { product: matched, needsRedirect: true };
   } catch (err) {
     console.error("[ProductPage] DB error in getProduct:", err);
-    return null;
+    return { product: null, needsRedirect: false };
   }
 });
 
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
-  const product = await getProduct(id);
+  const { product } = await getProduct(id);
 
   if (!product) {
     return { title: "Produk tidak ditemukan - JelajahBelanja" };
   }
 
-  const productUrl = `/produk/${id}`;
+  // Canonical URL selalu pakai slug 14-char baru (SEO: hindari duplicate content)
+  const productUrl = `/produk/${productSlug(product.title, product.id)}`;
   const mpLabel =
     product.marketplace
       ? product.marketplace.charAt(0).toUpperCase() + product.marketplace.slice(1)
@@ -87,17 +123,28 @@ export async function generateMetadata({ params }: Props) {
 export default async function ProductPage({ params }: Props) {
   const { id } = await params;
 
-  let product;
+  let result;
   try {
-    product = await getProduct(id);
+    result = await getProduct(id);
   } catch (err) {
     console.error("[ProductPage] DB error fetching product:", err);
     // DB error — tampilkan error boundary daripada crash
     return <ProductError error={new Error("Gagal memuat data produk")} reset={() => {}} />;
   }
 
+  const { product, needsRedirect } = result;
+
   if (!product) {
     notFound();
+  }
+
+  // Redirect URL lama (8-char shortId / full ID) ke URL baru (14-char shortId).
+  // Ini fix shared links yang sudah tersebar + SEO canonical.
+  if (needsRedirect) {
+    const newSlug = productSlug(product.title, product.id);
+    if (id !== newSlug) {
+      redirect(`/produk/${newSlug}`);
+    }
   }
 
   // Get related products (same category, excluding current)

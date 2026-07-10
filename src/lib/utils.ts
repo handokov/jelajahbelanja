@@ -21,30 +21,40 @@ export function slugify(text: string): string {
 
 /**
  * Product Slug — buat URL produk pendek + SEO friendly.
- * Ambil 4 kata pertama dari nama + 8 karakter pertama dari ID.
+ * Ambil 4 kata pertama dari nama + 14 karakter pertama dari ID.
+ *
+ * Kenapa 14 karakter? Produk yang di-insert dalam batch yang sama (cth: 7 produk
+ * Books & Stationery sekaligus) punya cuid prefix yang panjang sama. 8 karakter
+ * (timestamp saja) HANYA unik per detik → bisa tabrakan untuk produk batch yang sama.
+ * 14 karakter mencakup timestamp + counter + sebagian random → 0 tabrakan di DB production.
  *
  * "Havana Sepatu Sneakers Tali Simpel Kulit Wanita Korea" + "cmra2vybf0006l404k9asi7ms"
- * → "havana-sepatu-sneakers-tali-cmra2vyb"
+ * → "havana-sepatu-sneakers-tali-cmra2vybf0006l4"
  *
- * Backwards compatible: URL lama (full ID) tetap jalan.
+ * Backwards compatible: URL lama (8-char shortId atau full ID) tetap jalan karena
+ * lookup di page.tsx pakai title-disambiguation kalau ada multiple matches.
  */
 export function productSlug(name: string, id: string): string {
   const words = slugify(name).split("-").slice(0, 4).join("-");
-  const shortId = id.slice(0, 8);
+  const shortId = id.slice(0, 14);
   return `${words}-${shortId}`;
 }
 
 /**
- * Extract full product ID dari URL slug.
- * "havana-sepatu-sneakers-tali-cmra2vyb" → cari produk yang ID-nya start dengan "cmra2vyb"
- * Kalau slug = full ID (URL lama), return langsung.
+ * Extract short ID dari URL slug.
+ * "havana-sepatu-sneakers-tali-cmra2vybf0006l4" → "cmra2vybf0006l4" (14 char, URL baru)
+ * "havana-sepatu-sneakers-tali-cmra2vyb"       → "cmra2vyb"          (8 char, URL lama)
+ * "cmra2vybf0006l404k9asi7ms"                   → full ID            (URL lama, no title)
+ *
+ * Kalau slug = full ID (20+ karakter, format cuid), return langsung.
+ * Kalau slug = title-shortId, ambil segmen terakhir setelah dash terakhir.
  */
 export function extractProductId(slug: string): string {
-  // Kalau slug = full ID (25+ karakter, format cuid), return langsung
+  // Kalau slug = full ID (20+ karakter, format cuid), return langsung
   if (slug.length >= 20 && /^[a-z0-9]+$/i.test(slug)) {
     return slug;
   }
-  // Ambil 8 karakter terakhir setelah dash terakhir
+  // Ambil segmen terakhir setelah dash terakhir (bisa 8 atau 14 char tergantung umur URL)
   const parts = slug.split("-");
   const shortId = parts[parts.length - 1];
   return shortId;
