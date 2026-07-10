@@ -11,6 +11,54 @@
 
 ---
 
+## 🚀 GITHUB PUSH SETUP (WAJIB BACA DI SETIAP SESSION)
+
+**Sandbox ini BISA push langsung ke GitHub production.** Setup sudah permanen:
+
+### Credential Storage
+- File: `~/.git-credentials` (chmod 600, di luar repo, TIDAK di-commit)
+- Format: `https://handokov:<GHP_TOKEN>@github.com`
+- Git remote: `origin → https://github.com/handokov/jelajahbelanja.git`
+- Helper: `git config --global credential.helper store`
+
+### Cara Push (LANGKAH WAJIB)
+```bash
+# 1. SEBELUM push: SELALU sync ke production dulu (jangan force push!)
+git fetch origin
+git reset --hard origin/main    # sync ke state production terbaru
+
+# 2. Apply fix/perubahan di file yang relevan
+#    (jangan copy seluruh sandbox state — bisa bentrok dengan 258+ commit production)
+
+# 3. Commit dengan pesan proper (bukan UUID)
+git add <file1> <file2>
+git commit -m "fix/feat: deskripsi singkat perubahan"
+
+# 4. Push ke GitHub → Vercel auto-deploy dalam 1-2 menit
+git push origin main
+```
+
+### ⚠️ JANGAN DILAKUKAN
+- ❌ `git push --force` → akan HAPUS 258+ commit production
+- ❌ Push tanpa `git reset --hard origin/main` dulu → akan reject (divergen history)
+- ❌ Commit dengan UUID message → susah track di Vercel dashboard
+- ❌ Hapus `~/.git-credentials` → push akan gagal
+
+### Verifikasi Push Berhasil
+```bash
+git fetch origin
+git log origin/main -1 --format="%h %s"   # harus nunjukin commit kita
+```
+Lalu test production: `curl -sL https://www.jelajahbelanja.com/...`
+
+### Token Info
+- Type: GitHub Personal Access Token (classic)
+- Scope: `repo` (full control of private repositories)
+- Expiration: ~30 days (regenerate kalau expired)
+- Active tokens di GitHub: `jb-sandbox-dev`, `jelajahbelanja-push` (lihat github.com/settings/tokens)
+
+---
+
 ## 🔐 KREDENSIAL
 
 ### Cloudinary
