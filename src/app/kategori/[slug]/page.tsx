@@ -2,6 +2,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { ensureCategoriesSeeded, ensureAffiliateTagsSeeded } from "@/lib/seed";
+import { slugify } from "@/lib/utils";
 import CategoryPageClient from "./CategoryPageClient";
 
 interface Props {
@@ -12,24 +13,22 @@ interface Props {
 const getCategory = cache(async (slug: string) => {
   try {
     await ensureCategoriesSeeded();
-    // Slug = category ID atau slugified name
-    // Coba by ID dulu
+
+    // Coba by ID dulu (backwards compatible dengan URL lama)
     let category = await db.category.findUnique({ where: { id: slug } });
-    // Kalau tidak ketemu, coba cari by name (slugified)
+
+    // Kalau tidak ketemu by ID, cari by slug (dari nama kategori)
     if (!category) {
       const allCats = await db.category.findMany({ where: { enabled: true } });
       category = allCats.find(c => slugify(c.name) === slug) || null;
     }
+
     return category;
   } catch (err) {
     console.error("[CategoryPage] DB error:", err);
     return null;
   }
 });
-
-function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
 
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
@@ -49,6 +48,7 @@ export async function generateMetadata({ params }: Props) {
 }
 
 // Generate static params untuk kategori yang enabled (SEO + performance)
+// Pakai slug (dari nama) bukan ID
 export async function generateStaticParams() {
   try {
     await ensureCategoriesSeeded();
@@ -56,8 +56,8 @@ export async function generateStaticParams() {
       where: { enabled: true },
       select: { id: true, name: true },
     });
-    // Pakai ID sebagai slug (lebih stabil daripada name yang bisa berubah)
-    return categories.map(c => ({ slug: c.id }));
+    // Generate slug untuk tiap kategori
+    return categories.map(c => ({ slug: slugify(c.name) }));
   } catch {
     return [];
   }

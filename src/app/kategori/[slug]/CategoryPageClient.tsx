@@ -7,6 +7,7 @@ import { LogoBar, HeroSection, SortFilterBar, FlashSaleSection, ProductsGrid, Si
 import { CategoryChips } from "@/components/home/category-chips";
 import { BackToTop } from "@/components/back-to-top";
 import { RecentlyViewed } from "@/components/recently-viewed";
+import { slugify } from "@/lib/utils";
 
 interface Props {
   category: {
@@ -103,7 +104,11 @@ export default function CategoryPageClient({ category, allCategories }: Props) {
           categories={allCategories}
           activeCategory={category.id}
           onCategoryChange={(id) => {
-            window.location.href = `/kategori/${id}`;
+            // Navigasi ke halaman kategori lain pakai slug
+            const cat = allCategories.find(c => c.id === id);
+            if (cat) {
+              window.location.href = `/kategori/${slugify(cat.name)}`;
+            }
           }}
           isLoading={false}
         />

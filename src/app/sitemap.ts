@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { MetadataRoute } from "next";
+import { slugify } from "@/lib/utils";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.jelajahbelanja.com";
 
@@ -26,7 +27,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       orderBy: { order: "asc" },
     });
     categoryPages = cats.map(c => ({
-      url: `${SITE_URL}/kategori/${c.id}`,
+      url: `${SITE_URL}/kategori/${slugify(c.name)}`,
       lastModified: c.updatedAt,
       changeFrequency: "daily" as const,
       priority: 0.8,
