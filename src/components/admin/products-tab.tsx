@@ -35,6 +35,7 @@ import {
   Checkbox,
   Square,
   CheckSquare,
+  FolderInput,
   AlertTriangle,
   Filter,
   Zap,
@@ -72,6 +73,8 @@ export function ProductsTab() {
   const [filterDeleteMarketplace, setFilterDeleteMarketplace] = React.useState("");
   const [filterDeleteOlderDays, setFilterDeleteOlderDays] = React.useState("");
   const [deleteConfirmText, setDeleteConfirmText] = React.useState("");
+  const [showBulkMoveCategory, setShowBulkMoveCategory] = React.useState(false);
+  const [bulkMoveCategory, setBulkMoveCategory] = React.useState("");
 
   // ─── Queries ───
   const { data: categoriesData } = useQuery({
@@ -576,6 +579,15 @@ export function ProductsTab() {
               <Button
                 size="sm"
                 variant="outline"
+                className="text-xs border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-400"
+                onClick={() => setShowBulkMoveCategory(true)}
+              >
+                <FolderInput className="w-3.5 h-3.5 mr-1" />
+                Pindah Kategori
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
                 onClick={handleRefreshSelected}
                 disabled={refreshProgress !== null}
@@ -850,6 +862,64 @@ export function ProductsTab() {
               disabled={deleteConfirmText !== "HAPUS SEMUA" || bulkDeleteMutation.isPending}
             >
               {bulkDeleteMutation.isPending ? "Menghapus..." : "HAPUS SEMUA PRODUK"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Move Category Dialog */}
+      <AlertDialog open={showBulkMoveCategory} onOpenChange={setShowBulkMoveCategory}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pindah {selectedIds.size} Produk ke Kategori?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Pilih kategori tujuan. Semua produk yang dipilih akan dipindahkan ke kategori ini.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Label className="text-xs mb-1 block">Kategori Tujuan</Label>
+            <select
+              value={bulkMoveCategory}
+              onChange={(e) => setBulkMoveCategory(e.target.value)}
+              className="w-full h-9 rounded-md border border-input bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-3 py-1 text-sm shadow-sm"
+            >
+              <option value="">— Pilih Kategori —</option>
+              {(categoriesData ?? []).map((c: any) => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!bulkMoveCategory || selectedIds.size === 0) return;
+                const ids = Array.from(selectedIds);
+                let ok = 0;
+                for (const id of ids) {
+                  try {
+                    const res = await fetch(`/api/shopee-products?id=${id}`, {
+                      method: "PATCH",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_SECRET || ""}`,
+                      },
+                      body: JSON.stringify({ category: bulkMoveCategory }),
+                      credentials: "include",
+                    });
+                    if (res.ok) ok++;
+                  } catch {}
+                }
+                toast({ title: `✅ ${ok} produk dipindahkan ke ${bulkMoveCategory}` });
+                setShowBulkMoveCategory(false);
+                setBulkMoveCategory("");
+                clearSelection();
+                queryClient.invalidateQueries({ queryKey: ["products"] });
+              }}
+              disabled={!bulkMoveCategory}
+              className="bg-violet-600 hover:bg-violet-700"
+            >
+              Pindah {selectedIds.size} Produk
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
