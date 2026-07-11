@@ -278,16 +278,51 @@ export async function getQuicklink(campaignId: number): Promise<ATQuicklink | nu
 /** Map marketplace → campaign ID yang punya quicklink (di-cache saat first fetch) */
 let shopeeCampaignId: number | null = null;
 
-/** Cari campaign Shopee dari affiliated list, return ID-nya */
+/** Cari campaign Shopee utama dari affiliated list, return ID-nya.
+ *
+ * Prioritas (dari listing AT user):
+ * 1. "Shopee ID NON KOL" — campaign utama Shopee Indonesia (reward tertinggi, support custom link)
+ * 2. Campaign yang name-nya START WITH "Shopee" (bukan "Dario CPS Shopee" dll yang itu sub-campaign merchant)
+ * 3. Campaign dengan reward tertinggi yang marketplace=shopee
+ *
+ * Bug lama: find(c => name.includes("shopee")) → return "Dario CPS Shopee" (sub-campaign, reward 1)
+ * → custom link API gagal karena bukan campaign utama.
+ */
 async function findShopeeCampaignId(): Promise<number | null> {
   if (shopeeCampaignId !== null) return shopeeCampaignId;
   try {
     const campaigns = await getAffiliatedCampaigns();
-    const shopeeCampaign = campaigns.find(c => {
+    const shopeeCampaigns = campaigns.filter(c => {
       const name = (c.name || "").toLowerCase();
       return name.includes("shopee");
     });
-    shopeeCampaignId = shopeeCampaign?.id || null;
+
+    if (shopeeCampaigns.length === 0) return null;
+
+    // 1. Prefer "Shopee ID NON KOL" (campaign utama, exact match)
+    let best = shopeeCampaigns.find(c => {
+      const name = (c.name || "").toLowerCase();
+      return name.includes("non kol") || name.includes("shopee id");
+    });
+
+    // 2. Prefer campaign yang name-nya START WITH "shopee" (bukan "Dario CPS Shopee")
+    if (!best) {
+      best = shopeeCampaigns.find(c => {
+        const name = (c.name || "").toLowerCase().trim();
+        return name.startsWith("shopee");
+      });
+    }
+
+    // 3. Fallback: Shopee campaign dengan reward tertinggi
+    if (!best) {
+      best = shopeeCampaigns.sort((a, b) => {
+        const ra = a.highestRewardSummaries?.[0]?.reward || 0;
+        const rb = b.highestRewardSummaries?.[0]?.reward || 0;
+        return rb - ra;
+      })[0];
+    }
+
+    shopeeCampaignId = best?.id || null;
     return shopeeCampaignId;
   } catch {
     return null;
@@ -367,6 +402,14 @@ interface ATCustomCreativeResponse {
   content: ATCustomCreative[];
 }
 
+/** Error message dari createCustomCreative call terakhir (untuk debugging API response) */
+let lastCreateCustomError: string | null = null;
+
+/** Dapat error message terakhir dari createCustomCreative (untuk API response yang lebih informatif) */
+export function getLastCreateCustomError(): string | null {
+  return lastCreateCustomError;
+}
+
 /**
  * Create Custom Creative di AccessTrade — bikin short link atid.me/go/xxx
  * untuk produk spesifik. Lebih baik dari quicklink karena:
@@ -430,11 +473,14 @@ export async function createCustomCreative(
     const creative = result.content?.[0];
     if (!creative?.affiliateLink) {
       console.error("[AT createCustomCreative] No affiliateLink in response:", JSON.stringify(result).slice(0, 200));
+      lastCreateCustomError = "AT API return response tanpa affiliateLink";
       return null;
     }
     return creative;
   } catch (err) {
-    console.error("[AT createCustomCreative] Failed:", err instanceof Error ? err.message : String(err));
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("[AT createCustomCreative] Failed:", errMsg);
+    lastCreateCustomError = errMsg;
     return null;
   }
 }

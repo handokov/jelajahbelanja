@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { batchCreateCustomCreative, createCustomCreative, type BatchCustomLinkItem } from "@/lib/accesstrade";
+import { batchCreateCustomCreative, createCustomCreative, getLastCreateCustomError, type BatchCustomLinkItem } from "@/lib/accesstrade";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 menit (Vercel Pro) / 60s (free) — batch 120 produk × 0.5s = 60s
@@ -46,10 +46,12 @@ export async function POST(req: NextRequest) {
       const creative = await createCustomCreative(url, safeName, imageUrl);
 
       if (!creative) {
+        const detail = getLastCreateCustomError();
         return NextResponse.json(
           {
             success: false,
-            error: "Gagal generate custom link. Pastikan URL Shopee valid & AT credentials ter-set.",
+            error: "Gagal generate custom link",
+            detail: detail || "URL tidak valid, AT credentials bermasalah, atau campaign tidak support custom creative",
           },
           { status: 422 }
         );
