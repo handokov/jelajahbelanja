@@ -472,8 +472,9 @@ export async function createCustomCreative(
     const result = await atPostFetch<ATCustomCreativeResponse>(path, body);
     const creative = result.content?.[0];
     if (!creative?.affiliateLink) {
-      console.error("[AT createCustomCreative] No affiliateLink in response:", JSON.stringify(result).slice(0, 200));
-      lastCreateCustomError = "AT API return response tanpa affiliateLink";
+      const respStr = JSON.stringify(result).slice(0, 500);
+      console.error("[AT createCustomCreative] No affiliateLink in response:", respStr);
+      lastCreateCustomError = `AT response: ${respStr}`;
       return null;
     }
     return creative;
