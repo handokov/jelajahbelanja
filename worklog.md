@@ -388,3 +388,34 @@ Stage Summary:
 - Flow baru: scrape 30 produk → upload CSV → klik "Auto-generate AT Custom Links"
   → sistem call AT API × 30 (~15 detik) → affiliateUrl terisi → Upload Produk.
   Dari sebelumnya 15-20 menit manual jadi ~20 detik otomatis.
+
+---
+Task ID: at-custom-link-fix-response-parse
+Agent: main
+Task: Fix AT custom link generation yang gagal padahal API berhasil.
+
+Work Log:
+- Test production: API return "AT response tanpa affiliateLink"
+- Tambah debug logging: log full AT API response
+- Test lagi: response menunjukkan AT API BERHASIL generate link!
+  {"id":1284830,"name":"...","affiliateLink":"https://atid.me/go/bZpcVEHm",...}
+- Root cause: code expect format { content: [{ affiliateLink }] } (dari docs global)
+  tapi AT Indonesia return object langsung { id, name, affiliateLink, ... }
+- Fix: parse kedua format. Kalau result.affiliateLink ada langsung → pakai itu.
+  Kalau result.content array → pakai content[0].
+- Test production single: BERHASIL → atid.me/go/pClrPBo9 ✓
+- Test production batch (3 produk): BERHASIL → 3/3 sukses ✓
+  - Daster Cotton → atid.me/go/gCDBEOBE
+  - Daster EMO Kelinci → atid.me/go/gi0fmZqa
+  - URL test → atid.me/go/lOSguJnx
+- Commits: f8eae25 (debug log), fc2f6a8 (fix parse)
+
+Stage Summary:
+- AT Custom Link auto-generate SUDAH JALAN di production.
+- Single mode: ✓ (1 produk → atid.me/go/xxx)
+- Batch mode: ✓ (3 produk sekaligus → 3 atid.me/go/xxx)
+- Rate limit: 0.5s per request → 30 produk ≈ 15 detik.
+- Campaign yang dipakai: "Shopee ID NON KOL" (id: 966) — campaign utama Shopee.
+- Sub ID tracking: sub1=jb (untuk tracking di AT dashboard).
+- Flow: scrape 30 produk → upload CSV → klik "Auto-generate AT Custom Links"
+  → tunggu ~15 detik → affiliateUrl terisi → Upload Produk.
