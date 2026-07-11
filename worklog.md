@@ -327,3 +327,64 @@ Stage Summary:
 - Vercel auto-deploy BERHASIL: fix LIVE di jelajahbelanja.com.
 - Semua 7 produk Books & Stationery sekarang tampil halaman detail yang benar (sebelumnya semua nunjukin Bantex).
 - Credential GitHub tersimpan di sandbox untuk push future commits tanpa perlu token baru.
+
+---
+Task ID: at-custom-link-auto
+Agent: main
+Task: Otomatisasi pembuatan AT Custom Link (atid.me/go/xxx) supaya user tidak perlu manual di AT dashboard × 30 produk per batch scrape.
+
+Work Log:
+- Riset AT API: POST /v1/publishers/me/sites/{siteId}/campaigns/{campaignId}/creatives/custom
+  Request: { landingUrl (wajib), name, imageUrl?, anchorText?, subIds? }
+  Response: { content: [{ affiliateLink: "atid.me/go/xxx", ... }] }
+- Implementasi di 4 file:
+  1. src/lib/accesstrade.ts:
+     - Tambah atPostFetch() — POST version of atFetch dengan JWT auth + rate limit
+     - Tambah createCustomCreative(landingUrl, name, imageUrl?) — single generate
+       - Validasi: URL harus Shopee (https://shopee.co.id/...)
+       - Skip kalau sudah atid.me
+       - Name: max 50 char (AT form limit)
+       - Sub ID: sub1=jb untuk tracking source
+     - Tambah batchCreateCustomCreative(items, onProgress) — batch generate
+       dengan callback progress
+  2. src/app/api/at-custom-link/route.ts (BARU):
+     - POST /api/at-custom-link
+     - Mode 'single': { mode, url, name, imageUrl? } → { success, affiliateUrl }
+     - Mode 'batch': { mode, items: [{url, name, imageUrl?}] } → { success, total, successCount, failedCount, results }
+     - Max 200 per batch, maxDuration 300s
+     - Protected by middleware (admin auth)
+  3. src/middleware.ts: tambah /api/at-custom-link ke PROTECTED_API_PATTERNS (POST)
+  4. src/components/bulk-upload-tab.tsx:
+     - Tambah csvField() helper (CSV serialization dengan proper quoting)
+     - Tambah state atLinkGen (running, done, total, successCount, failedCount, errors)
+     - Tambah handleAutoGenerateAtLinks():
+       - Baca CSV → parse semua row
+       - Filter: hanya Shopee URL yang belum punya affiliateUrl (skip atid.me/shope.ee)
+       - Call /api/at-custom-link batch mode
+       - Patch CSV in-memory: isi affiliateUrl untuk yang success
+       - Rebuild CSV File object → setCsvFile → preview auto-update
+     - Tambah tombol "Auto-generate AT Custom Links" (Sparkles icon, violet border)
+       di sebelah tombol Upload Produk. Muncul setelah CSV di-upload.
+     - Tambah progress card: progress bar, success/failed count, error details (expandable)
+     - Reset atLinkGen di handleReset
+- Testing local:
+  - API route compiles: GET 405, POST without auth 401, POST with auth 400 (invalid mode), POST single 422 (AT creds not set local)
+  - Admin UI: login → Upload Massal tab → JB Upload mode → drop zone + tombol visible
+  - Lint: bersih (7 errors pre-existing di unrelated files)
+- Push ke GitHub: commit dff0f96 → d679122..dff0f96 main → main BERHASIL
+- Vercel deploy: 90 detik → LIVE
+- Test production:
+  - POST /api/at-custom-link (no auth) → 401 ✓
+  - POST /api/at-custom-link (with admin cookie) → 200 ✓
+  - Login production admin: success ✓
+  - AT credentials check: USER_UID 32 chars ✓, SECRET_KEY 31 chars ✗ (expected 32)
+  - Generate custom link: gagal karena SECRET_KEY di DB production truncated 1 char
+
+Stage Summary:
+- Feature code LIVE di production. API endpoint jalan. Admin UI jalan.
+- BLOCKER: SECRET_KEY di production DB (Setting table) cuma 31 chars, harusnya 32.
+  User perlu re-enter SECRET_KEY yang benar di admin AT Sync tab → AT Credentials.
+  Setelah itu, auto-generate custom link akan jalan.
+- Flow baru: scrape 30 produk → upload CSV → klik "Auto-generate AT Custom Links"
+  → sistem call AT API × 30 (~15 detik) → affiliateUrl terisi → Upload Produk.
+  Dari sebelumnya 15-20 menit manual jadi ~20 detik otomatis.
