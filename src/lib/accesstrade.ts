@@ -94,6 +94,33 @@ async function atFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// ─── POST version of atFetch (for Create Custom Creative endpoint) ───
+async function atPostFetch<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  await rateLimit();
+  const creds = await getCreds();
+  const url = creds.API_BASE + path;
+  const jwt = await generateJwt();
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      "X-Accesstrade-User-Type": "publisher",
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "User-Agent": "jb-sync/1.0",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`AT API ${res.status}: ${text.slice(0, 300)}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 // ─── Types ───
 export interface ATCampaign {
   id: number;
@@ -320,4 +347,151 @@ export async function generateAffiliateUrl(productUrl: string, marketplace: stri
   }
   // Marketplace lain: return null (tidak ada quicklink available)
   return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Create Custom Creative — AT API untuk bikin custom link (atid.me/go/xxx)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface ATCustomCreative {
+  id: number;
+  name: string;
+  affiliateLink: string;        // ← short link atid.me/go/xxx
+  landingUrl: string;           // ← URL asli produk
+  imageUrl: string | null;
+  createdOn: string;
+}
+
+interface ATCustomCreativeResponse {
+  totalItems: number;
+  content: ATCustomCreative[];
+}
+
+/**
+ * Create Custom Creative di AccessTrade — bikin short link atid.me/go/xxx
+ * untuk produk spesifik. Lebih baik dari quicklink karena:
+ * - Tracking per produk (di AT dashboard kelihatan klik per custom link)
+ * - URL pendek (atid.me/go/xxx) vs quicklink+?url= (panjang)
+ * - Bisa kasih name untuk identify di AT dashboard
+ *
+ * API: POST /v1/publishers/me/sites/{siteId}/campaigns/{campaignId}/creatives/custom
+ *
+ * @param landingUrl  Full URL produk (WAJIB, cth: https://shopee.co.id/product-xxx)
+ * @param name        Label untuk identify di AT dashboard (cth: "Dress Anak Frozen")
+ * @param imageUrl    Optional — image produk untuk AT creative preview
+ * @returns           Short link atid.me/go/xxx atau null kalau gagal
+ */
+export async function createCustomCreative(
+  landingUrl: string,
+  name: string,
+  imageUrl?: string
+): Promise<ATCustomCreative | null> {
+  if (!landingUrl) return null;
+
+  // Validasi: harus URL Shopee ( Accepted URL format di AT form )
+  const lowerUrl = landingUrl.toLowerCase();
+  const isShopeeUrl =
+    lowerUrl.startsWith("https://shopee.co.id") ||
+    lowerUrl.startsWith("https://mall.shopee.co.id") ||
+    lowerUrl.startsWith("https://shope.ee") ||
+    lowerUrl.startsWith("https://id.shp.ee") ||
+    lowerUrl.startsWith("https://s.shopee.co.id");
+
+  if (!isShopeeUrl) return null;
+
+  // Kalau sudah atid.me, skip — sudah custom link
+  if (lowerUrl.includes("atid.me")) return null;
+
+  try {
+    // Cari campaign Shopee
+    const campaignId = await findShopeeCampaignId();
+    if (!campaignId) {
+      console.error("[AT createCustomCreative] Shopee campaign not found");
+      return null;
+    }
+
+    const creds = await getCreds();
+    const path = `/v1/publishers/me/sites/${creds.SITE_ID}/campaigns/${campaignId}/creatives/custom?countryCode=${creds.COUNTRY_CODE}`;
+
+    // Name: max 50 char (AT form limit) — potong judul produk kalau kepanjangan
+    const safeName = (name || "").trim().slice(0, 50) || "JB Product";
+
+    const body: Record<string, unknown> = {
+      landingUrl,
+      name: safeName,
+      anchorText: "",
+      subIds: [
+        { label: "source", value: "jb", name: "source" },
+      ],
+    };
+    if (imageUrl) body.imageUrl = imageUrl;
+
+    const result = await atPostFetch<ATCustomCreativeResponse>(path, body);
+    const creative = result.content?.[0];
+    if (!creative?.affiliateLink) {
+      console.error("[AT createCustomCreative] No affiliateLink in response:", JSON.stringify(result).slice(0, 200));
+      return null;
+    }
+    return creative;
+  } catch (err) {
+    console.error("[AT createCustomCreative] Failed:", err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+
+/**
+ * Batch generate custom creative untuk multiple produk sekaligus.
+ * Rate limit AT: 0.5s per request → 30 produk ≈ 15 detik, 120 produk ≈ 60 detik.
+ *
+ * @param items  Array of { url, name, imageUrl? }
+ * @param onProgress  Callback untuk update progress UI (optional)
+ * @returns       Array of { index, url, name, success, affiliateUrl?, error? }
+ */
+export interface BatchCustomLinkItem {
+  url: string;
+  name: string;
+  imageUrl?: string;
+}
+
+export interface BatchCustomLinkResult {
+  index: number;
+  url: string;
+  name: string;
+  success: boolean;
+  affiliateUrl?: string;
+  error?: string;
+}
+
+export async function batchCreateCustomCreative(
+  items: BatchCustomLinkItem[],
+  onProgress?: (done: number, total: number, lastResult: BatchCustomLinkResult) => void
+): Promise<BatchCustomLinkResult[]> {
+  const results: BatchCustomLinkResult[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const result: BatchCustomLinkResult = {
+      index: i,
+      url: item.url,
+      name: item.name,
+      success: false,
+    };
+
+    try {
+      const creative = await createCustomCreative(item.url, item.name, item.imageUrl);
+      if (creative) {
+        result.success = true;
+        result.affiliateUrl = creative.affiliateLink;
+      } else {
+        result.error = "Gagal generate (URL tidak valid atau AT API error)";
+      }
+    } catch (err) {
+      result.error = err instanceof Error ? err.message : String(err);
+    }
+
+    results.push(result);
+    onProgress?.(i + 1, items.length, result);
+  }
+
+  return results;
 }

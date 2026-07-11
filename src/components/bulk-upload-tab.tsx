@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Upload, FileText, CheckCircle2, XCircle, Download, Loader2, AlertCircle, ArrowRightLeft, RefreshCw } from "lucide-react";
+import { Upload, FileText, CheckCircle2, XCircle, Download, Loader2, AlertCircle, ArrowRightLeft, RefreshCw, Sparkles, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { buildAtCategoryMap, mapAtCategory } from "@/lib/at-category-map";
@@ -79,6 +79,16 @@ function parseCsvLineWithDelimiter(line: string, delimiter: string): string[] {
 // Legacy: comma-only parser (dipakai JB upload)
 function parseCsvLine(line: string): string[] {
   return parseCsvLineWithDelimiter(line, ",");
+}
+
+// Serialize cell ke CSV-safe field: quote + escape quotes kalau mengandung comma/quote/newline
+function csvField(value: string): string {
+  if (value == null) return "";
+  const s = String(value);
+  if (/[",\n\r]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
 }
 
 function parseCsvText(text: string): string[][] {
@@ -301,6 +311,18 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
   // AT convert mode: "preview" = konversi dulu lihat preview, "streaming" = langsung convert+upload
   const [atConvertMode, setAtConvertMode] = React.useState<AtConvertMode>("preview");
 
+  // AT Custom Link generation state (auto-generate atid.me/go/xxx untuk produk di CSV)
+  const [atLinkGen, setAtLinkGen] = React.useState<{
+    running: boolean;
+    done: number;
+    total: number;
+    successCount: number;
+    failedCount: number;
+    lastProduct: string;
+    errors: string[];
+    finished: boolean;
+  } | null>(null);
+
   // ============================================================
   // JB Upload logic
   // ============================================================
@@ -340,6 +362,198 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
   }, [handleFile]);
+
+  // ─── Auto-generate AT Custom Links (atid.me/go/xxx) untuk produk di CSV ───
+  // Baca CSV → untuk tiap row yang BELUM punya affiliateUrl → call AT API → dapat short link
+  // → replace CSV in-memory (csvFile) supaya tombol Upload pick up affiliateUrls baru.
+  const handleAutoGenerateAtLinks = React.useCallback(async () => {
+    if (!csvFile) return;
+    setAtLinkGen({
+      running: true,
+      done: 0,
+      total: 0,
+      successCount: 0,
+      failedCount: 0,
+      lastProduct: "",
+      errors: [],
+      finished: false,
+    });
+
+    try {
+      const text = await csvFile.text();
+      const lines = text.split("\n").filter((l) => l.trim());
+      if (lines.length < 2) {
+        setAtLinkGen({
+          running: false,
+          done: 0,
+          total: 0,
+          successCount: 0,
+          failedCount: 0,
+          lastProduct: "CSV kosong / tidak ada data row",
+          errors: [],
+          finished: true,
+        });
+        return;
+      }
+
+      const headers = parseCsvLine(lines[0]);
+      const urlIdx = headers.findIndex((h) => h.toLowerCase() === "url");
+      const titleIdx = headers.findIndex((h) => h.toLowerCase() === "title");
+      const affIdx = headers.findIndex((h) => h.toLowerCase() === "affiliateurl");
+      const imageIdx = headers.findIndex((h) => h.toLowerCase() === "image");
+
+      if (urlIdx === -1 || titleIdx === -1) {
+        setAtLinkGen({
+          running: false,
+          done: 0,
+          total: 0,
+          successCount: 0,
+          failedCount: 0,
+          lastProduct: "CSV tidak punya kolom 'url' atau 'title'",
+          errors: ["Pastikan CSV punya header: title,url,image,...,affiliateUrl,notes"],
+          finished: true,
+        });
+        return;
+      }
+      if (affIdx === -1) {
+        setAtLinkGen({
+          running: false,
+          done: 0,
+          total: 0,
+          successCount: 0,
+          failedCount: 0,
+          lastProduct: "CSV tidak punya kolom 'affiliateUrl'",
+          errors: ["Tambahkan kolom 'affiliateUrl' di CSV (boleh kosong)"],
+          finished: true,
+        });
+        return;
+      }
+
+      // Parse semua row → kumpulkan yang perlu di-generate (Shopee URL, belum ada affiliateUrl)
+      interface RowTask {
+        lineIdx: number;       // index di lines array
+        url: string;
+        name: string;
+        imageUrl?: string;
+      }
+      const tasks: RowTask[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cells = parseCsvLine(lines[i]);
+        const url = (cells[urlIdx] || "").trim();
+        const name = (cells[titleIdx] || "").trim();
+        const existingAff = (cells[affIdx] || "").trim();
+        const imageUrl = imageIdx !== -1 ? (cells[imageIdx] || "").trim() : "";
+
+        // Skip kalau URL kosong atau bukan Shopee
+        if (!url || !url.toLowerCase().includes("shopee.co.id")) continue;
+        // Skip kalau sudah punya affiliateUrl (atid.me atau shope.ee)
+        if (existingAff && (existingAff.includes("atid.me") || existingAff.includes("shope.ee"))) continue;
+
+        tasks.push({ lineIdx: i, url, name, imageUrl: imageUrl || undefined });
+      }
+
+      if (tasks.length === 0) {
+        setAtLinkGen({
+          running: false,
+          done: 0,
+          total: 0,
+          successCount: 0,
+          failedCount: 0,
+          lastProduct: "Tidak ada produk Shopee yang perlu di-generate (semua sudah punya link atau bukan Shopee)",
+          errors: [],
+          finished: true,
+        });
+        return;
+      }
+
+      // Update total
+      setAtLinkGen({
+        running: true,
+        done: 0,
+        total: tasks.length,
+        successCount: 0,
+        failedCount: 0,
+        lastProduct: `Memulai generate ${tasks.length} custom link...`,
+        errors: [],
+        finished: false,
+      });
+
+      // Call API batch
+      const res = await fetch("/api/at-custom-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "batch",
+          items: tasks.map((t) => ({ url: t.url, name: t.name, imageUrl: t.imageUrl })),
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const results: Array<{
+        index: number;
+        url: string;
+        name: string;
+        success: boolean;
+        affiliateUrl?: string;
+        error?: string;
+      }> = data.results || [];
+
+      // Patch lines: isi affiliateUrl untuk yang success
+      let successCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+      for (const r of results) {
+        const task = tasks[r.index];
+        if (!task) continue;
+        if (r.success && r.affiliateUrl) {
+          // Re-parse line, set affIdx, re-serialize
+          const cells = parseCsvLine(lines[task.lineIdx]);
+          cells[affIdx] = r.affiliateUrl;
+          lines[task.lineIdx] = cells.map(csvField).join(",");
+          successCount++;
+        } else {
+          failedCount++;
+          errors.push(`"${task.name.slice(0, 30)}": ${r.error || "unknown error"}`);
+        }
+      }
+
+      // Rebuild CSV file
+      const newCsvText = lines.join("\n");
+      const newCsvBlob = new Blob([newCsvText], { type: "text/csv;charset=utf-8" });
+      const newCsvFile = new File([newCsvBlob], csvFile.name, { type: "text/csv" });
+      setCsvFile(newCsvFile);
+
+      // Re-parse preview supaya tampilan ke-update
+      parseCsvForPreview(newCsvText);
+
+      setAtLinkGen({
+        running: false,
+        done: tasks.length,
+        total: tasks.length,
+        successCount,
+        failedCount,
+        lastProduct: `Selesai: ${successCount} berhasil, ${failedCount} gagal`,
+        errors,
+        finished: true,
+      });
+    } catch (err) {
+      setAtLinkGen({
+        running: false,
+        done: 0,
+        total: 0,
+        successCount: 0,
+        failedCount: 0,
+        lastProduct: `Error: ${err instanceof Error ? err.message : String(err)}`,
+        errors: [err instanceof Error ? err.message : String(err)],
+        finished: true,
+      });
+    }
+  }, [csvFile, parseCsvForPreview]);
 
   // Batch upload for JB CSV
   const handleJbUpload = React.useCallback(async () => {
@@ -425,6 +639,7 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
     setCsvHeaders([]);
     setResult(null);
     setBatchProgress(null);
+    setAtLinkGen(null);
   }, []);
 
   // ============================================================
@@ -1057,8 +1272,8 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                 </table>
               </div>
 
-              <div className="flex gap-2">
-                <Button onClick={handleJbUpload} disabled={uploading} className="gap-1.5">
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleJbUpload} disabled={uploading || atLinkGen?.running} className="gap-1.5">
                   {uploading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -1071,10 +1286,102 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
                     </>
                   )}
                 </Button>
-                <Button variant="outline" onClick={handleReset} disabled={uploading}>
+                <Button
+                  variant="outline"
+                  onClick={handleAutoGenerateAtLinks}
+                  disabled={uploading || atLinkGen?.running}
+                  className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-900/20"
+                  title="Generate short link atid.me/go/xxx otomatis untuk semua produk Shopee di CSV yang belum punya affiliate URL"
+                >
+                  {atLinkGen?.running ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generate AT Link...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Auto-generate AT Custom Links
+                    </>
+                  )}
+                </Button>
+                <Button variant="outline" onClick={handleReset} disabled={uploading || atLinkGen?.running}>
                   Batal
                 </Button>
               </div>
+
+              {/* AT Custom Link generation progress */}
+              {atLinkGen && (
+                <div className={cn(
+                  "rounded-xl border p-3 space-y-2",
+                  atLinkGen.finished
+                    ? atLinkGen.failedCount > 0
+                      ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-900/20"
+                      : "border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-900/20"
+                    : "border-violet-200 bg-violet-50 dark:border-violet-900/50 dark:bg-violet-900/20"
+                )}>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 font-semibold">
+                      {atLinkGen.running ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Generating AT custom links...</>
+                      ) : atLinkGen.finished ? (
+                        <>
+                          {atLinkGen.failedCount > 0 ? <AlertCircle className="w-4 h-4 text-amber-600" /> : <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                          {atLinkGen.lastProduct}
+                        </>
+                      ) : null}
+                    </div>
+                    {atLinkGen.total > 0 && (
+                      <span className="text-xs font-mono">
+                        {atLinkGen.done}/{atLinkGen.total}
+                      </span>
+                    )}
+                  </div>
+
+                  {atLinkGen.total > 0 && (
+                    <div className="w-full bg-violet-200 dark:bg-violet-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-violet-500 h-full rounded-full transition-all duration-300"
+                        style={{ width: `${atLinkGen.total > 0 ? (atLinkGen.done / atLinkGen.total) * 100 : 0}%` }}
+                      />
+                    </div>
+                  )}
+
+                  {atLinkGen.finished && (atLinkGen.successCount > 0 || atLinkGen.failedCount > 0) && (
+                    <div className="flex gap-3 text-xs">
+                      <span className="text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> {atLinkGen.successCount} berhasil
+                      </span>
+                      {atLinkGen.failedCount > 0 && (
+                        <span className="text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                          <XCircle className="w-3 h-3" /> {atLinkGen.failedCount} gagal
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {atLinkGen.errors.length > 0 && (
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-amber-700 dark:text-amber-300">
+                        Lihat {atLinkGen.errors.length} error detail
+                      </summary>
+                      <ul className="mt-1 space-y-0.5 text-amber-800 dark:text-amber-200 max-h-32 overflow-y-auto">
+                        {atLinkGen.errors.slice(0, 20).map((e, i) => (
+                          <li key={i} className="truncate">• {e}</li>
+                        ))}
+                        {atLinkGen.errors.length > 20 && <li>• ...dan {atLinkGen.errors.length - 20} error lainnya</li>}
+                      </ul>
+                    </details>
+                  )}
+
+                  {atLinkGen.finished && atLinkGen.successCount > 0 && (
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                      <Link2 className="w-3 h-3" />
+                      {atLinkGen.successCount} affiliate URL sudah terisi. Klik "Upload Produk" untuk simpan ke DB.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
