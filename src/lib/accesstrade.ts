@@ -398,8 +398,15 @@ export interface ATCustomCreative {
 }
 
 interface ATCustomCreativeResponse {
-  totalItems: number;
-  content: ATCustomCreative[];
+  totalItems?: number;
+  content?: ATCustomCreative[];   // Format docs (array wrapper)
+  // AT Indonesia return object langsung (bukan wrapper array):
+  id?: number;
+  name?: string;
+  affiliateLink?: string;
+  landingUrl?: string;
+  imageUrl?: string | null;
+  createdOn?: string;
 }
 
 /** Error message dari createCustomCreative call terakhir (untuk debugging API response) */
@@ -470,13 +477,32 @@ export async function createCustomCreative(
     if (imageUrl) body.imageUrl = imageUrl;
 
     const result = await atPostFetch<ATCustomCreativeResponse>(path, body);
-    const creative = result.content?.[0];
+
+    // Parse response — handle 2 format:
+    // 1. Format docs: { totalItems, content: [{ affiliateLink, ... }] }
+    // 2. Format AT Indonesia: { id, name, affiliateLink, ... } (object langsung, tanpa wrapper)
+    let creative: ATCustomCreative | null = null;
+    if (result.content && Array.isArray(result.content) && result.content.length > 0) {
+      creative = result.content[0];
+    } else if (result.affiliateLink) {
+      // AT Indonesia return object langsung
+      creative = {
+        id: result.id || 0,
+        name: result.name || safeName,
+        affiliateLink: result.affiliateLink,
+        landingUrl: result.landingUrl || landingUrl,
+        imageUrl: result.imageUrl ?? null,
+        createdOn: result.createdOn || new Date().toISOString(),
+      };
+    }
+
     if (!creative?.affiliateLink) {
       const respStr = JSON.stringify(result).slice(0, 500);
       console.error("[AT createCustomCreative] No affiliateLink in response:", respStr);
       lastCreateCustomError = `AT response: ${respStr}`;
       return null;
     }
+    lastCreateCustomError = null;
     return creative;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
