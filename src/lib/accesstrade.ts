@@ -474,7 +474,11 @@ export async function createCustomCreative(
         { label: "source", value: "jb", name: "source" },
       ],
     };
-    if (imageUrl) body.imageUrl = imageUrl;
+    // imageUrl: AT API sering reject image URL dari CDN Shopee (susercontent.com)
+    // dengan error 400 "Invalid image URL". Karena imageUrl tidak wajib (optional),
+    // skip kirim imageUrl supaya tidak gagal. Image preview di AT dashboard akan kosong,
+    // tapi custom link tetap jalan & redirect ke produk.
+    // if (imageUrl) body.imageUrl = imageUrl;
 
     const result = await atPostFetch<ATCustomCreativeResponse>(path, body);
 
@@ -507,7 +511,9 @@ export async function createCustomCreative(
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error("[AT createCustomCreative] Failed:", errMsg);
-    lastCreateCustomError = errMsg;
+    // Extract errorMessage dari AT API response JSON (cth: "Invalid image URL")
+    const atErrMatch = errMsg.match(/"errorMessage"\s*:\s*"([^"]+)"/);
+    lastCreateCustomError = atErrMatch ? atErrMatch[1] : errMsg;
     return null;
   }
 }
@@ -556,7 +562,8 @@ export async function batchCreateCustomCreative(
         result.success = true;
         result.affiliateUrl = creative.affiliateLink;
       } else {
-        result.error = "Gagal generate (URL tidak valid atau AT API error)";
+        // Pakai error detail dari getLastCreateCustomError() supaya user tahu penyebabnya
+        result.error = lastCreateCustomError || "Gagal generate (URL tidak valid atau AT API error)";
       }
     } catch (err) {
       result.error = err instanceof Error ? err.message : String(err);
