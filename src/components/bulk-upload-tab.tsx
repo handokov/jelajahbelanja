@@ -444,8 +444,29 @@ export function BulkUploadTab({ adminFetch }: { adminFetch: (url: string, option
         const existingAff = (cells[affIdx] || "").trim();
         const imageUrl = imageIdx !== -1 ? (cells[imageIdx] || "").trim() : "";
 
-        // Skip kalau URL kosong atau bukan Shopee
-        if (!url || !url.toLowerCase().includes("shopee.co.id")) continue;
+        // Skip kalau URL kosong
+        if (!url) continue;
+
+        // Detect marketplace dari URL (support Shopee, Tokopedia, TikTok, dll)
+        const lowerUrl = url.toLowerCase();
+        const isSupportedUrl =
+          lowerUrl.includes("shopee.co.id") ||
+          lowerUrl.includes("shopee.com") ||
+          lowerUrl.includes("shope.ee") ||
+          lowerUrl.includes("shp.ee") ||
+          lowerUrl.includes("tokopedia.com") ||
+          lowerUrl.includes("ta.tokopedia.com") ||
+          lowerUrl.includes("tokopedia.link") ||
+          lowerUrl.includes("toko.link") ||
+          lowerUrl.includes("tiktok.com") ||
+          lowerUrl.includes("shop.tiktok.com") ||
+          lowerUrl.includes("blibli.com") ||
+          lowerUrl.includes("lazada.co.id") ||
+          lowerUrl.includes("bukalapak.com") ||
+          lowerUrl.includes("zalora.co.id") ||
+          lowerUrl.includes("sociolla.com");
+        if (!isSupportedUrl) continue;
+
         // Skip kalau sudah punya affiliateUrl (atid.me atau shope.ee)
         if (existingAff && (existingAff.includes("atid.me") || existingAff.includes("shope.ee"))) continue;
 
