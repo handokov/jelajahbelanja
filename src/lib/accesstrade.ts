@@ -276,57 +276,164 @@ export async function getQuicklink(campaignId: number): Promise<ATQuicklink | nu
 }
 
 /** Map marketplace → campaign ID yang punya quicklink (di-cache saat first fetch) */
-let shopeeCampaignId: number | null = null;
+const campaignIdCache: Record<string, number | null> = {};
 
-/** Cari campaign Shopee utama dari affiliated list, return ID-nya.
+/** Cari campaign utama untuk marketplace tertentu dari affiliated list.
  *
- * Prioritas (dari listing AT user):
- * 1. "Shopee ID NON KOL" — campaign utama Shopee Indonesia (reward tertinggi, support custom link)
- * 2. Campaign yang name-nya START WITH "Shopee" (bukan "Dario CPS Shopee" dll yang itu sub-campaign merchant)
- * 3. Campaign dengan reward tertinggi yang marketplace=shopee
+ * Support: shopee, tokopedia, tiktok, blibli, lazada, bukalapak, zalora, sociolla
+ *
+ * Prioritas:
+ * 1. Campaign utama (name mengandung keyword spesifik per marketplace)
+ * 2. Campaign yang name-nya START WITH marketplace name
+ * 3. Fallback: campaign dengan reward tertinggi untuk marketplace tersebut
  *
  * Bug lama: find(c => name.includes("shopee")) → return "Dario CPS Shopee" (sub-campaign, reward 1)
  * → custom link API gagal karena bukan campaign utama.
  */
-async function findShopeeCampaignId(): Promise<number | null> {
-  if (shopeeCampaignId !== null) return shopeeCampaignId;
+async function findCampaignId(marketplace: string): Promise<number | null> {
+  const mp = (marketplace || "").toLowerCase();
+  if (campaignIdCache[mp] !== undefined) return campaignIdCache[mp];
+
   try {
     const campaigns = await getAffiliatedCampaigns();
-    const shopeeCampaigns = campaigns.filter(c => {
-      const name = (c.name || "").toLowerCase();
-      return name.includes("shopee");
+
+    // Filter campaign yang match marketplace ini (pakai detectMarketplaceFromCampaign)
+    const mpCampaigns = campaigns.filter(c => {
+      const detected = detectMarketplaceFromCampaign(c);
+      return detected === mp;
     });
 
-    if (shopeeCampaigns.length === 0) return null;
-
-    // 1. Prefer "Shopee ID NON KOL" (campaign utama, exact match)
-    let best = shopeeCampaigns.find(c => {
-      const name = (c.name || "").toLowerCase();
-      return name.includes("non kol") || name.includes("shopee id");
-    });
-
-    // 2. Prefer campaign yang name-nya START WITH "shopee" (bukan "Dario CPS Shopee")
-    if (!best) {
-      best = shopeeCampaigns.find(c => {
-        const name = (c.name || "").toLowerCase().trim();
-        return name.startsWith("shopee");
-      });
+    if (mpCampaigns.length === 0) {
+      campaignIdCache[mp] = null;
+      return null;
     }
 
-    // 3. Fallback: Shopee campaign dengan reward tertinggi
+    // Keyword preferensi per marketplace (campaign utama biasanya namanya spesifik)
+    const preferKeywords: Record<string, string[]> = {
+      shopee: ["non kol", "shopee id"],
+      tokopedia: ["tokopedia cps", "tokopedia id"],
+      tiktok: ["tiktok shop id"],
+      blibli: ["blibli"],
+      lazada: ["lazada"],
+      bukalapak: ["bukalapak"],
+      zalora: ["zalora"],
+      sociolla: ["sociolla"],
+    };
+
+    let best: ATCampaign | null = null;
+
+    // 1. Prefer campaign dengan keyword spesifik
+    const keywords = preferKeywords[mp] || [];
+    for (const kw of keywords) {
+      best = mpCampaigns.find(c => (c.name || "").toLowerCase().includes(kw)) || null;
+      if (best) break;
+    }
+
+    // 2. Prefer campaign yang name-nya START WITH marketplace name
     if (!best) {
-      best = shopeeCampaigns.sort((a, b) => {
+      best = mpCampaigns.find(c => {
+        const name = (c.name || "").toLowerCase().trim();
+        // Skip sub-campaign (cth: "Dario CPS Shopee" — name tidak start with "shopee")
+        return name.startsWith(mp);
+      }) || null;
+    }
+
+    // 3. Fallback: campaign dengan reward tertinggi
+    if (!best) {
+      best = mpCampaigns.sort((a, b) => {
         const ra = a.highestRewardSummaries?.[0]?.reward || 0;
         const rb = b.highestRewardSummaries?.[0]?.reward || 0;
         return rb - ra;
       })[0];
     }
 
-    shopeeCampaignId = best?.id || null;
-    return shopeeCampaignId;
+    campaignIdCache[mp] = best?.id || null;
+    return campaignIdCache[mp];
   } catch {
+    campaignIdCache[mp] = null;
     return null;
   }
+}
+
+/** Legacy alias untuk backward compatibility */
+async function findShopeeCampaignId(): Promise<number | null> {
+  return findCampaignId("shopee");
+}
+
+/** Deteksi marketplace dari URL produk.
+ *  Dipakai untuk determine campaign mana yang dipakai untuk custom creative.
+ */
+export function detectMarketplaceFromUrl(url: string): string | null {
+  const lower = (url || "").toLowerCase();
+  // Shopee
+  if (lower.includes("shopee.co.id") || lower.includes("shopee.com") ||
+      lower.includes("shope.ee") || lower.includes("shp.ee") ||
+      lower.includes("s.shopee.co.id")) return "shopee";
+  // Tokopedia
+  if (lower.includes("tokopedia.com") || lower.includes("ta.tokopedia.com") ||
+      lower.includes("tokopedia.link") || lower.includes("toko.link") ||
+      lower.includes("shop-id.tokopedia.com")) return "tokopedia";
+  // TikTok Shop
+  if (lower.includes("tiktok.com") || lower.includes("shop.tiktok.com")) return "tiktok";
+  // Blibli
+  if (lower.includes("blibli.com")) return "blibli";
+  // Lazada
+  if (lower.includes("lazada.co.id")) return "lazada";
+  // Bukalapak
+  if (lower.includes("bukalapak.com")) return "bukalapak";
+  // Zalora
+  if (lower.includes("zalora.co.id")) return "zalora";
+  // Sociolla
+  if (lower.includes("sociolla.com")) return "sociolla";
+  return null;
+}
+
+/** Validasi URL produk untuk marketplace tertentu.
+ *  AT API reject URL yang tidak match "Accepted URL Format" campaign.
+ */
+function isValidProductUrl(url: string, marketplace: string): boolean {
+  const lower = (url || "").toLowerCase();
+  const mp = (marketplace || "").toLowerCase();
+
+  if (mp === "shopee") {
+    return lower.startsWith("https://shopee.co.id") ||
+           lower.startsWith("https://mall.shopee.co.id") ||
+           lower.startsWith("https://shope.ee") ||
+           lower.startsWith("https://id.shp.ee") ||
+           lower.startsWith("https://s.shopee.co.id");
+  }
+  if (mp === "tokopedia") {
+    return lower.startsWith("https://www.tokopedia.com") ||
+           lower.startsWith("https://tokopedia.com") ||
+           lower.startsWith("https://shop-id.tokopedia.com") ||
+           lower.startsWith("https://ta.tokopedia.com");
+  }
+  if (mp === "tiktok") {
+    return lower.startsWith("https://www.tiktok.com") ||
+           lower.startsWith("https://shop.tiktok.com") ||
+           lower.startsWith("https://tiktok.com");
+  }
+  if (mp === "blibli") {
+    return lower.startsWith("https://www.blibli.com") ||
+           lower.startsWith("https://blibli.com");
+  }
+  if (mp === "lazada") {
+    return lower.startsWith("https://www.lazada.co.id") ||
+           lower.startsWith("https://lazada.co.id");
+  }
+  if (mp === "bukalapak") {
+    return lower.startsWith("https://www.bukalapak.com") ||
+           lower.startsWith("https://bukalapak.com");
+  }
+  if (mp === "zalora") {
+    return lower.startsWith("https://www.zalora.co.id") ||
+           lower.startsWith("https://zalora.co.id");
+  }
+  if (mp === "sociolla") {
+    return lower.startsWith("https://www.sociolla.com") ||
+           lower.startsWith("https://sociolla.com");
+  }
+  return false;
 }
 
 /**
@@ -426,37 +533,47 @@ export function getLastCreateCustomError(): string | null {
  *
  * API: POST /v1/publishers/me/sites/{siteId}/campaigns/{campaignId}/creatives/custom
  *
- * @param landingUrl  Full URL produk (WAJIB, cth: https://shopee.co.id/product-xxx)
+ * @param landingUrl  Full URL produk (WAJIB, cth: https://shopee.co.id/product-xxx atau https://www.tokopedia.com/xxx)
  * @param name        Label untuk identify di AT dashboard (cth: "Dress Anak Frozen")
  * @param imageUrl    Optional — image produk untuk AT creative preview
+ * @param marketplace Optional — "shopee" | "tokopedia" | "tiktok" | dll.
+ *                    Kalau tidak di-specify, auto-detect dari URL.
  * @returns           Short link atid.me/go/xxx atau null kalau gagal
  */
 export async function createCustomCreative(
   landingUrl: string,
   name: string,
-  imageUrl?: string
+  imageUrl?: string,
+  marketplace?: string
 ): Promise<ATCustomCreative | null> {
   if (!landingUrl) return null;
 
-  // Validasi: harus URL Shopee ( Accepted URL format di AT form )
-  const lowerUrl = landingUrl.toLowerCase();
-  const isShopeeUrl =
-    lowerUrl.startsWith("https://shopee.co.id") ||
-    lowerUrl.startsWith("https://mall.shopee.co.id") ||
-    lowerUrl.startsWith("https://shope.ee") ||
-    lowerUrl.startsWith("https://id.shp.ee") ||
-    lowerUrl.startsWith("https://s.shopee.co.id");
+  // Auto-detect marketplace dari URL kalau tidak di-specify
+  const mp = marketplace || detectMarketplaceFromUrl(landingUrl);
+  if (!mp) {
+    console.error("[AT createCustomCreative] Cannot detect marketplace from URL:", landingUrl.slice(0, 80));
+    lastCreateCustomError = "Cannot detect marketplace from URL (bukan Shopee/Tokopedia/dll)";
+    return null;
+  }
 
-  if (!isShopeeUrl) return null;
+  // Validasi URL sesuai accepted format marketplace
+  if (!isValidProductUrl(landingUrl, mp)) {
+    console.error("[AT createCustomCreative] Invalid URL for", mp, ":", landingUrl.slice(0, 80));
+    lastCreateCustomError = `URL tidak valid untuk marketplace ${mp}. Cek format URL (cth: https://www.tokopedia.com/...)`;
+    return null;
+  }
+
+  const lowerUrl = landingUrl.toLowerCase();
 
   // Kalau sudah atid.me, skip — sudah custom link
   if (lowerUrl.includes("atid.me")) return null;
 
   try {
-    // Cari campaign Shopee
-    const campaignId = await findShopeeCampaignId();
+    // Cari campaign untuk marketplace ini
+    const campaignId = await findCampaignId(mp);
     if (!campaignId) {
-      console.error("[AT createCustomCreative] Shopee campaign not found");
+      console.error("[AT createCustomCreative]", mp, "campaign not found");
+      lastCreateCustomError = `Campaign ${mp} tidak ditemukan di AT account Anda. Cek apakah Anda sudah affiliated ke campaign ${mp}.`;
       return null;
     }
 
@@ -530,6 +647,7 @@ export interface BatchCustomLinkItem {
   url: string;
   name: string;
   imageUrl?: string;
+  marketplace?: string;  // optional — auto-detect kalau tidak di-specify
 }
 
 export interface BatchCustomLinkResult {
@@ -557,7 +675,7 @@ export async function batchCreateCustomCreative(
     };
 
     try {
-      const creative = await createCustomCreative(item.url, item.name, item.imageUrl);
+      const creative = await createCustomCreative(item.url, item.name, item.imageUrl, item.marketplace);
       if (creative) {
         result.success = true;
         result.affiliateUrl = creative.affiliateLink;
