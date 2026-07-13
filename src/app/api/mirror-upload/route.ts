@@ -4,9 +4,9 @@ import crypto from "crypto";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
-const API_KEY = process.env.CLOUDINARY_API_KEY;
-const API_SECRET = process.env.CLOUDINARY_API_SECRET;
+const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "bfvtb4xp";
+const API_KEY = process.env.CLOUDINARY_API_KEY || "455851493531962";
+const API_SECRET = process.env.CLOUDINARY_API_SECRET || "3-sWr7_Z2mAFZR-mPLrheTVymPg";
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "jelajahbelanja2024";
 
 function checkAuth(req: NextRequest): NextResponse | null {
