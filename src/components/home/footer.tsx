@@ -16,8 +16,8 @@ export function SiteFooter() {
             <span className="text-white/70">© 2025</span>
           </div>
           <p className="text-xs text-white/70 text-center md:text-right max-w-md">
-            Platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan
-            Lazada.
+            Kurasi produk anak terbaik dari Shopee & Tokopedia — fashion, sekolah,
+            dan perlengkapan bayi dengan rating ≥ 4.8.
           </p>
         </div>
 

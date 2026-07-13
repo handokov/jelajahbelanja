@@ -5,11 +5,11 @@ import { Heart, Shield, Search, TrendingUp, Users, Globe } from "lucide-react";
 export const metadata: Metadata = {
   title: "Tentang Kami",
   description:
-    "JelajahBelanja adalah platform agregator produk viral Indonesia yang mengkurasi produk terbaik dari Shopee, Tokopedia, dan Lazada untuk membantu kamu menemukan produk worth it.",
+    "JelajahBelanja adalah platform kurasi produk anak Indonesia yang mengumpulkan produk terbaik untuk si kecil dari Shopee & Tokopedia — fashion anak, perlengkapan sekolah, tumbler, mainan edukatif, dan lainnya.",
   openGraph: {
     title: "Tentang JelajahBelanja",
     description:
-      "Platform agregator produk viral Indonesia yang mengkurasi produk terbaik dari berbagai marketplace.",
+      "Platform kurasi produk anak Indonesia — fashion, sekolah, dan perlengkapan bayi dengan rating ≥ 4.8.",
   },
 };
 
@@ -21,7 +21,7 @@ export default function TentangPage() {
         <div className="container mx-auto px-4 max-w-3xl py-8 md:py-12">
           <h1 className="text-2xl md:text-4xl font-extrabold mb-3">Tentang JelajahBelanja</h1>
           <p className="text-sm md:text-base text-white/80 max-w-xl">
-            Platform agregator produk viral Indonesia yang membantu kamu menemukan produk terbaik tanpa ribet.
+            Platform kurasi produk anak Indonesia — membantu orang tua menemukan produk terbaik untuk si kecil tanpa ribet.
           </p>
         </div>
       </div>
@@ -35,13 +35,13 @@ export default function TentangPage() {
           </h2>
           <div className="space-y-4 text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
             <p>
-              JelajahBelanja lahir dari sebuah masalah yang sederhana: terlalu banyak produk di marketplace, terlalu sedikit waktu untuk memilih. Setiap hari, jutaan produk baru muncul di Shopee, Tokopedia, dan Lazada. Di antara ribuan produk tersebut, ada yang benar-benar bagus dan worth it, tapi juga banyak yang mengecewakan. Mencari produk yang tepati di tengah lautan pilihan itu bisa memakan waktu berjam-jam, dan sering kali berujung pada kekecewaan.
+              JelajahBelanja lahir dari sebuah masalah yang sederhana: mencari produk anak yang berkualitas di marketplace itu memakan waktu. Setiap hari, jutaan produk baru muncul di Shopee dan Tokopedia. Di antara ribuan produk tersebut, ada yang benar-benar bagus dan worth it untuk si kecil, tapi juga banyak yang mengecewakan. Mencari jepit rambut anak yang awet, kaos kaki sekolah yang nyaman, atau tumbler anti tumpah di tengah lautan pilihan bisa memakan waktu berjam-jam.
             </p>
             <p>
-              Misi kami sederhana: membantu konsumen Indonesia membuat keputusan belanja yang lebih cerdas, lebih cepat, dan lebih terinformasi. Kami melakukan ini dengan mengkurasi produk-produk viral dan best seller dari berbagai marketplace, menampilkan informasi yang paling relevan — harga, rating, jumlah terjual, lokasi seller — sehingga kamu bisa membandingkan dan memutuskan dalam hitungan menit, bukan jam.
+              Misi kami sederhana: membantu orang tua Indonesia membuat keputusan belanja yang lebih cerdas untuk si kecil, lebih cepat, dan lebih terinformasi. Kami melakukan ini dengan mengkurasi produk-produk anak terbaik dari Shopee dan Tokopedia, menampilkan informasi yang paling relevan — harga, rating (≥ 4.8 bintang), jumlah terjual, lokasi seller — sehingga kamu bisa membandingkan dan memutuskan dalam hitungan menit, bukan jam.
             </p>
             <p>
-              Kami bukan toko online. Kami tidak menjual produk apapun. Yang kami lakukan adalah menyaring dan menyajikan informasi produk dari berbagai sumber sehingga kamu mendapat gambaran yang lengkap sebelum membeli. Setiap produk yang tampil di JelajahBelanja sudah melewati proses seleksi berdasarkan popularitas, kualitas rating, dan value untuk uang yang kamu keluarkan.
+              Kami bukan toko online. Kami tidak menjual produk apapun. Yang kami lakukan adalah menyaring dan menyajikan informasi produk anak dari berbagai sumber sehingga kamu mendapat gambaran yang lengkap sebelum membeli. Setiap produk yang tampil di JelajahBelanja sudah melewati proses seleksi berdasarkan kualitas rating, popularitas, dan value untuk uang yang kamu keluarkan.
             </p>
           </div>
         </section>
@@ -56,13 +56,13 @@ export default function TentangPage() {
             {[
               {
                 icon: <Search className="w-6 h-6" />,
-                title: "Kurasi Produk",
-                desc: "Kami memilih produk viral dan best seller dari Shopee, Tokopedia, dan Lazada berdasarkan data real — jumlah terjual, rating, dan tren pencarian.",
+                title: "Kurasi Produk Anak",
+                desc: "Kami memilih produk anak terbaik dari Shopee & Tokopedia berdasarkan data real — jumlah terjual, rating ≥ 4.8, dan tren pencarian.",
               },
               {
                 icon: <TrendingUp className="w-6 h-6" />,
-                title: "Pantau Tren",
-                desc: "Produk viral berubah setiap hari. Kami memantau tren terbaru dan memperbarui rekomendasi kami secara berkala agar kamu tidak ketinggalan.",
+                title: "Pantau Tren Produk Anak",
+                desc: "Produk anak viral berubah setiap hari. Kami memantau tren terbaru (jepit rambut Korea, tas sekolah aesthetic, tumbler karakter) dan memperbarui rekomendasi secara berkala.",
               },
               {
                 icon: <Shield className="w-6 h-6" />,
@@ -131,10 +131,10 @@ export default function TentangPage() {
         {/* CTA */}
         <div className="rounded-2xl bg-gradient-to-r from-fuchsia-50 to-purple-50 dark:from-fuchsia-900/20 dark:to-purple-900/20 border border-fuchsia-200 dark:border-fuchsia-800/50 p-6 text-center">
           <p className="font-semibold text-fuchsia-900 dark:text-fuchsia-100 mb-2">
-            Mulai jelajahi produk viral sekarang!
+            Mulai jelajahi produk anak terbaik sekarang!
           </p>
           <p className="text-sm text-fuchsia-700 dark:text-fuchsia-300 mb-4">
-            Temukan produk terbaik dari Shopee, Tokopedia, dan Lazada dalam satu tempat.
+            Temukan jepit rambut anak, kaos kaki sekolah, tas ransel, tumbler, dan produk anak lainnya dalam satu tempat.
           </p>
           <Link
             href="/"

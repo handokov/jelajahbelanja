@@ -22,7 +22,7 @@ export const SITE_URL = VERCEL_URL
   : "https://www.jelajahbelanja.com";
 export const SITE_NAME = "JelajahBelanja";
 export const SITE_DESCRIPTION =
-  "JelajahBelanja adalah platform agregator produk viral Indonesia dari Shopee, Tokopedia, dan Lazada. Temukan produk viral 24 jam, best seller mingguan, dan diskon terbesar hari ini.";
+  "JelajahBelanja — kurasi produk anak terlengkap dari Shopee & Tokopedia. Temukan jepit rambut anak, kaos kaki sekolah, tas ransel, tumbler, dress anak, mainan edukatif, dan perlengkapan sekolah dengan rating tertinggi dan harga termurah.";
 
 // ─── Valid Marketplaces ───
 // Sebelumnya: hardcoded di 3 tempat (affiliate route, seed.ts, admin page).

@@ -51,8 +51,8 @@ export default function Home() {
     return {
       "@context": "https://schema.org",
       "@type": "ItemList",
-      name: "Produk Viral & Best Seller Indonesia",
-      description: `Kurasi ${products.length} produk viral dan best seller dari Shopee, Tokopedia, dan Lazada. Update terbaru, harga termurah, dan diskon terbesar hari ini.`,
+      name: "Produk Anak Terkurasi — Fashion, Sekolah & Perlengkapan Bayi",
+      description: `Kurasi ${products.length} produk anak terbaik dari Shopee & Tokopedia. Jepit rambut anak, kaos kaki sekolah, tas ransel, tumbler, dress anak, mainan edukatif. Rating ≥ 4.8, harga termurah.`,
       numberOfItems: products.length,
       itemListElement: products.slice(0, 10).map((p, i) => ({
         "@type": "ListItem",
