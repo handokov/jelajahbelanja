@@ -419,3 +419,36 @@ Stage Summary:
 - Sub ID tracking: sub1=jb (untuk tracking di AT dashboard).
 - Flow: scrape 30 produk → upload CSV → klik "Auto-generate AT Custom Links"
   → tunggu ~15 detik → affiliateUrl terisi → Upload Produk.
+
+---
+Task ID: pivot-positioning-anak
+Agent: main
+Task: Update positioning JB dari general ke fokus produk anak (tagline, meta, hero, SEO, footer, tentang).
+
+Work Log:
+- Update 7 files untuk pivot positioning:
+  1. src/lib/config.ts: SITE_DESCRIPTION fokus produk anak
+  2. src/app/layout.tsx:
+     - title: "Produk Viral & Best Seller Shopee/Tokopedia/Lazada" → "Produk Anak Terkurasi: Fashion, Sekolah & Perlengkapan Bayi"
+     - keywords: 20 keywords produk anak (jepit rambut, kaos kaki sekolah, tas ransel, tumbler, dll)
+     - OpenGraph + Twitter title update
+  3. src/components/home/hero-section.tsx:
+     - Tagline: "Produk Anak Terkurasi — Fashion, Sekolah & Perlengkapan Bayi"
+     - Subtitle: mention jepit rambut, kaos kaki sekolah, tas ransel, tumbler, dress anak, mainan edukatif
+     - Stats chip: "X kategori" → "rating ≥ 4.8"
+  4. src/components/home/seo-section.tsx: konten SEO fokus produk anak
+  5. src/components/home/footer.tsx: tagline fokus produk anak
+  6. src/app/tentang/page.tsx: misi & deskripsi fokus produk anak (CTA, what we do, mission)
+  7. src/app/page.tsx: JSON-LD structured data fokus produk anak
+- Push commit f869a99 → Vercel deploy
+- Verify production:
+  - Homepage title: "JelajahBelanja — Produk Anak Terkurasi: Fashion, Sekolah & Perlengkapan Bayi" ✓
+  - Meta description: fokus produk anak (jepit rambut, kaos kaki sekolah, tas ransel, tumbler, dll) ✓
+  - Hero tagline: "Produk Anak Terkurasi" ✓
+  - Tentang page: HTTP 200, title updated ✓
+
+Stage Summary:
+- Positioning JB sekarang fokus ke produk anak (bukan general viral lagi).
+- SEO keywords: 20 long-tail keyword produk anak untuk target Google.
+- Hero, footer, tentang page, JSON-LD semua konsisten fokus anak.
+- Next: generate blog artikel fokus produk anak + tambah produk di sub-kategori kurang.
