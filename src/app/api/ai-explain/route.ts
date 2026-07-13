@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30; // 30 detik — z-ai fallback butuh waktu lebih
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile";
@@ -135,10 +136,9 @@ Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang coc
 
     const completion = await zai.chat.completions.create({
       messages: [
-        { role: "assistant", content: systemPrompt },
+        { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      thinking: { type: "disabled" },
     });
 
     const fullResponse = completion.choices[0]?.message?.content;
