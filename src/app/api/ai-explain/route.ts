@@ -119,18 +119,18 @@ Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang coc
 
       if (groqResponse.ok) {
         const groqData = await groqResponse.json();
-        // GPT-OSS 120B: response bisa di message.content atau message.reasoning_content
-        const fullResponse: string | undefined = groqData.choices?.[0]?.message?.content
-          || groqData.choices?.[0]?.message?.reasoning_content;
+        const msg = groqData.choices?.[0]?.message || {};
+        // GPT-OSS 120B: content bisa kosong, text ada di "reasoning" field
+        const fullResponse: string | undefined = msg.content || msg.reasoning || msg.reasoning_content || "";
 
-        if (fullResponse) {
+        if (fullResponse && fullResponse.length > 10) {
           const separator = "---";
           const parts = fullResponse.split(separator);
           const explanation = parts[0]?.trim() || fullResponse;
           const outfitTips = parts[1]?.trim() || "";
           return NextResponse.json({ explanation, outfitTips });
         } else {
-          groqError = "Groq returned empty content. Full response: " + JSON.stringify(groqData).slice(0, 300);
+          groqError = "Empty content. Response: " + JSON.stringify(groqData).slice(0, 500);
         }
       } else {
         groqError = `Groq ${groqResponse.status}: ${await groqResponse.text()}`;
