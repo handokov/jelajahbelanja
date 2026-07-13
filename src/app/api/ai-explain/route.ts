@@ -112,8 +112,10 @@ Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang coc
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage },
           ],
-          max_tokens: 1024,
+          max_tokens: 2048,
           temperature: 0.7,
+          // GPT-OSS 120B: suppress reasoning supaya content langsung terisi
+          reasoning_format: "hidden",
         }),
       });
 
