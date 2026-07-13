@@ -133,31 +133,40 @@ Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang coc
 
     // === Fallback: z-ai-web-dev-sdk (selalu jalan kalau Groq gagal) ===
     console.log("[api/ai-explain] Using z-ai-web-dev-sdk");
-    const ZAI = (await import("z-ai-web-dev-sdk")).default;
-    const zai = await ZAI.create();
+    try {
+      const ZAI = (await import("z-ai-web-dev-sdk")).default;
+      const zai = await ZAI.create();
 
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-    });
+      const completion = await zai.chat.completions.create({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+      });
 
-    const fullResponse = completion.choices[0]?.message?.content;
+      const fullResponse = completion.choices[0]?.message?.content;
 
-    if (!fullResponse) {
+      if (!fullResponse) {
+        return NextResponse.json(
+          { error: "AI tidak bisa menjelaskan produk ini" },
+          { status: 500 }
+        );
+      }
+
+      const separator = "---";
+      const parts = fullResponse.split(separator);
+      const explanation = parts[0]?.trim() || fullResponse;
+      const outfitTips = parts[1]?.trim() || "";
+
+      return NextResponse.json({ explanation, outfitTips });
+    } catch (zaiErr: any) {
+      console.error("[api/ai-explain] z-ai SDK error:", zaiErr?.message || zaiErr);
       return NextResponse.json(
-        { error: "AI tidak bisa menjelaskan produk ini" },
+        { error: "Gagal menjelaskan produk", detail: zaiErr?.message || "z-ai SDK error" },
         { status: 500 }
       );
     }
 
-    const separator = "---";
-    const parts = fullResponse.split(separator);
-    const explanation = parts[0]?.trim() || fullResponse;
-    const outfitTips = parts[1]?.trim() || "";
-
-    return NextResponse.json({ explanation, outfitTips });
   } catch (err) {
     console.error("[api/ai-explain] Error:", err);
     return NextResponse.json(
