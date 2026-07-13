@@ -28,7 +28,6 @@ const PROTECTED_API_PATTERNS = [
   { path: "/api/blog-generate", methods: ["GET", "POST"] },
   { path: "/api/admin/bulk-products", methods: ["POST"] },
   { path: "/api/mirror-tokped", methods: ["POST"] },
-  { path: "/api/mirror-upload", methods: ["POST"] },
   { path: "/api/at-debug", methods: ["GET"] },
   { path: "/api/bulk-upload", methods: ["POST"] },
   { path: "/api/scrape-shopee", methods: ["POST"] },
