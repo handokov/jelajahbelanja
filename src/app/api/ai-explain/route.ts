@@ -3,14 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const MODEL = "openai/gpt-oss-120b";
 
 /**
  * POST /api/ai-explain
  *
  * AI Personal Stylist & Sales — menjelaskan produk + rekomendasi outfit pelengkap.
- * Menggunakan Groq + Meta Llama 4 untuk respons super cepat.
+ * Menggunakan Groq + GPT-OSS 120B untuk respons super cepat.
  * Fallback ke z-ai-web-dev-sdk kalau GROQ_API_KEY belum di-set.
+ *
+ * Note: Sebelumnya pakai "meta-llama/llama-4-scout-17b-16e-instruct" tapi
+ * model itu di-deprecated GroqCloud pada 17 Juli 2026. Pindah ke openai/gpt-oss-120b.
  *
  * Body: { product: { title, price, originalPrice, discountPercent, rating,
  *         reviewCount, soldCount, marketplace, category, location, isViral } }
