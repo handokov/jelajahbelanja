@@ -87,50 +87,52 @@ ${viralInfo}
 
 Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang cocok + estimasi harga.`;
 
-    // === Try Groq API first (Llama 4) ===
+    // === Try Groq API first (kalau GROQ_API_KEY ada) ===
+    // Note: Llama 4 Scout di-deprecated 17 Juli 2026, sekarang pakai llama-3.3-70b-versatile
     const apiKey = process.env.GROQ_API_KEY;
 
     if (apiKey) {
-      const groqResponse = await fetch(GROQ_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-          max_tokens: 512,
-          temperature: 0.7,
-          top_p: 0.9,
-        }),
-      });
+      try {
+        const groqResponse = await fetch(GROQ_API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: MODEL,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userMessage },
+            ],
+            max_tokens: 512,
+            temperature: 0.7,
+            top_p: 0.9,
+          }),
+        });
 
-      if (groqResponse.ok) {
-        const groqData = await groqResponse.json();
-        const fullResponse: string | undefined = groqData.choices?.[0]?.message?.content;
+        if (groqResponse.ok) {
+          const groqData = await groqResponse.json();
+          const fullResponse: string | undefined = groqData.choices?.[0]?.message?.content;
 
-        if (fullResponse) {
-          // Split response into review and outfit tips
-          const separator = "---";
-          const parts = fullResponse.split(separator);
-          const explanation = parts[0]?.trim() || fullResponse;
-          const outfitTips = parts[1]?.trim() || "";
-
-          return NextResponse.json({ explanation, outfitTips });
+          if (fullResponse) {
+            const separator = "---";
+            const parts = fullResponse.split(separator);
+            const explanation = parts[0]?.trim() || fullResponse;
+            const outfitTips = parts[1]?.trim() || "";
+            return NextResponse.json({ explanation, outfitTips });
+          }
+        } else {
+          const errText = await groqResponse.text();
+          console.error("[api/ai-explain] Groq API error:", groqResponse.status, errText);
         }
-      } else {
-        const errText = await groqResponse.text();
-        console.error("[api/ai-explain] Groq API error:", groqResponse.status, errText);
-        // Fall through to z-ai fallback
+      } catch (groqErr) {
+        console.error("[api/ai-explain] Groq fetch error:", groqErr);
       }
     }
 
-    // === Fallback: z-ai-web-dev-sdk ===
-    console.log("[api/ai-explain] Falling back to z-ai-web-dev-sdk");
+    // === Fallback: z-ai-web-dev-sdk (selalu jalan kalau Groq gagal) ===
+    console.log("[api/ai-explain] Using z-ai-web-dev-sdk");
     const ZAI = (await import("z-ai-web-dev-sdk")).default;
     const zai = await ZAI.create();
 
