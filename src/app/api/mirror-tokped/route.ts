@@ -5,6 +5,7 @@ import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // 60 detik per request
+export const fetchCache = "force-no-store";
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const API_KEY = process.env.CLOUDINARY_API_KEY;
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const limit = Number(body.limit) || 5;
+    const limit = Number(body.limit) || 1; // Default 1 per request (Vercel timeout)
     const productId = body.productId as string | undefined;
 
     // Get products that need mirror
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
             "Accept-Language": "id-ID,id;q=0.9",
           },
           redirect: "follow",
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(25000),
         });
 
         if (!pageRes.ok) {
