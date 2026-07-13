@@ -112,15 +112,16 @@ Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang coc
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage },
           ],
-          max_tokens: 512,
+          max_tokens: 1024,
           temperature: 0.7,
-          top_p: 0.9,
         }),
       });
 
       if (groqResponse.ok) {
         const groqData = await groqResponse.json();
-        const fullResponse: string | undefined = groqData.choices?.[0]?.message?.content;
+        // GPT-OSS 120B: response bisa di message.content atau message.reasoning_content
+        const fullResponse: string | undefined = groqData.choices?.[0]?.message?.content
+          || groqData.choices?.[0]?.message?.reasoning_content;
 
         if (fullResponse) {
           const separator = "---";
@@ -128,6 +129,8 @@ Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang coc
           const explanation = parts[0]?.trim() || fullResponse;
           const outfitTips = parts[1]?.trim() || "";
           return NextResponse.json({ explanation, outfitTips });
+        } else {
+          groqError = "Groq returned empty content. Full response: " + JSON.stringify(groqData).slice(0, 300);
         }
       } else {
         groqError = `Groq ${groqResponse.status}: ${await groqResponse.text()}`;
