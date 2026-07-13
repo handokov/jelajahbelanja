@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30; // 30 detik — z-ai fallback butuh waktu lebih
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"; // masih jalan sampai 17 Juli 2026
+const MODEL = "openai/gpt-oss-120b";
 
 /**
  * POST /api/ai-explain
