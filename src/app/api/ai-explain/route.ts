@@ -87,85 +87,61 @@ ${viralInfo}
 
 Ingat: jadiin personal stylist, bukan cuma reviewer! Rekomendasi outfit yang cocok + estimasi harga.`;
 
-    // === Try Groq API first (kalau GROQ_API_KEY ada) ===
-    // Note: Llama 4 Scout di-deprecated 17 Juli 2026, sekarang pakai llama-3.3-70b-versatile
+    // === Try Groq API (satu-satunya AI yang jalan di Vercel) ===
+    // z-ai SDK hanya jalan di sandbox (pakai internal-api.z.ai), tidak di Vercel
     const apiKey = process.env.GROQ_API_KEY;
 
-    if (apiKey) {
-      try {
-        const groqResponse = await fetch(GROQ_API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: MODEL,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userMessage },
-            ],
-            max_tokens: 512,
-            temperature: 0.7,
-            top_p: 0.9,
-          }),
-        });
-
-        if (groqResponse.ok) {
-          const groqData = await groqResponse.json();
-          const fullResponse: string | undefined = groqData.choices?.[0]?.message?.content;
-
-          if (fullResponse) {
-            const separator = "---";
-            const parts = fullResponse.split(separator);
-            const explanation = parts[0]?.trim() || fullResponse;
-            const outfitTips = parts[1]?.trim() || "";
-            return NextResponse.json({ explanation, outfitTips });
-          }
-        } else {
-          const errText = await groqResponse.text();
-          console.error("[api/ai-explain] Groq API error:", groqResponse.status, errText);
-        }
-      } catch (groqErr) {
-        console.error("[api/ai-explain] Groq fetch error:", groqErr);
-      }
-    }
-
-    // === Fallback: z-ai-web-dev-sdk (selalu jalan kalau Groq gagal) ===
-    console.log("[api/ai-explain] Using z-ai-web-dev-sdk");
-    try {
-      const ZAI = (await import("z-ai-web-dev-sdk")).default;
-      const zai = await ZAI.create();
-
-      const completion = await zai.chat.completions.create({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
-        ],
-      });
-
-      const fullResponse = completion.choices[0]?.message?.content;
-
-      if (!fullResponse) {
-        return NextResponse.json(
-          { error: "AI tidak bisa menjelaskan produk ini" },
-          { status: 500 }
-        );
-      }
-
-      const separator = "---";
-      const parts = fullResponse.split(separator);
-      const explanation = parts[0]?.trim() || fullResponse;
-      const outfitTips = parts[1]?.trim() || "";
-
-      return NextResponse.json({ explanation, outfitTips });
-    } catch (zaiErr: any) {
-      console.error("[api/ai-explain] z-ai SDK error:", zaiErr?.message || zaiErr);
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "Gagal menjelaskan produk", detail: zaiErr?.message || "z-ai SDK error" },
+        { error: "GROQ_API_KEY belum di-set di Vercel env vars" },
         { status: 500 }
       );
     }
+
+    let groqError = "";
+    try {
+      const groqResponse = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+          max_tokens: 512,
+          temperature: 0.7,
+          top_p: 0.9,
+        }),
+      });
+
+      if (groqResponse.ok) {
+        const groqData = await groqResponse.json();
+        const fullResponse: string | undefined = groqData.choices?.[0]?.message?.content;
+
+        if (fullResponse) {
+          const separator = "---";
+          const parts = fullResponse.split(separator);
+          const explanation = parts[0]?.trim() || fullResponse;
+          const outfitTips = parts[1]?.trim() || "";
+          return NextResponse.json({ explanation, outfitTips });
+        }
+      } else {
+        groqError = `Groq ${groqResponse.status}: ${await groqResponse.text()}`;
+        console.error("[api/ai-explain] Groq API error:", groqError);
+      }
+    } catch (groqErr: any) {
+      groqError = groqErr?.message || String(groqErr);
+      console.error("[api/ai-explain] Groq fetch error:", groqError);
+    }
+
+    return NextResponse.json(
+      { error: "Gagal menjelaskan produk", detail: groqError || "Groq API error", model: MODEL },
+      { status: 500 }
+    );
 
   } catch (err) {
     console.error("[api/ai-explain] Error:", err);
