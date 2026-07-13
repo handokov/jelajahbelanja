@@ -67,43 +67,71 @@ export async function POST(req: NextRequest) {
 
       // Exclude produk yang title-nya mengandung keyword tertentu
       // (cth: "anak", "sekolah", "bayi" — supaya tas anak tidak ke-hide)
-      if (f.excludeKeywords && f.excludeKeywords.length > 0) {
-        // Prisma: title NOT CONTAINS each keyword (case-insensitive)
-        // Pakai mode: insensitive supaya case tidak masalah
-        for (const kw of f.excludeKeywords) {
-          where.AND.push({
-            title: { not: { contains: kw, mode: "insensitive" } },
-          });
-        }
-      }
+      // Catatan: PostgreSQL default case-sensitive. Untuk case-insensitive,
+      // kita query dulu semua produk lalu filter di JS (lebih reliable cross-DB).
+      // Tapi untuk performance, kita simpan keyword di array untuk post-filter.
 
       // Shortcut: excludeAnakProducts = true → exclude semua keyword anak
-      if (f.excludeAnakProducts) {
-        const anakKeywords = [
-          "anak", "bayi", "balita", "sekolah", "sd ", "smp", "sma ",
-          "perempuan", "cewe", "cewek", "cowok", "laki-laki",
-          "jepit rambut", "kaos kaki", "dress anak", "daster anak",
-          "mukena anak", "romper", "tumbler anak", "botol anak",
-          "mainan", "edukatif", "buku anak", "crayon", "pensil anak",
-          "kacamata anak", "sepatu anak", "tas anak", "ransel anak",
-          "hijab anak", "jilbab anak", "kerudung anak",
-        ];
-        for (const kw of anakKeywords) {
-          where.AND.push({
-            title: { not: { contains: kw, mode: "insensitive" } },
-          });
-        }
+      const anakKeywords = [
+        "anak", "bayi", "balita", "sekolah", "sd ", "smp", "sma ",
+        "perempuan", "cewe", "cewek", "cowok", "laki-laki",
+        "jepit rambut", "kaos kaki", "dress anak", "daster anak",
+        "mukena anak", "romper", "tumbler anak", "botol anak",
+        "mainan", "edukatif", "buku anak", "crayon", "pensil anak",
+        "kacamata anak", "sepatu anak", "tas anak", "ransel anak",
+        "hijab anak", "jilbab anak", "kerudung anak",
+        "buku tulis", "alat tulis", "penggaris", "pulpen",
+      ];
+
+      // Gabungkan keyword: anakKeywords (kalau excludeAnakProducts) + excludeKeywords
+      const allExcludeKeywords: string[] = [];
+      if (f.excludeAnakProducts) allExcludeKeywords.push(...anakKeywords);
+      if (f.excludeKeywords && f.excludeKeywords.length > 0) {
+        allExcludeKeywords.push(...f.excludeKeywords);
+      }
+
+      // Simpan di where untuk dipakai post-filter (tidak bisa pakai Prisma NOT contains case-insensitive di semua DB)
+      if (allExcludeKeywords.length > 0) {
+        where.__excludeKeywords = allExcludeKeywords;
       }
 
       if (where.AND.length === 0) delete where.AND;
-      return where;
+
+      // Ambil excludeKeywords untuk post-filter di JS
+      const excludeKeywords: string[] = (where as any).__excludeKeywords || [];
+      delete (where as any).__excludeKeywords;
+
+      return { where, excludeKeywords };
+    }
+
+    // ─── Helper: query produk + post-filter exclude keywords (case-insensitive) ───
+    async function getFilteredProductIds(f: typeof filter): Promise<{ ids: string[]; count: number }> {
+      const { where, excludeKeywords } = buildWhereClause(f);
+
+      // Query semua produk yang match where clause
+      const products = await db.shopeeProduct.findMany({
+        where,
+        select: { id: true, title: true },
+      });
+
+      // Post-filter: exclude produk yang title-nya mengandung keyword (case-insensitive)
+      const filtered = products.filter(p => {
+        if (excludeKeywords.length === 0) return true;
+        const titleLower = (p.title || "").toLowerCase();
+        return !excludeKeywords.some(kw => titleLower.includes(kw.toLowerCase()));
+      });
+
+      return { ids: filtered.map(p => p.id), count: filtered.length };
     }
 
     // ─── Action: HIDE BY FILTER ───
     if (action === "hide-by-filter") {
-      const where = buildWhereClause(filter);
+      const { ids, count } = await getFilteredProductIds(filter);
+      if (ids.length === 0) {
+        return NextResponse.json({ success: true, action: "hide-by-filter", affected: 0, message: "0 produk di-hide" });
+      }
       const result = await db.shopeeProduct.updateMany({
-        where,
+        where: { id: { in: ids } },
         data: { isHidden: true },
       });
       return NextResponse.json({
@@ -116,9 +144,12 @@ export async function POST(req: NextRequest) {
 
     // ─── Action: UNHIDE BY FILTER ───
     if (action === "unhide-by-filter") {
-      const where = buildWhereClause(filter);
+      const { ids, count } = await getFilteredProductIds({ ...filter, ...{ _onlyHidden: true } } as any);
+      if (ids.length === 0) {
+        return NextResponse.json({ success: true, action: "unhide-by-filter", affected: 0, message: "0 produk di-unhide" });
+      }
       const result = await db.shopeeProduct.updateMany({
-        where: { ...where, isHidden: true },
+        where: { id: { in: ids }, isHidden: true },
         data: { isHidden: false },
       });
       return NextResponse.json({
@@ -131,8 +162,13 @@ export async function POST(req: NextRequest) {
 
     // ─── Action: DELETE BY FILTER ───
     if (action === "delete-by-filter") {
-      const where = buildWhereClause(filter);
-      const result = await db.shopeeProduct.deleteMany({ where });
+      const { ids, count } = await getFilteredProductIds(filter);
+      if (ids.length === 0) {
+        return NextResponse.json({ success: true, action: "delete-by-filter", affected: 0, message: "0 produk di-delete" });
+      }
+      const result = await db.shopeeProduct.deleteMany({
+        where: { id: { in: ids } },
+      });
       return NextResponse.json({
         success: true,
         action: "delete-by-filter",
@@ -175,15 +211,15 @@ export async function POST(req: NextRequest) {
 
     // ─── Action: PREVIEW (dry-run — count saja, tidak execute) ───
     if (action === "preview") {
-      const where = buildWhereClause(filter);
-      const count = await db.shopeeProduct.count({ where });
-      // Sample 10 produk untuk preview
-      const samples = await db.shopeeProduct.findMany({
-        where,
-        select: { id: true, title: true, category: true, marketplace: true, rating: true, isHidden: true },
-        take: 10,
-        orderBy: { createdAt: "desc" },
-      });
+      const { ids, count } = await getFilteredProductIds(filter);
+      // Ambil 10 sample dari ids untuk preview
+      const sampleIds = ids.slice(0, 10);
+      const samples = sampleIds.length > 0
+        ? await db.shopeeProduct.findMany({
+            where: { id: { in: sampleIds } },
+            select: { id: true, title: true, category: true, marketplace: true, rating: true, isHidden: true },
+          })
+        : [];
       return NextResponse.json({
         success: true,
         action: "preview",
