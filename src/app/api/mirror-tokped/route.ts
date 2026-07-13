@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     for (const product of products) {
       try {
-        // Step 1: Fetch Tokopedia product page
+        // Step 1: Fetch Tokopedia product page — only read first 50KB (og:image is in <head>)
         const pageRes = await fetch(product.url, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
             "Accept-Language": "id-ID,id;q=0.9",
           },
           redirect: "follow",
-          signal: AbortSignal.timeout(25000),
+          signal: AbortSignal.timeout(8000), // 8s max (Vercel free tier = 10s total)
         });
 
         if (!pageRes.ok) {
@@ -73,7 +73,18 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        const html = await pageRes.text();
+        // Read only first 50KB (og:image is in <head>, don't need full page)
+        const reader = pageRes.body?.getReader();
+        let html = "";
+        if (reader) {
+          const decoder = new TextDecoder();
+          while (html.length < 50000) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            html += decoder.decode(value, { stream: true });
+          }
+          reader.cancel();
+        }
 
         // Step 2: Extract image URL (try og:image first, then other patterns)
         let imageUrl: string | null = null;
@@ -114,7 +125,7 @@ export async function POST(req: NextRequest) {
             "Referer": "https://www.tokopedia.com/",
             "Accept": "image/*",
           },
-          signal: AbortSignal.timeout(10000),
+          signal: AbortSignal.timeout(5000),
         });
 
         if (!imgRes.ok) {
