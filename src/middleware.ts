@@ -24,7 +24,6 @@ const PROTECTED_API_PATTERNS = [
   { path: "/api/product-badges", methods: ["POST", "PATCH", "DELETE"] },
   { path: "/api/at-sync", methods: ["GET", "POST"] },
   { path: "/api/at-settings", methods: ["GET", "POST"] },
-  { path: "/api/at-custom-link", methods: ["POST"] },
   { path: "/api/blog-generate", methods: ["GET", "POST"] },
   { path: "/api/admin/bulk-products", methods: ["POST"] },
   { path: "/api/mirror-tokped", methods: ["POST"] },
