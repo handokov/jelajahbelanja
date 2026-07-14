@@ -944,7 +944,7 @@ export function ProductsTab() {
               Hapus Produk by Filter
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Pilih filter untuk menghapus produk secara massal. Bisa kombinasi lebih dari satu filter.
+              Pilih filter untuk menghapus produk secara massal. <strong>Wajib pilih minimal 1 filter</strong> (kategori/marketplace/umur).
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -991,11 +991,40 @@ export function ProductsTab() {
               />
             </div>
 
-            {/* Preview */}
-            <div className="rounded-lg bg-orange-50 dark:bg-orange-900/20 p-3 text-xs text-orange-800 dark:text-orange-200">
-              <Zap className="w-3.5 h-3.5 inline mr-1" />
-              <strong>Tips:</strong> Kalau file AT kebanyakan produk sample, pilih kategori atau marketplace yang salah, lalu hapus sekaligus. Misalnya hapus semua produk kategori &quot;Fashion wanita&quot; yang lebih lama dari 7 hari.
+            {/* Live preview count */}
+            <div className="rounded-lg bg-orange-50 dark:bg-orange-900/20 p-3 text-xs text-orange-800 dark:text-orange-200 border border-orange-200 dark:border-orange-800">
+              {filterDeleteCategory || filterDeleteMarketplace || filterDeleteOlderDays ? (
+                <>
+                  <AlertTriangle className="w-3.5 h-3.5 inline mr-1 text-orange-600" />
+                  Akan menghapus produk dengan filter:
+                  <ul className="mt-1 ml-4 list-disc">
+                    {filterDeleteCategory && <li>Kategori: <strong>{filterDeleteCategory}</strong></li>}
+                    {filterDeleteMarketplace && <li>Marketplace: <strong>{filterDeleteMarketplace}</strong></li>}
+                    {filterDeleteOlderDays && <li>Lebih lama dari: <strong>{filterDeleteOlderDays} hari</strong></li>}
+                  </ul>
+                  <p className="mt-2 text-orange-600 font-semibold">
+                    ⚠️ Ketik nama kategori atau "HAPUS" untuk konfirmasi:
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 inline mr-1" />
+                  <strong>Wajib pilih minimal 1 filter!</strong> Tanpa filter, tombol hapus tidak akan aktif.
+                </>
+              )}
             </div>
+
+            {/* Confirmation input — hanya muncul kalau ada filter */}
+            {(filterDeleteCategory || filterDeleteMarketplace || filterDeleteOlderDays) && (
+              <div>
+                <Input
+                  placeholder={filterDeleteCategory ? `Ketik: ${filterDeleteCategory}` : 'Ketik: HAPUS'}
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            )}
           </div>
 
           <AlertDialogFooter>
@@ -1011,49 +1040,55 @@ export function ProductsTab() {
               className="bg-orange-600 hover:bg-orange-700"
               disabled={
                 bulkDeleteMutation.isPending ||
-                (!filterDeleteCategory && !filterDeleteMarketplace && !filterDeleteOlderDays)
+                (!filterDeleteCategory && !filterDeleteMarketplace && !filterDeleteOlderDays) ||
+                (filterDeleteCategory
+                  ? deleteConfirmText !== filterDeleteCategory
+                  : deleteConfirmText !== "HAPUS")
               }
             >
-              {bulkDeleteMutation.isPending ? "Menghapus..." : "Hapus Produk"}
+              {bulkDeleteMutation.isPending ? "Menghapus..." : `Hapus Produk${filterDeleteCategory ? ` (${filterDeleteCategory})` : ""}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Delete All dialog ── */}
+      {/* ── Delete All dialog — DANGER ZONE ── */}
       <AlertDialog open={showDeleteAllDialog} onOpenChange={(open) => { setShowDeleteAllDialog(open); if (!open) setDeleteConfirmText(""); }}>
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md border-2 border-red-500">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-red-600">
               <AlertTriangle className="w-5 h-5" />
-              HAPUS SEMUA PRODUK?
+              🚫 DANGER: HAPUS SEMUA {products.length} PRODUK?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              <strong className="text-red-600">PERINGATAN:</strong> Semua {products.length} produk akan dihapus permanen.
-              Tindakan ini <strong>tidak bisa dibatalkan</strong>!
+              <strong className="text-red-600">PERINGATAN KERAS:</strong> Semua {products.length} produk akan dihapus <strong>PERMANEN</strong>.
+              <br/><br/>
+              <span className="text-red-500">⚠️ Tindakan ini TIDAK BISA dibatalkan!</span>
+              <br/><br/>
+              <span className="text-zinc-500 text-xs">💡 Tips: Kalau mau hide produk (bukan hapus), gunakan tombol "Hide" per produk atau bulk hide via API.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
 
           <div className="py-2">
-            <Label className="text-xs font-medium">
-              Ketik <strong>HAPUS SEMUA</strong> untuk konfirmasi:
+            <Label className="text-xs font-medium text-red-600">
+              Ketik <strong>HAPUS SEMUA {products.length} PRODUK</strong> untuk konfirmasi:
             </Label>
             <Input
-              placeholder="HAPUS SEMUA"
+              placeholder={`HAPUS SEMUA ${products.length} PRODUK`}
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
-              className="mt-1"
+              className="mt-1 border-red-300 focus-visible:ring-red-500"
             />
           </div>
 
           <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogCancel className="border-green-300 text-green-700 hover:bg-green-50">Batal (Aman)</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => bulkDeleteMutation.mutate({ deleteAll: true })}
               className="bg-red-600 hover:bg-red-700"
-              disabled={deleteConfirmText !== "HAPUS SEMUA" || bulkDeleteMutation.isPending}
+              disabled={deleteConfirmText !== `HAPUS SEMUA ${products.length} PRODUK` || bulkDeleteMutation.isPending}
             >
-              {bulkDeleteMutation.isPending ? "Menghapus..." : "HAPUS SEMUA PRODUK"}
+              {bulkDeleteMutation.isPending ? "Menghapus..." : "🚫 HAPUS SEMUA PERMANEN"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
