@@ -40,6 +40,7 @@ import {
   Filter,
   Zap,
   RefreshCw,
+  ImagePlus,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -69,6 +70,7 @@ export function ProductsTab() {
 
   // ─── Refresh State ───
   const [refreshProgress, setRefreshProgress] = React.useState<{ total: number; done: number; ok: number } | null>(null);
+  const [imgRefreshProgress, setImgRefreshProgress] = React.useState<{ total: number; done: number; ok: number; current: string } | null>(null);
   const [filterDeleteCategory, setFilterDeleteCategory] = React.useState("");
   const [filterDeleteMarketplace, setFilterDeleteMarketplace] = React.useState("");
   const [filterDeleteOlderDays, setFilterDeleteOlderDays] = React.useState("");
@@ -267,6 +269,121 @@ export function ProductsTab() {
     queryClient.invalidateQueries({ queryKey: ["products"] });
     setRefreshProgress(null);
     toast({ title: "Refresh semua selesai", description: `${okCount} dari ${ids.length} produk berhasil di-update dari Shopee` });
+  }
+
+  // ─── Refresh Image Tokopedia (browser-side fetch + Cloudinary upload) ───
+  async function handleRefreshImages() {
+    const allProducts = productsData ?? [];
+    // Filter: Tokopedia products with expiring image URLs (not Cloudinary)
+    const needRefresh = allProducts.filter((p: any) =>
+      p.marketplace === "tokopedia" &&
+      p.image &&
+      !p.image.includes("cloudinary.com") &&
+      (p.image.includes("tokopedia-static") || p.image.includes("p16-images") || p.image.includes("p19-images"))
+    );
+
+    if (needRefresh.length === 0) {
+      toast({ title: "Tidak ada produk Tokopedia yang perlu refresh image" });
+      return;
+    }
+
+    setImgRefreshProgress({ total: needRefresh.length, done: 0, ok: 0, current: "" });
+    let okCount = 0;
+
+    for (let i = 0; i < needRefresh.length; i++) {
+      const product = needRefresh[i];
+      const title = product.title?.slice(0, 30) || "Unknown";
+      setImgRefreshProgress({ total: needRefresh.length, done: i, ok: okCount, current: title });
+
+      try {
+        // Step 1: Fetch Tokopedia product page (from browser — CAN access CDN)
+        const pageRes = await fetch(product.url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "text/html",
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (!pageRes.ok) continue;
+
+        // Read first 50KB (og:image is in <head>)
+        const reader = pageRes.body?.getReader();
+        let html = "";
+        if (reader) {
+          const decoder = new TextDecoder();
+          while (html.length < 50000) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            html += decoder.decode(value, { stream: true });
+          }
+          reader.cancel();
+        }
+
+        // Step 2: Extract image URL
+        let imageUrl: string | null = null;
+        const ogMatch = html.match(/property=["']og:image["']\s+content=["']([^"']+)/i);
+        if (ogMatch) imageUrl = ogMatch[1];
+        if (!imageUrl) {
+          const signMatch = html.match(/https:\/\/p16-images-sign-sg\.tokopedia-static\.net\/[^"'\s<>\\]+\.(?:jpg|jpeg|png|webp)/i);
+          if (signMatch) imageUrl = signMatch[0];
+        }
+        if (!imageUrl) continue;
+
+        // Step 3: Download image as blob
+        const imgRes = await fetch(imageUrl, {
+          headers: { "Referer": "https://www.tokopedia.com/", "Accept": "image/*" },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!imgRes.ok) continue;
+
+        const blob = await imgRes.blob();
+        if (blob.size < 1000) continue;
+
+        // Step 4: Convert to base64
+        const base64: string = await new Promise((resolve) => {
+          const r = new FileReader();
+          r.onloadend = () => resolve(r.result as string);
+          r.readAsDataURL(blob);
+        });
+
+        // Step 5: Upload to Cloudinary via API
+        const uploadRes = await fetch("/api/mirror-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ image: base64, publicId: product.id }),
+        });
+
+        if (!uploadRes.ok) continue;
+        const uploadData = await uploadRes.json();
+        if (!uploadData.success || !uploadData.url) continue;
+
+        // Step 6: Update product image in DB
+        await fetch("/api/shopee-products", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ id: product.id, image: uploadData.url }),
+        });
+
+        okCount++;
+      } catch {
+        // skip this product, continue to next
+      }
+
+      setImgRefreshProgress({ total: needRefresh.length, done: i + 1, ok: okCount, current: "" });
+      // Small delay to avoid overwhelming
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+    queryClient.invalidateQueries({ queryKey: ["products"] });
+    setImgRefreshProgress(null);
+    toast({
+      title: "Refresh Image Tokopedia selesai",
+      description: `${okCount} dari ${needRefresh.length} produk image berhasil di-mirror ke Cloudinary`,
+    });
   }
 
   // ─── Selection Handlers ───
@@ -592,10 +709,23 @@ export function ProductsTab() {
               variant="outline"
               className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
               onClick={handleRefreshAll}
-              disabled={refreshProgress !== null}
+              disabled={refreshProgress !== null || imgRefreshProgress !== null}
             >
               <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshProgress ? "animate-spin" : ""}`} />
               {refreshProgress ? `Refresh ${refreshProgress.done}/${refreshProgress.total}` : "Refresh dari Shopee"}
+            </Button>
+            {/* Refresh Image Tokopedia — re-fetch expired image → Cloudinary */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-400 dark:hover:bg-violet-900/20"
+              onClick={handleRefreshImages}
+              disabled={imgRefreshProgress !== null || refreshProgress !== null}
+            >
+              <ImagePlus className={`w-3.5 h-3.5 mr-1 ${imgRefreshProgress ? "animate-spin" : ""}`} />
+              {imgRefreshProgress
+                ? `Image ${imgRefreshProgress.done}/${imgRefreshProgress.total} (${imgRefreshProgress.ok} ok)`
+                : "🔄 Refresh Image Tokped"}
             </Button>
             {/* Filter Delete Button */}
             <Button
