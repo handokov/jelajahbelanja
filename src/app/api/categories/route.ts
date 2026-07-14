@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { ensureCategoriesSeeded, DEFAULT_CATEGORIES } from "@/lib/seed";
 import type {
@@ -84,6 +85,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Force homepage re-render
+    try { revalidatePath("/", "layout"); } catch {}
+
     return NextResponse.json<{ category: CategoryDTO }>({
       category: toDTO(created),
     });
@@ -122,6 +126,8 @@ export async function PATCH(req: NextRequest) {
         })
       );
       await Promise.all(ops);
+      // Force homepage re-render supaya category chips update
+      try { revalidatePath("/", "layout"); } catch {}
       const updated = await db.category.findMany({ orderBy: { order: "asc" } });
       return NextResponse.json<{ categories: CategoryDTO[] }>({
         categories: updated.map(toDTO),
@@ -150,6 +156,9 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
+    // Force homepage re-render supaya category chips update
+    try { revalidatePath("/", "layout"); } catch {}
+
     return NextResponse.json<{ category: CategoryDTO }>({
       category: toDTO(updated),
     });
@@ -171,6 +180,8 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "ID wajib diisi" }, { status: 400 });
     }
     await db.category.delete({ where: { id } });
+    // Force homepage re-render
+    try { revalidatePath("/", "layout"); } catch {}
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[api/categories DELETE] Error:", err);
