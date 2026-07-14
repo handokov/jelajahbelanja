@@ -2,7 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { batchCreateCustomCreative, createCustomCreative, getLastCreateCustomError, type BatchCustomLinkItem } from "@/lib/accesstrade";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // 5 menit (Vercel Pro) / 60s (free) — batch 120 produk × 0.5s = 60s
+export const maxDuration = 300;
+
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "jelajahbelanja2024";
+
+// Auth: accept Bearer token (scraper) OR cookie (admin panel)
+function checkAuth(req: NextRequest): NextResponse | null {
+  // Check Bearer token first (scraper extension)
+  const auth = req.headers.get("authorization");
+  if (auth === `Bearer ${ADMIN_SECRET}`) return null;
+  // Check cookie (admin panel)
+  const cookie = req.cookies.get("jb-admin-session")?.value;
+  if (cookie) return null; // middleware already verified cookie
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
 
 /**
  * POST /api/at-custom-link
@@ -23,6 +36,9 @@ export const maxDuration = 300; // 5 menit (Vercel Pro) / 60s (free) — batch 1
  * Auth: admin (protected by middleware — jb-admin-session cookie).
  */
 export async function POST(req: NextRequest) {
+  const authErr = checkAuth(req);
+  if (authErr) return authErr;
+
   try {
     const body = await req.json();
     const mode = body.mode as "single" | "batch";
