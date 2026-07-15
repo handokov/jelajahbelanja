@@ -85,76 +85,98 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Generate content via z-ai-web-dev-sdk
+    // Generate content via Groq API (GPT-OSS 120B) — jalan di Vercel
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+    const MODEL = "openai/gpt-oss-120b";
+
     let content = "";
     let excerpt = "";
     let metaDescription = "";
     let tags = "";
     let readTime = "5 menit";
 
+    if (!GROQ_API_KEY) {
+      return NextResponse.json({ error: "GROQ_API_KEY not set" }, { status: 500 });
+    }
+
     try {
-      const ZAI = (await import("z-ai-web-dev-sdk")).default;
-      const zai = await ZAI.create();
-
-      // Generate article content
-      const response = await zai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: "Anda adalah penulis blog Indonesia yang ahli dalam tips belanja online, review produk, dan gaya hidup. Tulis dalam bahasa Indonesia yang natural, santai, dan informatif. Format output sebagai HTML yang siap ditampilkan (h2, p, ul, li, strong).",
-          },
-          {
-            role: "user",
-            content: `${topic.prompt}\n\nJudul artikel: ${topic.title}\n\nTulis artikel lengkap (minimal 800 kata) dalam format HTML. Mulai dengan paragraf pembuka yang menarik, lalu isi dengan sub-heading (h2), dan tutup dengan kesimpulan.`,
-          },
-        ],
+      // Generate article content via Groq
+      const groqResponse = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            {
+              role: "system",
+              content: "Anda adalah jurnalis dan penulis blog Indonesia yang ahli dalam tips belanja online produk anak, review produk, dan gaya hidup keluarga. Tulis dalam bahasa Indonesia yang natural, santai, informatif, dan seperti ditulis manusia sungguhan. Format output sebagai HTML (h2, p, ul, li, strong). JANGAN pakai markdown.",
+            },
+            {
+              role: "user",
+              content: `${topic.prompt}\n\nJudul artikel: ${topic.title}\n\nTulis artikel lengkap (minimal 1000 kata) dalam format HTML. Mulai dengan paragraf pembuka yang menarik, lalu isi dengan 4-5 sub-heading (h2), dan tutup dengan kesimpulan.`,
+            },
+          ],
+          max_tokens: 4096,
+          temperature: 0.8,
+          reasoning_format: "hidden",
+        }),
       });
 
-      content = response.choices[0]?.message?.content || "";
+      if (groqResponse.ok) {
+        const groqData = await groqResponse.json();
+        content = groqData.choices?.[0]?.message?.content || "";
+      } else {
+        throw new Error(`Groq API ${groqResponse.status}`);
+      }
 
-      // Generate excerpt
-      const excerptResponse = await zai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: "Anda adalah asisten yang membuat ringkasan artikel. Tulis ringkasan 1-2 kalimat dalam bahasa Indonesia.",
-          },
-          {
-            role: "user",
-            content: `Buat ringkasan singkat (1 kalimat, max 150 karakter) untuk artikel berjudul: ${topic.title}`,
-          },
-        ],
+      // Generate excerpt via Groq
+      const excerptResponse = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${GROQ_API_KEY}` },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            { role: "system", content: "Buat ringkasan 1 kalimat menarik dalam bahasa Indonesia, max 150 karakter." },
+            { role: "user", content: `Ringkasan untuk artikel: ${topic.title}` },
+          ],
+          max_tokens: 200, temperature: 0.5, reasoning_format: "hidden",
+        }),
       });
-      excerpt = excerptResponse.choices[0]?.message?.content?.slice(0, 200) || topic.title;
+      if (excerptResponse.ok) {
+        const exData = await excerptResponse.json();
+        excerpt = exData.choices?.[0]?.message?.content?.slice(0, 200) || topic.title;
+      } else { excerpt = topic.title; }
 
-      // Generate meta description
       metaDescription = excerpt.slice(0, 160);
 
-      // Generate tags
-      const tagsResponse = await zai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: "Anda adalah asisten SEO. Berikan 5 tag relevan dalam bahasa Indonesia, dipisah koma.",
-          },
-          {
-            role: "user",
-            content: `Berikan 5 tag SEO untuk artikel berjudul: ${topic.title}`,
-          },
-        ],
+      // Generate tags via Groq
+      const tagsResponse = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${GROQ_API_KEY}` },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            { role: "system", content: "Berikan 5 tag SEO relevan dalam bahasa Indonesia, dipisah koma." },
+            { role: "user", content: `Tag untuk artikel: ${topic.title}` },
+          ],
+          max_tokens: 100, temperature: 0.3, reasoning_format: "hidden",
+        }),
       });
-      tags = tagsResponse.choices[0]?.message?.content || "";
+      if (tagsResponse.ok) {
+        const tagData = await tagsResponse.json();
+        tags = tagData.choices?.[0]?.message?.content || topic.category;
+      } else { tags = topic.category; }
 
       // Estimate read time (200 words per minute)
       const wordCount = content.split(/\s+/).length;
       readTime = `${Math.max(3, Math.ceil(wordCount / 200))} menit`;
     } catch (aiErr: any) {
       console.error("[cron/blog-generate] AI error:", aiErr);
-      // Fallback: pakai template content sederhana
-      content = `<h2>Pendahuluan</h2><p>${topic.title}. Artikel ini akan membahas tips dan trik yang berguna untuk Anda.</p><h2>Tips Utama</h2><ul><li>Selalu cek rating toko sebelum beli</li><li>Bandngkan harga di beberapa marketplace</li><li>Manfaatkan voucher dan cashback</li><li>Baca review dari pembeli lain</li></ul><h2>Kesimpulan</h2><p>Belanja online bisa jadi pengalaman yang menyenangkan jika Anda tahu caranya. Semoga tips di artikel ini bermanfaat!</p>`;
-      excerpt = topic.title;
-      metaDescription = topic.title;
-      tags = topic.category;
+      return NextResponse.json({ error: "Gagal generate AI: " + (aiErr.message || "unknown") }, { status: 500 });
     }
 
     // Save to DB
