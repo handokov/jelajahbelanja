@@ -4,10 +4,12 @@ import { blogArticles } from "@/lib/blog-data";
 import { db } from "@/lib/db";
 import { Clock, ArrowRight, BookOpen, Tag } from "lucide-react";
 
+export const revalidate = 0; // Always fresh — jangan cache halaman artikel
+
 export const metadata: Metadata = {
-  title: "Blog & Artikel — Tips Belanja Online, Review Produk, Panduan Affiliate",
+  title: "Blog & Artikel — Tips Belanja Produk Anak, Review & Panduan",
   description:
-    "Artikel seputar tips belanja online aman, review produk viral, rahasia diskon Shopee, ide hadiah murah, dan panduan Shopee Affiliate untuk pemula.",
+    "Artikel seputar tips belanja produk anak, review tumbler, tas sekolah, baju anak, mainan edukatif, dan panduan belanja hemat untuk orang tua.",
   keywords: [
     "tips belanja online",
     "review produk viral",
