@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { checkAuth } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,58 +19,32 @@ function authCheck(req: NextRequest): NextResponse | null {
 /**
  * GET /api/blog-trending
  *
- * Cari trending topik produk anak di Google + marketplace Indonesia.
- * AI analisis → suggest 5 judul artikel yang fresh (belum pernah diblog lain).
- *
- * Response: { success, trending: [{ title, category, prompt, reason, searchVolume }] }
+ * AI cari trending topik produk anak Indonesia → suggest 5 judul artikel fresh.
+ * Pakai Groq API (GPT-OSS 120B) — punya knowledge cutoff terbaru + reasoning.
  */
 export async function GET(req: NextRequest) {
   const authErr = authCheck(req);
   if (authErr) return authErr;
 
   try {
-    // Step 1: Search trending produk anak di Google via z-ai web_search
-    const ZAI = (await import("z-ai-web-dev-sdk")).default;
-    const zai = await ZAI.create();
-
-    // Multiple search queries untuk dapat trending terbaru
-    const searchQueries = [
-      "produk anak viral TikTok Indonesia 2026",
-      "trending belanja produk anak Shopee Tokopedia 2026",
-      "produk bayi dan anak terlaris marketplace Indonesia 2026",
-      "fashion anak tren terbaru 2026 Indonesia",
-    ];
-
-    interface SearchResult {
-      url: string;
-      name: string;
-      snippet: string;
-      host_name: string;
-      date: string;
-    }
-
-    const allResults: SearchResult[] = [];
-    for (const query of searchQueries) {
-      try {
-        const results = await zai.functions.invoke("web_search", { query, num: 10 });
-        if (Array.isArray(results)) {
-          allResults.push(...results);
-        }
-      } catch {}
-    }
-
-    // Step 2: Cek artikel yang sudah ada di DB (supaya tidak duplikat)
+    // Cek artikel yang sudah ada di DB
     const existingArticles = await db.blogArticle.findMany({ select: { title: true } });
     const existingTitles = existingArticles.map(a => a.title.toLowerCase());
+    const existingContext = existingTitles.join("; ").slice(0, 800);
 
-    // Step 3: AI analisis trending → suggest 5 judul artikel fresh
-    const searchContext = allResults
-      .slice(0, 30)
-      .map((r, i) => `${i + 1}. ${r.name}\n   ${r.snippet?.slice(0, 120)}`)
-      .join("\n");
+    // Cek produk yang ada di DB (untuk konteks kategori)
+    const productCount = await db.shopeeProduct.count({ where: { isHidden: false } });
+    const categories = await db.category.findMany({
+      where: { enabled: true },
+      select: { name: true },
+    });
+    const categoryNames = categories.map(c => c.name).join(", ");
 
-    const existingContext = existingTitles.join("; ").slice(0, 500);
+    // Current date untuk konteks
+    const now = new Date();
+    const monthYear = now.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
 
+    // AI: analisis trending + suggest judul artikel
     const groqResponse = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
@@ -83,49 +56,51 @@ export async function GET(req: NextRequest) {
         messages: [
           {
             role: "system",
-            content: `Anda adalah content strategist untuk JelajahBelanja — blog kurasi produk anak Indonesia. Tugas: analisis data trending dan suggest 5 judul artikel yang FRESH, SEO-friendly, dan belum pernah diblog orang lain.
+            content: `Anda adalah content strategist AI untuk JelajahBelanja — blog kurasi produk anak Indonesia (jelajahbelanja.com).
+
+Tugas: cari topik trending produk anak di Indonesia untuk ${monthYear} dan suggest 5 judul artikel yang FRESH dan SEO-friendly.
+
+Konteks JB:
+- Niche: produk anak (fashion anak, tumbler, tas sekolah, mainan edukatif, kaos kaki, jepit rambut, sepatu anak, mukena anak)
+- Marketplace: Shopee, Tokopedia, Lazada, Blibli, TikTok Shop
+- Audience: ibu/ayah muda Indonesia (25-40 tahun)
+- Kategori aktif: ${categoryNames}
+- ${productCount} produk di database
 
 Penting:
-- Artikel harus tentang produk anak (fashion anak, tumbler, tas sekolah, mainan edukatif, kaos kaki, jepit rambut, sepatu anak, mukena anak, dll)
-- Judul harus menarik clickbait tapi jujur (tidak menyesatkan)
-- Sertakan tahun 2026 jika relevan
-- Bahasa Indonesia
-- Format: JSON array dengan field: title, category, prompt, reason, searchVolume
+- Think about what's trending NOW: viral TikTok, seasonal (back to school, Lebaran, Natal), new product launches
+- Judul harus SEO-friendly (orang cari di Google)
+- First-mover: pilih topik yang BELUM banyak diblog orang lain
+- Artikel harus relevan dengan produk yang dijual JB
 
-Category options: "Review Produk", "Tips Belanja", "Tips Hemat", "Trending"
-
-Output HANYA JSON, tidak ada penjelasan lain.`,
+Output: JSON array dengan 5 suggestions. HANYA JSON, tidak ada teks lain.
+[
+  {
+    "title": "Judul Artikel",
+    "category": "Review Produk|Tips Belanja|Tips Hemat|Trending",
+    "prompt": "Prompt detail untuk AI generate artikel (deskripsikan apa yang harus ditulis, tone, struktur)",
+    "reason": "Kenapa topik ini trending sekarang",
+    "searchVolume": "Tinggi|Sedang|Rendah",
+    "keyword": "Keyword SEO utama"
+  }
+]`,
           },
           {
             role: "user",
-            content: `Data trending dari Google & marketplace Indonesia:
-
-${searchContext}
+            content: `Bulan: ${monthYear}
 
 Artikel yang SUDAH ada di JB (jangan duplikat):
 ${existingContext}
 
-Berdasarkan data trending di atas, suggest 5 judul artikel produk anak yang:
-1. Lagi trending/viral sekarang
-2. Belum pernah diblog JB
-3. Potensi SEO tinggi (orang cari di Google)
-4. First-mover advantage (belum banyak blog yang bahas)
+Suggest 5 judul artikel produk anak yang trending untuk ${monthYear}. 
+Pikirkan: apa yang lagi viral di TikTok, apa yang orang cari di Google, 
+musim/season yang relevan, dan produk baru yang menarik.
 
-Output format: JSON array
-[
-  {
-    "title": "Judul Artikel Menarik",
-    "category": "Review Produk",
-    "prompt": "Prompt detail untuk AI generate artikel ini",
-    "reason": "Kenapa topik ini trending",
-    "searchVolume": "Estimasi tingkat pencarian: Tinggi/Sedang/Rendah"
-  },
-  ...5 items
-]`,
+Jangan suggest topik yang sudah ada di list di atas.`,
           },
         ],
         max_tokens: 2000,
-        temperature: 0.7,
+        temperature: 0.8,
         reasoning_format: "hidden",
       }),
     });
@@ -133,7 +108,7 @@ Output format: JSON array
     if (!groqResponse.ok) {
       const errText = await groqResponse.text();
       return NextResponse.json(
-        { success: false, error: `Groq API error: ${groqResponse.status}`, detail: errText.slice(0, 200) },
+        { success: false, error: `Groq API ${groqResponse.status}`, detail: errText.slice(0, 300) },
         { status: 500 }
       );
     }
@@ -141,44 +116,38 @@ Output format: JSON array
     const groqData = await groqResponse.json();
     const aiResponse = groqData.choices?.[0]?.message?.content || "";
 
-    // Parse JSON dari AI response
+    // Parse JSON
     let trending: any[] = [];
     try {
-      // Coba parse langsung
       trending = JSON.parse(aiResponse);
     } catch {
-      // Coba extract JSON dari text
       const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        try {
-          trending = JSON.parse(jsonMatch[0]);
-        } catch {
-          return NextResponse.json({
-            success: false,
-            error: "AI response bukan JSON valid",
-            raw: aiResponse.slice(0, 500),
-          });
-        }
-      } else {
-        return NextResponse.json({
-          success: false,
-          error: "AI response tidak ada JSON",
-          raw: aiResponse.slice(0, 500),
-        });
+        try { trending = JSON.parse(jsonMatch[0]); } catch {}
       }
     }
 
-    // Filter: pastikan belum ada di DB
-    const filteredTrending = trending.filter((t: any) => {
+    if (!Array.isArray(trending) || trending.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: "AI tidak return JSON valid",
+        raw: aiResponse.slice(0, 500),
+      });
+    }
+
+    // Filter duplikat
+    const filtered = trending.filter((t: any) => {
       const titleLower = (t.title || "").toLowerCase();
-      return !existingTitles.some(et => et.includes(titleLower) || titleLower.includes(et));
+      return !existingTitles.some(et => et === titleLower);
     });
 
     return NextResponse.json({
       success: true,
-      totalSearchResults: allResults.length,
+      month: monthYear,
+      productCount,
+      categories: categoryNames,
       existingArticles: existingTitles.length,
-      trending: filteredTrending,
+      trending: filtered,
     });
   } catch (err: any) {
     console.error("[api/blog-trending] Error:", err);
@@ -188,10 +157,8 @@ Output format: JSON array
 
 /**
  * POST /api/blog-trending
- *
- * Generate artikel berdasarkan trending suggestion.
+ * Generate artikel dari trending suggestion.
  * Body: { "title": "...", "category": "...", "prompt": "..." }
- * → Call /api/blog-generate dengan topic dari trending
  */
 export async function POST(req: NextRequest) {
   const authErr = authCheck(req);
@@ -202,13 +169,10 @@ export async function POST(req: NextRequest) {
     const { title, category, prompt } = body;
 
     if (!title || !prompt) {
-      return NextResponse.json(
-        { error: "title dan prompt wajib diisi" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "title dan prompt wajib diisi" }, { status: 400 });
     }
 
-    // Forward ke blog-generate API
+    // Forward ke blog-generate
     const blogRes = await fetch(`${req.nextUrl.origin}/api/blog-generate`, {
       method: "POST",
       headers: {
@@ -219,16 +183,7 @@ export async function POST(req: NextRequest) {
     });
 
     const blogData = await blogRes.json();
-
-    if (!blogData.success) {
-      return NextResponse.json(blogData, { status: blogRes.status });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Artikel trending berhasil di-generate!",
-      article: blogData.article,
-    });
+    return NextResponse.json(blogData, { status: blogRes.status });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
