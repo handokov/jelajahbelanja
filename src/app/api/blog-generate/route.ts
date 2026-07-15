@@ -22,67 +22,67 @@ export async function POST(req: NextRequest) {
   if (authErr) return authErr;
 
   try {
-    // Daftar topik default (sama dengan cron/blog-generate)
+    // Default topics — FOKUS PRODUK ANAK
     const defaultTopics = [
       {
-        title: "10 Produk Fashion Viral TikTok yang Worth It Beli",
+        title: "10 Tumbler Anak Anti Tumpah Terbaik 2026 — Review Lengkap",
         category: "Review Produk",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang 10 produk fashion yang viral di TikTok Indonesia 2025. Format HTML dengan heading h2, paragraf p, list ul/li. Sertakan tips memilih fashion viral yang berkualitas. Tone: santai, informatif, seperti influencer Indonesia.",
+        prompt: "Tulis artikel review 10 tumbler/botol minum anak anti tumpah terbaik. Bahas bahan (BPA free, stainless steel, plastik food grade), sedotan anti tumpah, ukuran, harga, dan rekomendasi per usia anak. Sertakan tips memilih tumbler yang aman untuk balita.",
       },
       {
-        title: "Cara Dapat Diskon Shopee Hingga 70% yang Sering Terlewat",
-        category: "Tips Hemat",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang rahasia mendapat diskon Shopee hingga 70%. Bahas voucher tersembunyi, flash sale, cashback, gratis ongkir. Format HTML dengan h2, p, ul/li. Tone: praktis, langsung ke poin.",
-      },
-      {
-        title: "Produk Elektronik Termurah di Tokopedia 2025",
+        title: "Cara Memilih Kaos Kaki Sekolah Anak yang Nyaman dan Tahan Lama",
         category: "Tips Belanja",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang 10 produk elektronik termurah dan berkualitas di Tokopedia 2025. Format HTML dengan h2, p, ul/li. Bahas earbuds, powerbank, smartwatch, dll. Tone: informatif, santai.",
+        prompt: "Tulis artikel panduan memilih kaos kaki sekolah anak SD/SMP/SMA. Bahas bahan (katun, spandex, bamboo), ketebalan, ukuran, tips agar tidak mudah berlubang, dan merekomendasikan 5 produk terbaik dengan rating tinggi.",
       },
       {
-        title: "Skincare Viral yang Beneran Bagus — Review Jujur",
+        title: "10 Jepit Rambut Anak Korea yang Viral di TikTok 2026",
         category: "Review Produk",
-        prompt: "Tulis artikel blog bahasa Indonesia review 8 produk skincare viral di TikTok/Instagram yang beneran bagus. Format HTML dengan h2, p, ul/li. Bahas sunscreen, serum, moisturizer. Tone: jujur, seperti sahabat yang kasih saran.",
+        prompt: "Tulis artikel review 10 jepit rambut anak model Korea yang lagi viral di TikTok. Bahas bahan, daya rekat, apakah bikin sakit kepala atau tidak, harga, dan rekomendasi untuk anak perempuan usia 3-10 tahun.",
       },
       {
-        title: "Tips Belanja Online Aman untuk Pemula 2025",
+        title: "Tips Belanja Baju Anak Online — Hindari Kecewa dengan 7 Tips Ini",
         category: "Tips Belanja",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang tips belanja online aman untuk pemula di marketplace Indonesia (Shopee, Tokopedia, Lazada). Format HTML dengan h2, p, ul/li. Bahas cek rating toko, bedakan original vs kw, cara klaim garansi. Tone: edukatif, mudah dipahami.",
+        prompt: "Tulis artikel tips belanja baju anak online di Shopee dan Tokopedia. Bahas: cek ukuran dengan teliti, baca review foto pembeli, pilih seller rating 4.8+, cek bahan (katun combed, baby terry), musim yang tepat untuk beli, dan cara klaim garansi.",
       },
       {
-        title: "Produk Home Living Estetik di Bawah Rp100rb",
-        category: "Tips Hemat",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang 10 produk home living estetik di bawah Rp100rb dari marketplace Indonesia. Format HTML dengan h2, p, ul/li. Bahas dekorasi, organizer, lampu, dll. Tone: inspiratif, cozy.",
-      },
-      {
-        title: "Perbedaan Shopee, Tokopedia, dan Lazada — Mana yang Terbaik?",
-        category: "Tips Belanja",
-        prompt: "Tulis artikel blog bahasa Indonesia membandingkan Shopee vs Tokopedia vs Lazada. Bahas kelebihan, kekurangan, promo, pengiriman, dll. Format HTML dengan h2, p, ul/li, table. Tone: objektif, informatif.",
-      },
-      {
-        title: "Cara Daftar Affiliate Shopee untuk Pemula",
-        category: "Affiliate Guide",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang cara daftar Shopee Affiliate untuk pemula. Bahas syarat, cara daftar, tips dapat komisi. Format HTML dengan h2, p, ol/li. Tone: praktis, langkah demi langkah.",
-      },
-      {
-        title: "10 Produk Viral TikTok yang Worth It Beli 2025",
+        title: "10 Tas Ransel Sekolah Anak SD yang Kuat dan Estetik",
         category: "Review Produk",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang 10 produk viral TikTok 2025 yang worth it dibeli. Bahas berbagai kategori: fashion, beauty, elektronik, home. Format HTML dengan h2, p, ul/li. Tone: santai, review jujur.",
+        prompt: "Tulis artikel review 10 tas ransel sekolah anak SD terbaik. Bahas kapasitas, bahan (waterproof, anti air), tali yang ergonomis, desain, dan harga. Sertakan tips memilih tas yang tidak bikin punggung anak sakit.",
       },
       {
-        title: "Rahasia Gratis Ongkir Shopee & Tokopedia Tanpa Minimum Belanja",
+        title: "Mainan Edukatif Anak 3-5 Tahun yang Worth It Beli",
+        category: "Review Produk",
+        prompt: "Tulis artikel review 10 mainan edukatif untuk anak usia 3-5 tahun. Bahas manfaat perkembangan (motorik, kognitif, kreativitas), bahan aman (non-toxic), dan rekomendasi produk dari marketplace Indonesia dengan harga terjangkau.",
+      },
+      {
+        title: "Cara Dapat Diskon Belanja Produk Anak di Shopee Hingga 70%",
         category: "Tips Hemat",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang rahasia gratis ongkir Shopee dan Tokopedia tanpa minimum belanja. Bahas voucher, program gratis ongkir, tips kombinasi. Format HTML dengan h2, p, ul/li. Tone: praktis.",
+        prompt: "Tulis artikel tips hemat belanja produk anak di Shopee. Bahas: voucher tersembunyi, flash sale produk anak, cashback, gratis ongkir, combo promo, dan timing belanja yang tepat (back to school, mid-year sale, 11.11).",
       },
       {
-        title: "Produk Murah Meriah di Bawah Rp20rb yang Worth It",
-        category: "Tips Hemat",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang 15 produk murah meriah di bawah Rp20rb yang worth it beli dari marketplace Indonesia. Format HTML dengan h2, p, ul/li. Bahas aksesoris, alat tulis, kebutuhan rumah. Tone: fun, hemat.",
+        title: "Dress Anak Perempuan untuk Pesta: 10 Pilihan Murah tapi Cantik",
+        category: "Review Produk",
+        prompt: "Tulis artikel rekomendasi 10 dress anak perempuan untuk pesta/acara formal. Bahas bahan (organza, sateen, tulle), desain, ukuran, harga di bawah Rp100rb, dan tips memilih dress yang nyaman untuk anak bergerak.",
       },
       {
-        title: "Cara Pilih Produk Viral yang Beneran Bagus (Bukan Cuma Hype)",
+        title: "Sepatu Sekolah Anak: Panduan Memilih yang Tepat per Usia",
         category: "Tips Belanja",
-        prompt: "Tulis artikel blog bahasa Indonesia tentang cara memilih produk viral di TikTok/Instagram yang beneran bagus, bukan cuma hype. Bahas cek review, rating, seller, dll. Format HTML dengan h2, p, ul/li. Tone: edukatif, kritis.",
+        prompt: "Tulis artikel panduan memilih sepatu sekolah anak. Bahas: ukuran yang tepat (cara ukur kaki anak), bahan (kulit, canvas, mesh), sol anti slip, tips agar awet, dan kapan harus ganti sepatu. Sertakan rekomendasi 5 sepatu terbaik.",
+      },
+      {
+        title: "Mukena Anak Terbaik — Bahan Adem dan Desain Cantik untuk Si Kecil",
+        category: "Review Produk",
+        prompt: "Tulis artikel review 8 mukena anak terbaik. Bahas bahan (parasut, kaos, baby terry), ukuran per usia, desain yang disukai anak, harga, dan tips merawat mukena anak agar awas.",
+      },
+      {
+        title: "Produk Anak Viral TikTok 2026 yang Beneran Worth It (Bukan Cuma Hype)",
+        category: "Review Produk",
+        prompt: "Tulis artikel review produk anak yang viral di TikTok 2026. Pilih 10 produk yang beneran bagus, bukan cuma hype. Bahas kenapa viral, apakah worth it, kelebihan dan kekurangan, serta rekomendasi untuk usia berapa.",
+      },
+      {
+        title: "Belanja Perlengkapan Sekolah Anak Hemat — Checklist Lengkap",
+        category: "Tips Hemat",
+        prompt: "Tulis artikel checklist perlengkapan sekolah anak SD. Bahas: tas, buku tulis, alat tulis, kotak pensil, seragam, sepatu, kaos kaki, tumbler. Sertakan estimasi budget dan tips hemat belanja di marketplace.",
       },
     ];
 
@@ -128,75 +128,120 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate content via z-ai-web-dev-sdk
+    // Generate content via Groq API (GPT-OSS 120B) — jalan di Vercel
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+    const MODEL = "openai/gpt-oss-120b";
+
     let content = "";
     let excerpt = "";
     let metaDescription = "";
     let tags = "";
     let readTime = "5 menit";
 
+    if (!GROQ_API_KEY) {
+      return NextResponse.json(
+        { success: false, error: "GROQ_API_KEY belum di-set di Vercel env vars" },
+        { status: 500 }
+      );
+    }
+
     try {
-      const ZAI = (await import("z-ai-web-dev-sdk")).default;
-      const zai = await ZAI.create();
-
-      // Generate article content
-      const response = await zai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: "Anda adalah penulis blog Indonesia yang ahli dalam tips belanja online, review produk, dan gaya hidup. Tulis dalam bahasa Indonesia yang natural, santai, dan informatif. Format output sebagai HTML yang siap ditampilkan (h2, p, ul, li, strong).",
-          },
-          {
-            role: "user",
-            content: `${topic.prompt}\n\nJudul artikel: ${topic.title}\n\nTulis artikel lengkap (minimal 800 kata) dalam format HTML. Mulai dengan paragraf pembuka yang menarik, lalu isi dengan sub-heading (h2), dan tutup dengan kesimpulan.`,
-          },
-        ],
+      // Generate article content via Groq API
+      const groqResponse = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            {
+              role: "system",
+              content: "Anda adalah jurnalis dan penulis blog Indonesia yang ahli dalam tips belanja online produk anak, review produk, dan gaya hidup keluarga. Tulis dalam bahasa Indonesia yang natural, santai, informatif, dan seperti ditulis manusia sungguhan. Format output sebagai HTML yang siap ditampilkan (h2, p, ul, li, strong). JANGAN pakai markdown (##, **, *). Tulis teks biasa dengan tag HTML.",
+            },
+            {
+              role: "user",
+              content: `${topic.prompt}\n\nJudul artikel: ${topic.title}\n\nTulis artikel lengkap (minimal 1000 kata) dalam format HTML. Mulai dengan paragraf pembuka yang menarik dan hook yang kuat, lalu isi dengan 4-5 sub-heading (h2) yang detail, sertakan tips praktis dan data konkret, dan tutup dengan kesimpulan yang actionable. Tone: seperti ibu/ayah yang sharing pengalaman belanja produk anak.`,
+            },
+          ],
+          max_tokens: 4096,
+          temperature: 0.8,
+          reasoning_format: "hidden",
+        }),
       });
 
-      content = response.choices[0]?.message?.content || "";
+      if (groqResponse.ok) {
+        const groqData = await groqResponse.json();
+        content = groqData.choices?.[0]?.message?.content || "";
+      } else {
+        const errText = await groqResponse.text();
+        console.error("[api/blog-generate] Groq error:", groqResponse.status, errText.slice(0, 200));
+        throw new Error(`Groq API ${groqResponse.status}`);
+      }
 
-      // Generate excerpt
-      const excerptResponse = await zai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: "Anda adalah asisten yang membuat ringkasan artikel. Tulis ringkasan 1-2 kalimat dalam bahasa Indonesia.",
-          },
-          {
-            role: "user",
-            content: `Buat ringkasan singkat (1 kalimat, max 150 karakter) untuk artikel berjudul: ${topic.title}`,
-          },
-        ],
+      // Generate excerpt via Groq
+      const excerptResponse = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            { role: "system", content: "Buat ringkasan 1 kalimat menarik dalam bahasa Indonesia, max 150 karakter." },
+            { role: "user", content: `Buat ringkasan untuk artikel: ${topic.title}` },
+          ],
+          max_tokens: 200,
+          temperature: 0.5,
+          reasoning_format: "hidden",
+        }),
       });
-      excerpt = excerptResponse.choices[0]?.message?.content?.slice(0, 200) || topic.title;
+      if (excerptResponse.ok) {
+        const exData = await excerptResponse.json();
+        excerpt = exData.choices?.[0]?.message?.content?.slice(0, 200) || topic.title;
+      } else {
+        excerpt = topic.title;
+      }
 
       metaDescription = excerpt.slice(0, 160);
 
-      // Generate tags
-      const tagsResponse = await zai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: "Anda adalah asisten SEO. Berikan 5 tag relevan dalam bahasa Indonesia, dipisah koma.",
-          },
-          {
-            role: "user",
-            content: `Berikan 5 tag SEO untuk artikel berjudul: ${topic.title}`,
-          },
-        ],
+      // Generate tags via Groq
+      const tagsResponse = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            { role: "system", content: "Berikan 5 tag SEO relevan dalam bahasa Indonesia, dipisah koma. Hanya tag, tidak ada penjelasan." },
+            { role: "user", content: `Tag untuk artikel: ${topic.title}` },
+          ],
+          max_tokens: 100,
+          temperature: 0.3,
+          reasoning_format: "hidden",
+        }),
       });
-      tags = tagsResponse.choices[0]?.message?.content || "";
+      if (tagsResponse.ok) {
+        const tagData = await tagsResponse.json();
+        tags = tagData.choices?.[0]?.message?.content || topic.category;
+      } else {
+        tags = topic.category;
+      }
 
       // Estimate read time (200 words per minute)
       const wordCount = content.split(/\s+/).length;
       readTime = `${Math.max(3, Math.ceil(wordCount / 200))} menit`;
     } catch (aiErr: any) {
       console.error("[api/blog-generate] AI error:", aiErr);
-      // Fallback: pakai template content sederhana
-      content = `<h2>Pendahuluan</h2><p>${topic.title}. Artikel ini akan membahas tips dan trik yang berguna untuk Anda.</p><h2>Tips Utama</h2><ul><li>Selalu cek rating toko sebelum beli</li><li>Bandngkan harga di beberapa marketplace</li><li>Manfaatkan voucher dan cashback</li><li>Baca review dari pembeli lain</li></ul><h2>Kesimpulan</h2><p>Belanja online bisa jadi pengalaman yang menyenangkan jika Anda tahu caranya. Semoga tips di artikel ini bermanfaat!</p>`;
-      excerpt = topic.title;
-      metaDescription = topic.title;
-      tags = topic.category;
+      return NextResponse.json(
+        { success: false, error: "Gagal generate artikel AI: " + (aiErr.message || "unknown") },
+        { status: 500 }
+      );
     }
 
     // Save to DB
