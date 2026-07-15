@@ -1,0 +1,897 @@
+     1→     1→/**
+     2→     2→ * jb-discover.js — AI-1: PRODUCT DISCOVERY (STANDALONE)
+     3→     3→ *
+     4→     4→ * Cari & tambah produk BARU dari Shopee berdasarkan kategori.
+     5→     5→ * Pakai browser (Chrome/Edge) — baca langsung dari halaman yang dirender.
+     6→     6→ *
+     7→     7→ * Cara kayak manusia:
+     8→     8→ *   - Buka halaman search Shopee di browser
+     9→     9→ *   - Baca produk yang tampil di layar (DOM scraping)
+    10→    10→ *   - Klik produk buat ambil detail
+    11→    11→ *   - Delay random antar request
+    12→    12→ *
+    13→    13→ * Cara jalankan:
+    14→    14→ *   node jb-discover.js              ← semua kategori (lama!)
+    15→    15→ *   node jb-discover.js --cat Beauty ← cuma 1 kategori
+    16→    16→ *   node jb-discover.js --top 5      ← top 5 per kategori (default 10)
+    17→    17→ *   node jb-discover.js --dry-run    ← cek aja, gak simpan ke DB
+    18→    18→ *
+    19→    19→ * GAK nyentuh web sama sekali — cuma baca/tulis DB
+    20→    20→ */
+    21→    21→
+    22→    22→import pg from "pg";
+    23→    23→import fs from "fs";
+    24→    24→import path from "path";
+    25→    25→import { fileURLToPath } from "url";
+    26→    26→
+    27→    27→const __filename = fileURLToPath(import.meta.url);
+    28→    28→const __dirname = path.dirname(__filename);
+    29→    29→
+    30→    30→// ========== LOAD CONFIG ==========
+    31→    31→const envPath = path.join(__dirname, "scripts", ".env.telegram");
+    32→    32→if (!fs.existsSync(envPath)) {
+    33→    33→  console.error("❌ File .env.telegram gak ketemu di scripts/");
+    34→    34→  process.exit(1);
+    35→    35→}
+    36→    36→
+    37→    37→const envContent = fs.readFileSync(envPath, "utf-8");
+    38→    38→const envVars = {};
+    39→    39→for (const line of envContent.split("\n")) {
+    40→    40→  const trimmed = line.trim();
+    41→    41→  if (!trimmed || trimmed.startsWith("#")) continue;
+    42→    42→  const [key, ...rest] = trimmed.split("=");
+    43→    43→  const value = rest.join("=").trim();
+    44→    44→  if (key && value) envVars[key.trim()] = value;
+    45→    45→}
+    46→    46→
+    47→    47→const BOT_TOKEN = envVars.TELEGRAM_BOT_TOKEN;
+    48→    48→const CHAT_ID = envVars.TELEGRAM_CHAT_ID;
+    49→    49→const DATABASE_URL = envVars.DATABASE_URL;
+    50→    50→
+    51→    51→if (!BOT_TOKEN || !CHAT_ID || !DATABASE_URL) {
+    52→    52→  console.error("❌ Isi TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DATABASE_URL di scripts/.env.telegram");
+    53→    53→  process.exit(1);
+    54→    54→}
+    55→    55→
+    56→    56→const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
+    57→    57→const { Pool } = pg;
+    58→    58→
+    59→    59→const pool = new Pool({
+    60→    60→  connectionString: DATABASE_URL,
+    61→    61→  ssl: { rejectUnauthorized: false },
+    62→    62→});
+    63→    63→
+    64→    64→async function query(sql, params = []) {
+    65→    65→  const client = await pool.connect();
+    66→    66→  try {
+    67→    67→    const result = await client.query(sql, params);
+    68→    68→    return result;
+    69→    69→  } finally {
+    70→    70→    client.release();
+    71→    71→  }
+    72→    72→}
+    73→    73→
+    74→    74→// ========== TELEGRAM ==========
+    75→    75→async function sendTelegram(text) {
+    76→    76→  try {
+    77→    77→    const res = await fetch(`${API_BASE}/sendMessage`, {
+    78→    78→      method: "POST",
+    79→    79→      headers: { "Content-Type": "application/json" },
+    80→    80→      body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
+    81→    81→    });
+    82→    82→    const data = await res.json();
+    83→    83→    return data.ok;
+    84→    84→  } catch (err) {
+    85→    85→    console.error("❌ Gagal kirim:", err.message);
+    86→    86→    return false;
+    87→    87→  }
+    88→    88→}
+    89→    89→
+    90→    90→async function sendTelegramWithButtons(text, buttons) {
+    91→    91→  try {
+    92→    92→    const res = await fetch(`${API_BASE}/sendMessage`, {
+    93→    93→      method: "POST",
+    94→    94→      headers: { "Content-Type": "application/json" },
+    95→    95→      body: JSON.stringify({
+    96→    96→        chat_id: CHAT_ID,
+    97→    97→        text,
+    98→    98→        parse_mode: "HTML",
+    99→    99→        reply_markup: { inline_keyboard: [buttons] },
+   100→   100→      }),
+   101→   101→    });
+   102→   102→    const data = await res.json();
+   103→   103→    return data.ok;
+   104→   104→  } catch (err) {
+   105→   105→    console.error("❌ Gagal kirim:", err.message);
+   106→   106→    return false;
+   107→   107→  }
+   108→   108→}
+   109→   109→
+   110→   110→// ========== HUMAN-LIKE HELPERS ==========
+   111→   111→
+   112→   112→function randomDelay(minSec, maxSec) {
+   113→   113→  const sec = minSec + Math.random() * (maxSec - minSec);
+   114→   114→  console.log(`  ⏳ Tunggu ${sec.toFixed(1)} detik...`);
+   115→   115→  return new Promise((r) => setTimeout(r, sec * 1000));
+   116→   116→}
+   117→   117→
+   118→   118→function randomInt(min, max) {
+   119→   119→  return Math.floor(Math.random() * (max - min + 1)) + min;
+   120→   120→}
+   121→   121→
+   122→   122→const USER_AGENTS = [
+   123→   123→  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+   124→   124→  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+   125→   125→  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+   126→   126→  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+   127→   127→  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0",
+   128→   128→];
+   129→   129→
+   130→   130→function randomUserAgent() {
+   131→   131→  return USER_AGENTS[randomInt(0, USER_AGENTS.length - 1)];
+   132→   132→}
+   133→   133→
+   134→   134→// ========== BROWSER SETUP ==========
+   135→   135→
+   136→   136→function findBrowserPath() {
+   137→   137→  const candidates = [
+   138→   138→    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   139→   139→    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+   140→   140→    process.env.LOCALAPPDATA + "\\Google\\Chrome\\Application\\chrome.exe",
+   141→   141→    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+   142→   142→    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+   143→   143→    "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   144→   144→    "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe",
+   145→   145→  ];
+   146→   146→  for (const p of candidates) {
+   147→   147→    if (p && fs.existsSync(p)) return p;
+   148→   148→  }
+   149→   149→  return null;
+   150→   150→}
+   151→   151→
+   152→   152→// ⭐ Folder buat simpan session Shopee (login persistent)
+   153→   153→const USER_DATA_DIR = path.join(__dirname, "shopee-session");
+   154→   154→
+   155→   155→async function launchBrowser() {
+   156→   156→  let pp = null;
+   157→   157→  try {
+   158→   158→    pp = await import("puppeteer-core");
+   159→   159→    console.log("  ✅ puppeteer-core tersedia");
+   160→   160→  } catch {
+   161→   161→    try {
+   162→   162→      pp = await import("puppeteer");
+   163→   163→      console.log("  ✅ puppeteer tersedia");
+   164→   164→    } catch {
+   165→   165→      console.log("  ❌ puppeteer-core/puppeteer gak ada");
+   166→   166→      return null;
+   167→   167→    }
+   168→   168→  }
+   169→   169→
+   170→   170→  const browserPath = findBrowserPath();
+   171→   171→  if (!browserPath) {
+   172→   172→    console.log("  ❌ Gak ketemu Chrome/Edge/Firefox di komputer!");
+   173→   173→    return null;
+   174→   174→  }
+   175→   175→
+   176→   176→  const browserName = browserPath.includes("Edge") ? "Edge" :
+   177→   177→                      browserPath.includes("Chrome") ? "Chrome" : "Browser";
+   178→   178→  console.log(`  🌐 Pakai ${browserName}: ${browserPath}`);
+   179→   179→
+   180→   180→  try {
+   181→   181→    const browser = await (pp.default || pp).launch({
+   182→   182→      executablePath: browserPath,
+   183→   183→      headless: false,  // ⭐ FALSE biar keliatan = lebih stealth
+   184→   184→      userDataDir: USER_DATA_DIR,  // ⭐ SIMPAN SESSION — login sekali!
+   185→   185→      args: [
+   186→   186→        "--no-sandbox",
+   187→   187→        "--disable-setuid-sandbox",
+   188→   188→        "--disable-blink-features=AutomationControlled",
+   189→   189→        "--window-size=1366,768",
+   190→   190→        "--disable-infobars",
+   191→   191→        "--disable-dev-shm-usage",
+   192→   192→      ],
+   193→   193→    });
+   194→   194→    return browser;
+   195→   195→  } catch (err) {
+   196→   196→    console.log(`  ❌ Gagal launch browser: ${err.message}`);
+   197→   197→    return null;
+   198→   198→  }
+   199→   199→}
+   200→   200→
+   201→   201→/**
+   202→   202→ * Cek apakah sudah login Shopee
+   203→   203→ * Kalau belum, tunggu user login manual
+   204→   204→ */
+   205→   205→async function ensureShopeeLogin(page) {
+   206→   206→  console.log("🔍 Cek login Shopee...");
+   207→   207→  
+   208→   208→  await page.goto("https://shopee.co.id/", { waitUntil: "networkidle2", timeout: 30000 });
+   209→   209→  await randomDelay(2, 4);
+   210→   210→  
+   211→   211→  const isLoggedIn = await page.evaluate(() => {
+   212→   212→    const bodyText = document.body.innerText;
+   213→   213→    const html = document.body.innerHTML;
+   214→   214→    if (html.includes('navbar__username') || html.includes('user-info') || html.includes('account-name')) return true;
+   215→   215→    if (html.includes('btn-login') || html.includes('button-login') || bodyText.includes('Log In') || bodyText.includes('Daftar')) return false;
+   216→   216→    return false;
+   217→   217→  });
+   218→   218→  
+   219→   219→  if (isLoggedIn) {
+   220→   220→    console.log("  ✅ Sudah login Shopee!");
+   221→   221→    return true;
+   222→   222→  }
+   223→   223→  
+   224→   224→  console.log("");
+   225→   225→  console.log("╔══════════════════════════════════════════╗");
+   226→   226→  console.log("║  ⚠️  BELUM LOGIN SHOPEE!                ║");
+   227→   227→  console.log("║                                          ║");
+   228→   228→  console.log("║  Browser sudah terbuka.                  ║");
+   229→   229→  console.log("║  Silakan LOGIN SHOPEE di browser:        ║");
+   230→   230→  console.log("║  → Klik tombol Log In                    ║");
+   231→   231→  console.log("║  → Login pakai HP / email / FB           ║");
+   232→   232→  console.log("║                                          ║");
+   233→   233→  console.log("║  Setelah login, tekan ENTER di sini...   ║");
+   234→   234→  console.log("║                                          ║");
+   235→   235→  console.log("║  (Session disimpan, cuma login sekali!)  ║");
+   236→   236→  console.log("╚══════════════════════════════════════════╝");
+   237→   237→  console.log("");
+   238→   238→  
+   239→   239→  await new Promise((resolve) => {
+   240→   240→    process.stdin.once("data", () => resolve());
+   241→   241→  });
+   242→   242→  
+   243→   243→  await page.goto("https://shopee.co.id/", { waitUntil: "networkidle2", timeout: 30000 });
+   244→   244→  await randomDelay(2, 4);
+   245→   245→  
+   246→   246→  console.log("  ✅ Login berhasil! Session disimpan.");
+   247→   247→  console.log("  💾 Next run gak perlu login lagi.");
+   248→   248→  return true;
+   249→   249→}
+   250→   250→
+   251→   251→// ========== STEALTH INJECT ==========
+   252→   252→
+   253→   253→function injectStealth() {
+   254→   254→  return `
+   255→   255→    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+   256→   256→    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+   257→   257→    Object.defineProperty(navigator, 'languages', { get: () => ['id-ID', 'id', 'en-US', 'en'] });
+   258→   258→    
+   259→   259→    // Override permissions query
+   260→   260→    const originalQuery = window.navigator.permissions.query;
+   261→   261→    window.navigator.permissions.query = (parameters) =>
+   262→   262→      parameters.name === 'notifications'
+   263→   263→        ? Promise.resolve({ state: Notification.permission })
+   264→   264→        : originalQuery(parameters);
+   265→   265→  `;
+   266→   266→}
+   267→   267→
+   268→   268→// ========== SHOPEE SEARCH (DOM SCRAPING) ==========
+   269→   269→
+   270→   270→/**
+   271→   271→ * Cari produk di Shopee — baca langsung dari halaman!
+   272→   272→ * Buka search page → tunggu load → baca produk dari DOM
+   273→   273→ */
+   274→   274→async function searchShopeeViaBrowser(page, keyword, limit = 20) {
+   275→   275→  console.log(`\n🔍 Cari: "${keyword}" (limit: ${limit})`);
+   276→   276→
+   277→   277→  try {
+   278→   278→    // Set stealth
+   279→   279→    await page.evaluateOnNewDocument(() => {
+   280→   280→      eval(injectStealth());
+   281→   281→    });
+   282→   282→    await page.setUserAgent(randomUserAgent());
+   283→   283→
+   284→   284→    // Buka halaman search Shopee
+   285→   285→    const searchUrl = `https://shopee.co.id/search?keyword=${encodeURIComponent(keyword)}`;
+   286→   286→    await page.goto(searchUrl, {
+   287→   287→      waitUntil: "networkidle2",
+   288→   288→      timeout: 60000,
+   289→   289→    });
+   290→   290→
+   291→   291→    // Tunggu halaman search selesai render
+   292→   292→    console.log(`  ⏳ Tunggu halaman search load...`);
+   293→   293→    try {
+   294→   294→      await page.waitForSelector('[class*="shopee-search-item-result"], [class*="item-grid"], a[href*="-i."]', {
+   295→   295→        timeout: 15000,
+   296→   296→      });
+   297→   297→    } catch {
+   298→   298→      console.log(`  ⚠️ Selector search gak ketemu — coba scroll dulu...`);
+   299→   299→    }
+   300→   300→
+   301→   301→    // Tunggu extra biar semua card render
+   302→   302→    await randomDelay(3, 5);
+   303→   303→
+   304→   304→    // Scroll pelan-pelan buat trigger lazy loading
+   305→   305→    for (let scroll = 0; scroll < 3; scroll++) {
+   306→   306→      await page.evaluate(() => window.scrollBy(0, 600));
+   307→   307→      await randomDelay(1, 3);
+   308→   308→    }
+   309→   309→
+   310→   310→    // ⭐ SCRAPE DARI DOM — baca produk yang tampil di layar
+   311→   311→    const items = await page.evaluate((lim) => {
+   312→   312→      const results = [];
+   313→   313→
+   314→   314→      // Cari semua link produk di halaman search
+   315→   315→      // Shopee pakai <a> dengan href yang ada -i.shopid.itemid
+   316→   316→      const productLinks = document.querySelectorAll('a[href*="-i."]');
+   317→   317→
+   318→   318→      for (const link of productLinks) {
+   319→   319→        if (results.length >= lim) break;
+   320→   320→
+   321→   321→        try {
+   322→   322→          const href = link.getAttribute("href") || "";
+   323→   323→
+   324→   324→          // Extract shopId dan itemId dari URL
+   325→   325→          const urlMatch = href.match(/-i\.(\d+)\.(\d+)/);
+   326→   326→          if (!urlMatch) continue;
+   327→   327→
+   328→   328→          const shopId = urlMatch[1];
+   329→   329→          const itemId = urlMatch[2];
+   330→   330→          const fullUrl = href.startsWith("http") ? href : `https://shopee.co.id${href}`;
+   331→   331→
+   332→   332→          // Cari elemen-elemen data di dalam card produk
+   333→   333→          const card = link.closest('[class*="item"]') || link;
+   334→   334→
+   335→   335→          // Title — cari di semua child element
+   336→   336→          let title = "";
+   337→   337→          const titleEl = card.querySelector('[class*="title"], [class*="name"], [class*="line-clamp"]')
+   338→   338→            || card.querySelector('div > div > span');
+   339→   339→          if (titleEl) title = titleEl.textContent.trim();
+   340→   340→
+   341→   341→          // Image
+   342→   342→          let image = "";
+   343→   343→          const imgEl = card.querySelector("img");
+   344→   344→          if (imgEl) {
+   345→   345→            image = imgEl.getAttribute("src") || imgEl.getAttribute("data-src") || "";
+   346→   346→            if (image && !image.startsWith("http")) {
+   347→   347→              image = image.startsWith("//") ? `https:${image}` : `https://down-id.img.susercontent.com/file/${image}`;
+   348→   348→            }
+   349→   349→          }
+   350→   350→
+   351→   351→          // Price
+   352→   352→          let price = 0;
+   353→   353→          const priceEls = card.querySelectorAll('[class*="price"], [class*="Price"]');
+   354→   354→          for (const el of priceEls) {
+   355→   355→            const match = el.textContent.match(/Rp([\d.]+)/);
+   356→   356→            if (match) {
+   357→   357→              price = parseInt(match[1].replace(/\./g, ""), 10);
+   358→   358→              break;
+   359→   359→            }
+   360→   360→          }
+   361→   361→
+   362→   362→          // Sold count
+   363→   363→          let soldCount = 0;
+   364→   364→          const allText = card.textContent;
+   365→   365→          const soldMatch = allText.match(/([\d.]+)\s*terjual/i);
+   366→   366→          if (soldMatch) {
+   367→   367→            soldCount = parseInt(soldMatch[1].replace(/\./g, ""), 10);
+   368→   368→          }
+   369→   369→
+   370→   370→          // Rating
+   371→   371→          let rating = 0;
+   372→   372→          const ratingMatch = allText.match(/(\d+[\.,]\d+)/);
+   373→   373→          if (ratingMatch) {
+   374→   374→            rating = parseFloat(ratingMatch[1].replace(",", "."));
+   375→   375→          }
+   376→   376→
+   377→   377→          // Location
+   378→   378→          let location = "";
+   379→   379→          const locMatch = allText.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)$/);
+   380→   380→          if (locMatch) location = locMatch[1];
+   381→   381→
+   382→   382→          // Skip kalau gak ada data penting
+   383→   383→          if (!title && !price) continue;
+   384→   384→
+   385→   385→          results.push({
+   386→   386→            title: title || `Produk ${shopId}.${itemId}`,
+   387→   387→            url: fullUrl,
+   388→   388→            image,
+   389→   389→            price,
+   390→   390→            originalPrice: null,
+   391→   391→            discountPercent: null,
+   392→   392→            rating,
+   393→   393→            reviewCount: 0,
+   394→   394→            soldCount,
+   395→   395→            location,
+   396→   396→            shopId,
+   397→   397→            itemId,
+   398→   398→          });
+   399→   399→        } catch (e) {
+   400→   400→          // Skip card yang error
+   401→   401→        }
+   402→   402→      }
+   403→   403→
+   404→   404→      return results;
+   405→   405→    }, limit);
+   406→   406→
+   407→   407→    console.log(`  ✅ Dapat ${items.length} produk dari halaman`);
+   408→   408→
+   409→   409→    // Kalau DOM scraping dapet 0, coba intercept network request
+   410→   410→    if (items.length === 0) {
+   411→   411→      console.log(`  🔄 DOM kosong — coba tunggu lebih lama...`);
+   412→   412→      await randomDelay(5, 8);
+   413→   413→
+   414→   414→      // Scroll lebih banyak
+   415→   415→      for (let scroll = 0; scroll < 5; scroll++) {
+   416→   416→        await page.evaluate(() => window.scrollBy(0, 800));
+   417→   417→        await randomDelay(1, 2);
+   418→   418→      }
+   419→   419→
+   420→   420→      // Coba lagi
+   421→   421→      const items2 = await page.evaluate((lim) => {
+   422→   422→        const results = [];
+   423→   423→        const productLinks = document.querySelectorAll('a[href*="-i."]');
+   424→   424→        for (const link of productLinks) {
+   425→   425→          if (results.length >= lim) break;
+   426→   426→          try {
+   427→   427→            const href = link.getAttribute("href") || "";
+   428→   428→            const urlMatch = href.match(/-i\.(\d+)\.(\d+)/);
+   429→   429→            if (!urlMatch) continue;
+   430→   430→            const shopId = urlMatch[1];
+   431→   431→            const itemId = urlMatch[2];
+   432→   432→            const fullUrl = href.startsWith("http") ? href : `https://shopee.co.id${href}`;
+   433→   433→
+   434→   434→            const card = link.closest('[class*="item"]') || link;
+   435→   435→            let title = "";
+   436→   436→            const titleEl = card.querySelector('[class*="line-clamp"]') || card.querySelector("div > div > span");
+   437→   437→            if (titleEl) title = titleEl.textContent.trim();
+   438→   438→
+   439→   439→            let image = "";
+   440→   440→            const imgEl = card.querySelector("img");
+   441→   441→            if (imgEl) {
+   442→   442→              image = imgEl.getAttribute("src") || "";
+   443→   443→              if (image && !image.startsWith("http") && image.startsWith("//")) {
+   444→   444→                image = `https:${image}`;
+   445→   445→              }
+   446→   446→            }
+   447→   447→
+   448→   448→            let price = 0;
+   449→   449→            const allText = card.textContent;
+   450→   450→            const priceMatch = allText.match(/Rp([\d.]+)/);
+   451→   451→            if (priceMatch) price = parseInt(priceMatch[1].replace(/\./g, ""), 10);
+   452→   452→
+   453→   453→            let soldCount = 0;
+   454→   454→            const soldMatch = allText.match(/([\d.]+)\s*terjual/i);
+   455→   455→            if (soldMatch) soldCount = parseInt(soldMatch[1].replace(/\./g, ""), 10);
+   456→   456→
+   457→   457→            let rating = 0;
+   458→   458→            const ratingMatch = allText.match(/(\d+[\.,]\d+)/);
+   459→   459→            if (ratingMatch) rating = parseFloat(ratingMatch[1].replace(",", "."));
+   460→   460→
+   461→   461→            if (!title && !price) continue;
+   462→   462→
+   463→   463→            results.push({
+   464→   464→              title: title || `Produk ${shopId}.${itemId}`,
+   465→   465→              url: fullUrl,
+   466→   466→              image,
+   467→   467→              price,
+   468→   468→              originalPrice: null,
+   469→   469→              discountPercent: null,
+   470→   470→              rating,
+   471→   471→              reviewCount: 0,
+   472→   472→              soldCount,
+   473→   473→              location: "",
+   474→   474→              shopId,
+   475→   475→              itemId,
+   476→   476→            });
+   477→   477→          } catch (e) {}
+   478→   478→        }
+   479→   479→        return results;
+   480→   480→      }, limit);
+   481→   481→
+   482→   482→      if (items2.length > 0) {
+   483→   483→        console.log(`  ✅ Dapat ${items2.length} produk (retry)`);
+   484→   484→        return items2;
+   485→   485→      }
+   486→   486→
+   487→   487→      // Kalau masih 0, coba ambil dari URL aja
+   488→   488→      console.log(`  🔄 Masih kosong — ambil dari URL saja...`);
+   489→   489→      const items3 = await page.evaluate(() => {
+   490→   490→        const results = [];
+   491→   491→        const links = document.querySelectorAll('a[href*="-i."]');
+   492→   492→        const seen = new Set();
+   493→   493→        for (const link of links) {
+   494→   494→          const href = link.getAttribute("href") || "";
+   495→   495→          const match = href.match(/-i\.(\d+)\.(\d+)/);
+   496→   496→          if (!match) continue;
+   497→   497→          const key = `${match[1]}.${match[2]}`;
+   498→   498→          if (seen.has(key)) continue;
+   499→   499→          seen.add(key);
+   500→   500→          results.push({
+   501→   501→            shopId: match[1],
+   502→   502→            itemId: match[2],
+   503→   503→            url: href.startsWith("http") ? href : `https://shopee.co.id${href}`,
+   504→   504→          });
+   505→   505→        }
+   506→   506→        return results;
+   507→   507→      });
+   508→   508→
+   509→   509→      if (items3.length > 0) {
+   510→   510→        console.log(`  ✅ Dapat ${items3.length} link produk — ambil detail satu-satu...`);
+   511→   511→        const detailedItems = [];
+   512→   512→        for (const linkItem of items3.slice(0, limit)) {
+   513→   513→          const detail = await getProductDetailFromBrowser(page, linkItem.url, linkItem.shopId, linkItem.itemId);
+   514→   514→          if (detail) {
+   515→   515→            detailedItems.push(detail);
+   516→   516→          }
+   517→   517→          await randomDelay(2, 5);
+   518→   518→        }
+   519→   519→        return detailedItems;
+   520→   520→      }
+   521→   521→    }
+   522→   522→
+   523→   523→    return items;
+   524→   524→  } catch (err) {
+   525→   525→    console.error(`  ❌ Error: ${err.message}`);
+   526→   526→    return [];
+   527→   527→  }
+   528→   528→}
+   529→   529→
+   530→   530→/**
+   531→   531→ * Ambil detail 1 produk dari halaman produk Shopee
+   532→   532→ * (dipakai kalau search page gak bisa di-scrape)
+   533→   533→ */
+   534→   534→async function getProductDetailFromBrowser(page, productUrl, shopId, itemId) {
+   535→   535→  try {
+   536→   536→    await page.evaluateOnNewDocument(() => {
+   537→   537→      Object.defineProperty(navigator, "webdriver", { get: () => false });
+   538→   538→    });
+   539→   539→
+   540→   540→    await page.goto(productUrl, {
+   541→   541→      waitUntil: "networkidle2",
+   542→   542→      timeout: 45000,
+   543→   543→    });
+   544→   544→
+   545→   545→    await randomDelay(3, 5);
+   546→   546→
+   547→   547→    // Scroll
+   548→   548→    await page.evaluate(() => window.scrollBy(0, 300));
+   549→   549→    await randomDelay(1, 2);
+   550→   550→    await page.evaluate(() => window.scrollBy(0, 300));
+   551→   551→    await randomDelay(1, 2);
+   552→   552→
+   553→   553→    // Extract dari halaman produk
+   554→   554→    const data = await page.evaluate(() => {
+   555→   555→      const result = {};
+   556→   556→
+   557→   557→      // Title
+   558→   558→      const titleSelectors = [
+   559→   559→        '[class*="qaNIZv"]', '[class*="WBVL_7"]',
+   560→   560→        '[class*="_44qnta"]', '[class*="product-name"]',
+   561→   561→        'span[class*="title"]', 'h1', 'h2',
+   562→   562→      ];
+   563→   563→      for (const sel of titleSelectors) {
+   564→   564→        const el = document.querySelector(sel);
+   565→   565→        if (el && el.textContent.trim().length > 3) {
+   566→   566→          result.title = el.textContent.trim();
+   567→   567→          break;
+   568→   568→        }
+   569→   569→      }
+   570→   570→
+   571→   571→      // Price
+   572→   572→      const bodyText = document.body.innerText;
+   573→   573→      const priceMatch = bodyText.match(/Rp([\d.]+)/);
+   574→   574→      if (priceMatch) {
+   575→   575→        result.price = parseInt(priceMatch[1].replace(/\./g, ""), 10);
+   576→   576→      }
+   577→   577→
+   578→   578→      // Sold
+   579→   579→      const soldMatch = bodyText.match(/([\d.]+)\s*terjual/i);
+   580→   580→      if (soldMatch) {
+   581→   581→        result.soldCount = parseInt(soldMatch[1].replace(/\./g, ""), 10);
+   582→   582→      }
+   583→   583→
+   584→   584→      // Rating
+   585→   585→      const ratingMatch = bodyText.match(/(\d+[\.,]\d+)\s*(?:bintang|rating|★)/i);
+   586→   586→      if (ratingMatch) {
+   587→   587→        result.rating = parseFloat(ratingMatch[1].replace(",", "."));
+   588→   588→      }
+   589→   589→
+   590→   590→      // Image
+   591→   591→      const imgEl = document.querySelector('img[class*="product"], img[src*="susercontent"]');
+   592→   592→      if (imgEl) {
+   593→   593→        result.image = imgEl.getAttribute("src") || "";
+   594→   594→      }
+   595→   595→
+   596→   596→      // Location
+   597→   597→      const locMatch = bodyText.match(/(?:Dikirim dari|Lokasi)\s*[:\-]?\s*([A-Za-z\s]+)/i);
+   598→   598→      if (locMatch) result.location = locMatch[1].trim();
+   599→   599→
+   600→   600→      return result;
+   601→   601→    });
+   602→   602→
+   603→   603→    return {
+   604→   604→      title: data.title || `Produk ${shopId}.${itemId}`,
+   605→   605→      url: productUrl,
+   606→   606→      image: data.image || "",
+   607→   607→      price: data.price || 0,
+   608→   608→      originalPrice: null,
+   609→   609→      discountPercent: null,
+   610→   610→      rating: data.rating || 0,
+   611→   611→      reviewCount: 0,
+   612→   612→      soldCount: data.soldCount || 0,
+   613→   613→      location: data.location || "",
+   614→   614→      shopId,
+   615→   615→      itemId,
+   616→   616→    };
+   617→   617→  } catch (err) {
+   618→   618→    console.error(`  ❌ Detail error: ${err.message}`);
+   619→   619→    return null;
+   620→   620→  }
+   621→   621→}
+   622→   622→
+   623→   623→// ========== PRODUCT FILTERS ==========
+   624→   624→
+   625→   625→function isGoodProduct(product) {
+   626→   626→  if (!product.title || product.title.length < 5) return false;
+   627→   627→  if (!product.image) return false;
+   628→   628→  if (product.price < 5000) return false;
+   629→   629→  // Relax filter — dari DOM gak selalu dapet rating/sold
+   630→   630→  if (product.rating > 0 && product.rating < 4.0) return false;
+   631→   631→  if (product.soldCount > 0 && product.soldCount < 50) return false;
+   632→   632→  return true;
+   633→   633→}
+   634→   634→
+   635→   635→// ========== DATABASE OPERATIONS ==========
+   636→   636→
+   637→   637→async function productExists(product) {
+   638→   638→  let result = await query(
+   639→   639→    `SELECT id FROM "ShopeeProduct" WHERE url = $1`,
+   640→   640→    [product.url]
+   641→   641→  );
+   642→   642→  if (result.rows.length > 0) return result.rows[0].id;
+   643→   643→
+   644→   644→  if (product.shopId && product.itemId) {
+   645→   645→    result = await query(
+   646→   646→      `SELECT id FROM "ShopeeProduct" WHERE url LIKE $1`,
+   647→   647→      [`%.${product.shopId}.${product.itemId}%`]
+   648→   648→    );
+   649→   649→    if (result.rows.length > 0) return result.rows[0].id;
+   650→   650→  }
+   651→   651→
+   652→   652→  return null;
+   653→   653→}
+   654→   654→
+   655→   655→async function insertProduct(product, categoryName) {
+   656→   656→  const result = await query(
+   657→   657→    `INSERT INTO "ShopeeProduct" 
+   658→   658→      (id, title, url, image, price, "originalPrice", "discountPercent", 
+   659→   659→       rating, "reviewCount", "soldCount", location, category, "isViral", 
+   660→   660→       "isPinned", "isHidden", marketplace, enabled, "createdAt", "updatedAt")
+   661→   661→     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, false, false, 'shopee', true, NOW(), NOW())
+   662→   662→     RETURNING id`,
+   663→   663→    [
+   664→   664→      product.title,
+   665→   665→      product.url,
+   666→   666→      product.image,
+   667→   667→      product.price,
+   668→   668→      product.originalPrice,
+   669→   669→      product.discountPercent,
+   670→   670→      product.rating,
+   671→   671→      product.reviewCount,
+   672→   672→      product.soldCount,
+   673→   673→      product.location,
+   674→   674→      categoryName,
+   675→   675→    ]
+   676→   676→  );
+   677→   677→  return result.rows[0]?.id;
+   678→   678→}
+   679→   679→
+   680→   680→async function updateExistingProduct(existingId, product) {
+   681→   681→  await query(
+   682→   682→    `UPDATE "ShopeeProduct" SET 
+   683→   683→       "soldCount" = $2, price = $3, rating = $4, "updatedAt" = NOW()
+   684→   684→     WHERE id = $1`,
+   685→   685→    [existingId, product.soldCount, product.price, product.rating]
+   686→   686→  );
+   687→   687→}
+   688→   688→
+   689→   689→// ========== MAIN DISCOVERY ==========
+   690→   690→
+   691→   691→async function discoverProducts() {
+   692→   692→  const args = process.argv.slice(2);
+   693→   693→  const isDryRun = args.includes("--dry-run");
+   694→   694→  const topIdx = args.indexOf("--top");
+   695→   695→  const topN = topIdx !== -1 ? parseInt(args[topIdx + 1]) || 10 : 10;
+   696→   696→  const catIdx = args.indexOf("--cat");
+   697→   697→  const filterCat = catIdx !== -1 ? args[catIdx + 1] : null;
+   698→   698→
+   699→   699→  console.log("🤖 AI-1 DISCOVER mulai...");
+   700→   700→  console.log(`📡 Database: ${DATABASE_URL.substring(0, 30)}...`);
+   701→   701→  console.log(`⚙️ Mode: ${isDryRun ? "DRY RUN (gak simpan)" : "LIVE"}`);
+   702→   702→  console.log(`📦 Top N per keyword: ${topN}`);
+   703→   703→  console.log(`📂 Filter kategori: ${filterCat || "Semua"}`);
+   704→   704→  console.log("");
+   705→   705→
+   706→   706→  // ⭐ LAUNCH BROWSER (headless: false = keliatan window-nya)
+   707→   707→  console.log("🌐 Cari browser di komputer...");
+   708→   708→  const browser = await launchBrowser();
+   709→   709→
+   710→   710→  if (!browser) {
+   711→   711→    const errorMsg =
+   712→   712→      `❌ <b>Gak bisa mulai discover!</b>\n\n` +
+   713→   713→      `Butuh browser (Chrome/Edge) + puppeteer-core.\n\n` +
+   714→   714→      `Jalankan di CMD:\n` +
+   715→   715→      `<code>cd C:\\jb-telegram-bot</code>\n` +
+   716→   716→      `<code>npm install puppeteer-core</code>`;
+   717→   717→    await sendTelegram(errorMsg);
+   718→   718→    console.log("\n" + errorMsg.replace(/<[^>]+>/g, ""));
+   719→   719→    await pool.end();
+   720→   720→    return;
+   721→   721→  }
+   722→   722→
+   723→   723→  // Buat page dan init session
+   724→   724→  const page = await browser.newPage();
+   725→   725→
+   726→   726→  await page.evaluateOnNewDocument(() => {
+   727→   727→    Object.defineProperty(navigator, "webdriver", { get: () => false });
+   728→   728→    Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
+   729→   729→    Object.defineProperty(navigator, "languages", { get: () => ["id-ID", "id", "en-US", "en"] });
+   730→   730→  });
+   731→   731→  await page.setUserAgent(randomUserAgent());
+   732→   732→
+   733→   733→  // ⭐ CEK LOGIN — kalau belum login, tunggu user login manual
+   734→   734→  await ensureShopeeLogin(page);
+   735→   735→  console.log("  ✅ Session siap!\n");
+   736→   736→
+   737→   737→  // Ambil kategori dari DB
+   738→   738→  let catSql = `SELECT name, emoji, keywords, "shopeeCat" FROM "Category" WHERE enabled = true`;
+   739→   739→  const catParams = [];
+   740→   740→  if (filterCat) {
+   741→   741→    catSql += ` AND name ILIKE $1`;
+   742→   742→    catParams.push(`%${filterCat}%`);
+   743→   743→  }
+   744→   744→  catSql += ` ORDER BY name`;
+   745→   745→
+   746→   746→  const catResult = await query(catSql, catParams);
+   747→   747→  const categories = catResult.rows;
+   748→   748→
+   749→   749→  if (categories.length === 0) {
+   750→   750→    console.log("❌ Gak ada kategori aktif!");
+   751→   751→    await browser.close();
+   752→   752→    await pool.end();
+   753→   753→    return;
+   754→   754→  }
+   755→   755→
+   756→   756→  console.log(`📂 ${categories.length} kategori:\n`);
+   757→   757→  for (const cat of categories) {
+   758→   758→    console.log(`  ${cat.emoji} ${cat.name}: ${cat.keywords}`);
+   759→   759→  }
+   760→   760→
+   761→   761→  await sendTelegram(
+   762→   762→    `🔍 <b>AI-1 DISCOVER mulai!</b>\n\n` +
+   763→   763→    `📂 ${categories.length} kategori\n` +
+   764→   764→    `📦 Top ${topN} per keyword\n` +
+   765→   765→    `🌐 Mode: Browser (DOM scraping)\n` +
+   766→   766→    `${isDryRun ? "🧪 DRY RUN (gak simpan)" : "✅ LIVE"}\n\n` +
+   767→   767→    `Mulai cari produk baru...`
+   768→   768→  );
+   769→   769→
+   770→   770→  // Stats
+   771→   771→  let totalFound = 0;
+   772→   772→  let totalAdded = 0;
+   773→   773→  let totalUpdated = 0;
+   774→   774→  let totalFiltered = 0;
+   775→   775→  const newProducts = [];
+   776→   776→
+   777→   777→  for (const cat of categories) {
+   778→   778→    const keywords = cat.keywords.split(",").map((k) => k.trim()).filter(Boolean);
+   779→   779→
+   780→   780→    console.log(`\n${cat.emoji} ===== ${cat.name} =====`);
+   781→   781→
+   782→   782→    const keywordsToScrape = keywords.slice(0, 2);
+   783→   783→
+   784→   784→    for (const keyword of keywordsToScrape) {
+   785→   785→      const items = await searchShopeeViaBrowser(page, keyword, topN);
+   786→   786→
+   787→   787→      console.log(`  📊 Dapat ${items.length} produk untuk "${keyword}"`);
+   788→   788→
+   789→   789→      for (const item of items) {
+   790→   790→        totalFound++;
+   791→   791→
+   792→   792→        if (!isGoodProduct(item)) {
+   793→   793→          totalFiltered++;
+   794→   794→          continue;
+   795→   795→        }
+   796→   796→
+   797→   797→        const existingId = await productExists(item);
+   798→   798→
+   799→   799→        if (existingId) {
+   800→   800→          if (!isDryRun) {
+   801→   801→            await updateExistingProduct(existingId, item);
+   802→   802→            totalUpdated++;
+   803→   803→            console.log(`  🔄 Updated: ${item.title.substring(0, 45)}...`);
+   804→   804→          }
+   805→   805→        } else {
+   806→   806→          totalAdded++;
+   807→   807→          const shortTitle = item.title.length > 40 ? item.title.substring(0, 40) + "..." : item.title;
+   808→   808→          console.log(`  🆕 BARU: ${shortTitle} | Rp ${item.price?.toLocaleString("id-ID")} | ${item.soldCount} terjual`);
+   809→   809→
+   810→   810→          if (!isDryRun) {
+   811→   811→            const newId = await insertProduct(item, cat.name);
+   812→   812→            newProducts.push({
+   813→   813→              id: newId,
+   814→   814→              title: item.title,
+   815→   815→              price: item.price,
+   816→   816→              soldCount: item.soldCount,
+   817→   817→              rating: item.rating,
+   818→   818→              category: cat.name,
+   819→   819→              emoji: cat.emoji,
+   820→   820→            });
+   821→   821→          }
+   822→   822→        }
+   823→   823→      }
+   824→   824→
+   825→   825→      if (keywordsToScrape.indexOf(keyword) < keywordsToScrape.length - 1) {
+   826→   826→        await randomDelay(30, 60);
+   827→   827→      }
+   828→   828→    }
+   829→   829→
+   830→   830→    if (categories.indexOf(cat) < categories.length - 1) {
+   831→   831→      console.log(`  ⏳ Istirahat antar kategori...`);
+   832→   832→      await randomDelay(45, 90);
+   833→   833→    }
+   834→   834→  }
+   835→   835→
+   836→   836→  await page.close();
+   837→   837→  await browser.close();
+   838→   838→
+   839→   839→  // ========== KIRIM RINGKASAN KE TELEGRAM ==========
+   840→   840→
+   841→   841→  let summary = [
+   842→   842→    `🏁 <b>AI-1 DISCOVER selesai!</b>`,
+   843→   843→    ``,
+   844→   844→    `🔍 Total ditemukan: ${totalFound}`,
+   845→   845→    `🆕 Produk baru: ${totalAdded}`,
+   846→   846→    `🔄 Diupdate: ${totalUpdated}`,
+   847→   847→    `✅ Lolos filter: ${totalFound - totalFiltered}`,
+   848→   848→    `❌ Difilter (kualitas rendah): ${totalFiltered}`,
+   849→   849→    `${isDryRun ? "\n🧪 DRY RUN — gak ada yang disimpan" : ""}`,
+   850→   850→  ].join("\n");
+   851→   851→
+   852→   852→  if (newProducts.length > 0 && !isDryRun) {
+   853→   853→    summary += `\n\n🆕 <b>Produk Baru Ditambahkan:</b>`;
+   854→   854→
+   855→   855→    for (const p of newProducts.slice(0, 10)) {
+   856→   856→      const shortTitle = p.title.length > 35 ? p.title.substring(0, 35) + "..." : p.title;
+   857→   857→      summary += `\n${p.emoji} ${shortTitle}`;
+   858→   858→      summary += `\n   💰 Rp ${p.price?.toLocaleString("id-ID")} | ⭐ ${p.rating} | 📦 ${p.soldCount} terjual`;
+   859→   859→    }
+   860→   860→
+   861→   861→    if (newProducts.length > 10) {
+   862→   862→      summary += `\n\n...dan ${newProducts.length - 10} produk lainnya`;
+   863→   863→    }
+   864→   864→
+   865→   865→    for (const p of newProducts) {
+   866→   866→      if (p.soldCount >= 1000) {
+   867→   867→        const shortTitle = p.title.length > 45 ? p.title.substring(0, 45) + "..." : p.title;
+   868→   868→        await sendTelegramWithButtons(
+   869→   869→          [
+   870→   870→            `🔥 <b>PRODUK VIRAL BARU!</b>`,
+   871→   871→            ``,
+   872→   872→            `📦 <b>${shortTitle}</b>`,
+   873→   873→            `📊 ${p.soldCount.toLocaleString("id-ID")} terjual | ⭐ ${p.rating}`,
+   874→   874→            `💰 Rp ${p.price?.toLocaleString("id-ID")}`,
+   875→   875→            `📂 ${p.emoji} ${p.category}`,
+   876→   876→            ``,
+   877→   877→            `Tandai sebagai viral di JB?`,
+   878→   878→          ].join("\n"),
+   879→   879→          [
+   880→   880→            { text: "✅ Approve", callback_data: `approve:${p.id}` },
+   881→   881→            { text: "❌ Batal", callback_data: `reject:${p.id}` },
+   882→   882→          ]
+   883→   883→        );
+   884→   884→        await randomDelay(3, 8);
+   885→   885→      }
+   886→   886→    }
+   887→   887→  }
+   888→   888→
+   889→   889→  await sendTelegram(summary);
+   890→   890→  console.log("\n" + summary.replace(/<[^>]+>/g, ""));
+   891→   891→
+   892→   892→  await pool.end();
+   893→   893→  console.log("\n✅ AI-1 DISCOVER selesai.");
+   894→   894→}
+   895→   895→
+   896→   896→discoverProducts();
+   897→   897→

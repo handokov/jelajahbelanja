@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "JB Scraper (All Marketplace)",
+  "version": "2.2.0",
+  "description": "Scrape produk dari TikTok Shop, Tokopedia, Shopee, Blibli, Lazada, Bukalapak, Zalora, Sociolla → upload batch ke JelajahBelanja",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://www.tiktok.com/*",
+    "https://shop.tiktok.com/*",
+    "https://tiktok.com/*",
+    "https://www.tokopedia.com/*",
+    "https://tokopedia.com/*",
+    "https://shop-id.tokopedia.com/*",
+    "https://ta.tokopedia.com/*",
+    "https://tokopedia.link/*",
+    "https://toko.link/*",
+    "https://shopee.co.id/*",
+    "https://www.shopee.co.id/*",
+    "https://shopee.com/*",
+    "https://s.shopee.co.id/*",
+    "https://shope.ee/*",
+    "https://shp.ee/*",
+    "https://www.blibli.com/*",
+    "https://blibli.com/*",
+    "https://www.lazada.co.id/*",
+    "https://lazada.co.id/*",
+    "https://www.bukalapak.com/*",
+    "https://bukalapak.com/*",
+    "https://www.zalora.co.id/*",
+    "https://zalora.co.id/*",
+    "https://www.sociolla.com/*",
+    "https://sociolla.com/*",
+    "http://localhost:3000/*",
+    "https://jelajahbelanja.com/*",
+    "https://www.jelajahbelanja.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "JB Scraper"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

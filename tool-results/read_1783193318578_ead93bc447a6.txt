@@ -1,0 +1,794 @@
+     1→     1→/**
+     2→     2→ * JB Shopee Scraper + Accesstrade Converter — v5
+     3→     3→ *
+     4→     4→ * FIX v5:
+     5→     5→ * - Fix: gambar ambil dari meta og:image (paling reliable)
+     6→     6→ * - Fix: rating/reviewCount/soldCount diambil dari Shopee API v4 langsung
+     7→     7→ * - Fix: selector gambar diperbaiki supaya nggak ambil logo Shopee
+     8→     8→ *
+     9→     9→ * 2 Tab:
+    10→    10→ * 1. Scrape Shopee — ambil produk langsung dari halaman Shopee
+    11→    11→ * 2. Convert Accesstrade — convert CSV Accesstrade ke format JB
+    12→    12→ *
+    13→    13→ * GAK butuh server. GAK butuh bot. GAK butuh Node.js.
+    14→    14→ */
+    15→    15→
+    16→    16→// CSV headers — sesuai template JB Bulk Upload
+    17→    17→const CSV_HEADERS = 'title,url,image,price,originalPrice,discountPercent,rating,reviewCount,soldCount,location,category,marketplace,affiliateUrl,notes';
+    18→    18→
+    19→    19→// Produk yang udah dikumpul dari Scrape Shopee
+    20→    20→let collected = [];
+    21→    21→
+    22→    22→// Produk dari Accesstrade CSV
+    23→    23→let accesstradeProducts = [];
+    24→    24→
+    25→    25→// Load dari localStorage
+    26→    26→try {
+    27→    27→  const saved = localStorage.getItem('jb_collected');
+    28→    28→  if (saved) collected = JSON.parse(saved);
+    29→    29→} catch {}
+    30→    30→
+    31→    31→function saveCollected() {
+    32→    32→  localStorage.setItem('jb_collected', JSON.stringify(collected));
+    33→    33→  updateUI();
+    34→    34→}
+    35→    35→
+    36→    36→function esc(text) {
+    37→    37→  const d = document.createElement('div');
+    38→    38→  d.textContent = text;
+    39→    39→  return d.innerHTML;
+    40→    40→}
+    41→    41→
+    42→    42→function csvField(val) {
+    43→    43→  if (val == null || val === '') return '';
+    44→    44→  const s = String(val);
+    45→    45→  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    46→    46→    return '"' + s.replace(/"/g, '""') + '"';
+    47→    47→  }
+    48→    48→  return s;
+    49→    49→}
+    50→    50→
+    51→    51→function buildCSV(products) {
+    52→    52→  const lines = [CSV_HEADERS];
+    53→    53→  for (const p of products) {
+    54→    54→    lines.push([
+    55→    55→      csvField(p.title),
+    56→    56→      csvField(p.url),
+    57→    57→      csvField(p.image),
+    58→    58→      csvField(p.price),
+    59→    59→      csvField(p.originalPrice),
+    60→    60→      csvField(p.discountPercent),
+    61→    61→      csvField(p.rating),
+    62→    62→      csvField(p.reviewCount),
+    63→    63→      csvField(p.soldCount),
+    64→    64→      csvField(p.location),
+    65→    65→      csvField(p.category),
+    66→    66→      csvField(p.marketplace || 'shopee'),
+    67→    67→      csvField(p.affiliateUrl),
+    68→    68→      csvField(p.notes),
+    69→    69→    ].join(','));
+    70→    70→  }
+    71→    71→  return lines.join('\r\n');
+    72→    72→}
+    73→    73→
+    74→    74→function downloadCSV(csv, filename) {
+    75→    75→  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    76→    76→  const url = URL.createObjectURL(blob);
+    77→    77→  const a = document.createElement('a');
+    78→    78→  a.href = url;
+    79→    79→  a.download = filename;
+    80→    80→  document.body.appendChild(a);
+    81→    81→  a.click();
+    82→    82→  document.body.removeChild(a);
+    83→    83→  URL.revokeObjectURL(url);
+    84→    84→}
+    85→    85→
+    86→    86→// ========== ACCESSTRADE CSV PARSER ==========
+    87→    87→
+    88→    88→function parseAccesstradeCSV(text) {
+    89→    89→  const products = [];
+    90→    90→  const lines = text.split('\n');
+    91→    91→
+    92→    92→  for (const line of lines) {
+    93→    93→    if (!line.trim()) continue;
+    94→    94→
+    95→    95→    // Accesstrade CSV pakai koma sebagai separator
+    96→    96→    // Tapi ada field yang mengandung koma di dalam kutip
+    97→    97→    const fields = parseCSVLine(line);
+    98→    98→
+    99→    99→    if (fields.length < 10) continue;
+   100→   100→
+   101→   101→    try {
+   102→   102→      const productId = (fields[0] || '').replace('?', '').trim();
+   103→   103→      const title = (fields[1] || '').trim();
+   104→   104→      const image = (fields[2] || '').trim();
+   105→   105→      // fields[3] biasanya kosong
+   106→   106→      const affiliateLink1 = (fields[4] || '').trim(); // s.shopee.co.id link
+   107→   107→      const affiliateLink2 = (fields[5] || '').trim(); // atid.me link (LEBIH BAIK)
+   108→   108→      const description = (fields[6] || '').trim();
+   109→   109→      const price = parseInt((fields[7] || '0').replace(/[^\d]/g, ''), 10);
+   110→   110→      const originalPrice = parseInt((fields[8] || '0').replace(/[^\d]/g, ''), 10);
+   111→   111→      // fields[9] = stock/flag
+   112→   112→      const category = (fields[14] || '').trim(); // Kategori utama
+   113→   113→      const subCategory = (fields[16] || '').trim();
+   114→   114→      const subSubCategory = (fields[18] || '').trim();
+   115→   115→      const currency = (fields[19] || '').trim();
+   116→   116→      const brand = (fields[20] || '').trim();
+   117→   117→
+   118→   118→      // Skip kalau gak ada data penting
+   119→   119→      if (!productId || !title || !price) continue;
+   120→   120→      if (currency && currency !== 'IDR') continue;
+   121→   121→
+   122→   122→      // Extract shopId dan itemId dari affiliate link
+   123→   123→      let shopId = '', itemId = productId;
+   124→   124→      const urlMatch = affiliateLink1.match(/product%2F(\d+)%2F(\d+)/) ||
+   125→   125→                       affiliateLink1.match(/product\/(\d+)\/(\d+)/);
+   126→   126→      if (urlMatch) {
+   127→   127→        shopId = urlMatch[1];
+   128→   128→        itemId = urlMatch[2];
+   129→   129→      }
+   130→   130→
+   131→   131→      // Buat URL Shopee
+   132→   132→      const shopeeUrl = shopId && itemId
+   133→   133→        ? `https://shopee.co.id/universal-link/product/${shopId}/${itemId}`
+   134→   134→        : `https://shopee.co.id/product-${productId}`;
+   135→   135→
+   136→   136→      // Pilih affiliate link terbaik (atid.me lebih trackable)
+   137→   137→      const affiliateUrl = affiliateLink2 || affiliateLink1 || '';
+   138→   138→
+   139→   139→      // Bersihin deskripsi (hapus HTML tags)
+   140→   140→      const cleanDesc = description
+   141→   141→        .replace(/<br\s*\/?>/gi, ' ')
+   142→   142→        .replace(/<[^>]+>/g, '')
+   143→   143→        .replace(/\s+/g, ' ')
+   144→   144→        .trim()
+   145→   145→        .substring(0, 200);
+   146→   146→
+   147→   147→      // Map kategori Accesstrade ke JB
+   148→   148→      const jbCategory = mapCategory(category, subCategory, subSubCategory);
+   149→   149→
+   150→   150→      // Hitung diskon
+   151→   151→      let discountPercent = null;
+   152→   152→      if (originalPrice > 0 && price > 0 && originalPrice > price) {
+   153→   153→        discountPercent = Math.round((1 - price / originalPrice) * 100);
+   154→   154→      }
+   155→   155→
+   156→   156→      products.push({
+   157→   157→        title: title.substring(0, 200),
+   158→   158→        url: shopeeUrl,
+   159→   159→        image: image,
+   160→   160→        price: price,
+   161→   161→        originalPrice: originalPrice > price ? originalPrice : null,
+   162→   162→        discountPercent: discountPercent,
+   163→   163→        rating: null, // Accesstrade gak kasih rating
+   164→   164→        reviewCount: null,
+   165→   165→        soldCount: null,
+   166→   166→        location: null,
+   167→   167→        category: jbCategory,
+   168→   168→        marketplace: 'shopee',
+   169→   169→        affiliateUrl: decodeURIComponent(affiliateUrl),
+   170→   170→        notes: brand && brand !== 'NoBrand' ? `Brand: ${brand}` : '',
+   171→   171→      });
+   172→   172→    } catch {}
+   173→   173→  }
+   174→   174→
+   175→   175→  return products;
+   176→   176→}
+   177→   177→
+   178→   178→// Parse CSV line yang handle kutip dua
+   179→   179→function parseCSVLine(line) {
+   180→   180→  const fields = [];
+   181→   181→  let current = '';
+   182→   182→  let inQuotes = false;
+   183→   183→
+   184→   184→  for (let i = 0; i < line.length; i++) {
+   185→   185→    const ch = line[i];
+   186→   186→    if (inQuotes) {
+   187→   187→      if (ch === '"') {
+   188→   188→        if (i + 1 < line.length && line[i + 1] === '"') {
+   189→   189→          current += '"';
+   190→   190→          i++;
+   191→   191→        } else {
+   192→   192→          inQuotes = false;
+   193→   193→        }
+   194→   194→      } else {
+   195→   195→        current += ch;
+   196→   196→      }
+   197→   197→    } else {
+   198→   198→      if (ch === '"') {
+   199→   199→        inQuotes = true;
+   200→   200→      } else if (ch === ',') {
+   201→   201→        fields.push(current);
+   202→   202→        current = '';
+   203→   203→      } else {
+   204→   204→        current += ch;
+   205→   205→      }
+   206→   206→    }
+   207→   207→  }
+   208→   208→  fields.push(current);
+   209→   209→  return fields;
+   210→   210→}
+   211→   211→
+   212→   212→// Map kategori Accesstrade ke JB
+   213→   213→function mapCategory(cat, subCat, subSubCat) {
+   214→   214→  const c = (cat || '').toLowerCase();
+   215→   215→  if (c.includes('fashion') || c.includes('muslim fashion')) return 'Fashion';
+   216→   216→  if (c.includes('beauty') || c.includes('health')) return 'Beauty';
+   217→   217→  if (c.includes('home') || c.includes('living')) return 'Home & Living';
+   218→   218→  if (c.includes('gadget') || c.includes('electronic') || c.includes('computer') || c.includes('mobile')) return 'Electronics';
+   219→   219→  if (c.includes('sport') || c.includes('outdoor')) return 'Sports';
+   220→   220→  if (c.includes('food') || c.includes('beverage')) return 'Food & Beverage';
+   221→   221→  if (c.includes('baby') || c.includes('mom') || c.includes('kid')) return 'Kids & Baby';
+   222→   222→  if (c.includes('automotive') || c.includes('motor') || c.includes('car')) return 'Automotive';
+   223→   223→  if (c.includes('book') || c.includes('stationery')) return 'Books & Stationery';
+   224→   224→  if (c.includes('pet')) return 'Pets';
+   225→   225→  return 'Fashion'; // default
+   226→   226→}
+   227→   227→
+   228→   228→// ========== UI ==========
+   229→   229→
+   230→   230→function updateUI() {
+   231→   231→  const countBadge = document.getElementById('countBadge');
+   232→   232→  const collectedList = document.getElementById('collectedList');
+   233→   233→  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+   234→   234→
+   235→   235→  if (countBadge) {
+   236→   236→    countBadge.textContent = collected.length;
+   237→   237→  }
+   238→   238→
+   239→   239→  if (collectedList) {
+   240→   240→    if (collected.length === 0) {
+   241→   241→      collectedList.innerHTML = '<div style="color:#666">Belum ada produk</div>';
+   242→   242→    } else {
+   243→   243→      collectedList.innerHTML = collected.map((p, i) =>
+   244→   244→        `<div>${i + 1}. ${esc(p.title.substring(0, 45))}${p.title.length > 45 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
+   245→   245→      ).join('');
+   246→   246→    }
+   247→   247→  }
+   248→   248→
+   249→   249→  if (downloadCsvBtn) {
+   250→   250→    downloadCsvBtn.disabled = collected.length === 0;
+   251→   251→  }
+   252→   252→}
+   253→   253→
+   254→   254→// ========== INIT ==========
+   255→   255→document.addEventListener('DOMContentLoaded', async () => {
+   256→   256→  // Tab switching
+   257→   257→  const tabBtns = document.querySelectorAll('.tab-btn');
+   258→   258→  const tabContents = document.querySelectorAll('.tab-content');
+   259→   259→
+   260→   260→  tabBtns.forEach(btn => {
+   261→   261→    btn.addEventListener('click', () => {
+   262→   262→      tabBtns.forEach(b => b.classList.remove('active'));
+   263→   263→      tabContents.forEach(c => c.classList.remove('active'));
+   264→   264→      btn.classList.add('active');
+   265→   265→      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+   266→   266→    });
+   267→   267→  });
+   268→   268→
+   269→   269→  // ===== TAB 1: SCRAPE SHOPEE =====
+   270→   270→  const pageStatus = document.getElementById('pageStatus');
+   271→   271→  const scrapePageBtn = document.getElementById('scrapePageBtn');
+   272→   272→  const scrapeDetailBtn = document.getElementById('scrapeDetailBtn');
+   273→   273→  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+   274→   274→  const clearBtn = document.getElementById('clearBtn');
+   275→   275→  const categorySelect = document.getElementById('categorySelect');
+   276→   276→
+   277→   277→  let currentTab = null;
+   278→   278→  let isShopee = false;
+   279→   279→  let isDetail = false;
+   280→   280→
+   281→   281→  try {
+   282→   282→    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+   283→   283→    currentTab = tab;
+   284→   284→    if (tab.url && tab.url.includes('shopee.co.id')) {
+   285→   285→      isShopee = true;
+   286→   286→      isDetail = !!tab.url.match(/-i\.\d+\.\d+/);
+   287→   287→      if (isDetail) {
+   288→   288→        pageStatus.textContent = '📄 Halaman produk detail';
+   289→   289→        pageStatus.className = 'page-status ok';
+   290→   290→      } else {
+   291→   291→        pageStatus.textContent = '🔍 Halaman Shopee — siap ambil!';
+   292→   292→        pageStatus.className = 'page-status ok';
+   293→   293→      }
+   294→   294→    }
+   295→   295→  } catch {}
+   296→   296→
+   297→   297→  if (scrapePageBtn) scrapePageBtn.disabled = !isShopee;
+   298→   298→  if (scrapeDetailBtn) scrapeDetailBtn.disabled = !(isShopee && isDetail);
+   299→   299→
+   300→   300→  // Scrape halaman
+   301→   301→  if (scrapePageBtn) {
+   302→   302→    scrapePageBtn.addEventListener('click', async () => {
+   303→   303→      scrapePageBtn.disabled = true;
+   304→   304→      scrapePageBtn.textContent = '⏳ Membaca...';
+   305→   305→
+   306→   306→      const category = categorySelect.value;
+   307→   307→
+   308→   308→      try {
+   309→   309→        const results = await chrome.scripting.executeScript({
+   310→   310→          target: { tabId: currentTab.id },
+   311→   311→          func: scrapeSearchPage,
+   312→   312→          args: [category],
+   313→   313→        });
+   314→   314→
+   315→   315→        if (results?.[0]?.result) {
+   316→   316→          const products = results[0].result;
+   317→   317→          const existingUrls = new Set(collected.map(p => p.url));
+   318→   318→          let newCount = 0;
+   319→   319→          for (const p of products) {
+   320→   320→            if (!existingUrls.has(p.url)) {
+   321→   321→              collected.push(p);
+   322→   322→              existingUrls.add(p.url);
+   323→   323→              newCount++;
+   324→   324→            }
+   325→   325→          }
+   326→   326→          saveCollected();
+   327→   327→          scrapePageBtn.textContent = `✅ +${newCount} baru (total ${collected.length})`;
+   328→   328→        } else {
+   329→   329→          scrapePageBtn.textContent = '❌ Gak bisa baca — scroll dulu?';
+   330→   330→        }
+   331→   331→      } catch {
+   332→   332→        scrapePageBtn.textContent = '❌ Error';
+   333→   333→      }
+   334→   334→
+   335→   335→      setTimeout(() => {
+   336→   336→        scrapePageBtn.textContent = '📦 Ambil Semua Produk di Halaman Ini';
+   337→   337→        scrapePageBtn.disabled = !isShopee;
+   338→   338→      }, 2000);
+   339→   339→    });
+   340→   340→  }
+   341→   341→
+   342→   342→  // Scrape detail — v5: pakai Shopee API + meta tags
+   343→   343→  if (scrapeDetailBtn) {
+   344→   344→    scrapeDetailBtn.addEventListener('click', async () => {
+   345→   345→      scrapeDetailBtn.disabled = true;
+   346→   346→      scrapeDetailBtn.textContent = '⏳ Membaca...';
+   347→   347→
+   348→   348→      const category = categorySelect.value;
+   349→   349→
+   350→   350→      try {
+   351→   351→        // Step 1: Scrape basic data dari DOM
+   352→   352→        const domResults = await chrome.scripting.executeScript({
+   353→   353→          target: { tabId: currentTab.id },
+   354→   354→          func: scrapeProductDetail,
+   355→   355→          args: [category],
+   356→   356→        });
+   357→   357→
+   358→   358→        const product = domResults?.[0]?.result;
+   359→   359→
+   360→   360→        if (!product || !product.title) {
+   361→   361→          scrapeDetailBtn.textContent = '❌ Gak bisa baca';
+   362→   362→          setTimeout(() => {
+   363→   363→            scrapeDetailBtn.textContent = '🔍 Ambil 1 Produk (Halaman Detail)';
+   364→   364→            scrapeDetailBtn.disabled = !(isShopee && isDetail);
+   365→   365→          }, 2000);
+   366→   366→          return;
+   367→   367→        }
+   368→   368→
+   369→   369→        // Step 2: Ambil data lengkap dari Shopee API v4
+   370→   370→        const url = currentTab.url;
+   371→   371→        const idMatch = url.match(/-i\.(\d+)\.(\d+)/);
+   372→   372→        if (idMatch) {
+   373→   373→          const shopId = idMatch[1];
+   374→   374→          const itemId = idMatch[2];
+   375→   375→
+   376→   376→          try {
+   377→   377→            const apiResults = await chrome.scripting.executeScript({
+   378→   378→              target: { tabId: currentTab.id },
+   379→   379→              func: fetchShopeeApiInPage,
+   380→   380→              args: [shopId, itemId],
+   381→   381→            });
+   382→   382→
+   383→   383→            const apiData = apiResults?.[0]?.result;
+   384→   384→            if (apiData) {
+   385→   385→              // Override dengan data API (lebih akurat)
+   386→   386→              if (apiData.image) product.image = apiData.image;
+   387→   387→              if (apiData.rating) product.rating = apiData.rating;
+   388→   388→              if (apiData.reviewCount) product.reviewCount = apiData.reviewCount;
+   389→   389→              if (apiData.soldCount) product.soldCount = apiData.soldCount;
+   390→   390→              if (apiData.price && apiData.price > 0) product.price = apiData.price;
+   391→   391→              if (apiData.originalPrice && apiData.originalPrice > 0) product.originalPrice = apiData.originalPrice;
+   392→   392→              if (apiData.location) product.location = apiData.location;
+   393→   393→              if (apiData.title) product.title = apiData.title;
+   394→   394→              if (apiData.discountPercent) product.discountPercent = apiData.discountPercent;
+   395→   395→            }
+   396→   396→          } catch (e) {
+   397→   397→            console.log('Shopee API fallback to DOM data:', e);
+   398→   398→          }
+   399→   399→        }
+   400→   400→
+   401→   401→        const existingUrls = new Set(collected.map(p => p.url));
+   402→   402→        if (existingUrls.has(product.url)) {
+   403→   403→          scrapeDetailBtn.textContent = '⚠️ Udah ada!';
+   404→   404→        } else {
+   405→   405→          collected.push(product);
+   406→   406→          saveCollected();
+   407→   407→          scrapeDetailBtn.textContent = `✅ Ditambah! ⭐${product.rating?.toFixed(1) || '?'} 📦${product.soldCount || 0} (total ${collected.length})`;
+   408→   408→        }
+   409→   409→      } catch {
+   410→   410→        scrapeDetailBtn.textContent = '❌ Error';
+   411→   411→      }
+   412→   412→
+   413→   413→      setTimeout(() => {
+   414→   414→        scrapeDetailBtn.textContent = '🔍 Ambil 1 Produk (Halaman Detail)';
+   415→   415→        scrapeDetailBtn.disabled = !(isShopee && isDetail);
+   416→   416→      }, 2000);
+   417→   417→    });
+   418→   418→  }
+   419→   419→
+   420→   420→  // Download CSV
+   421→   421→  if (downloadCsvBtn) {
+   422→   422→    downloadCsvBtn.addEventListener('click', () => {
+   423→   423→      const csv = buildCSV(collected);
+   424→   424→      downloadCSV(csv, `jb-upload-${collected.length}produk.csv`);
+   425→   425→      downloadCsvBtn.textContent = `✅ File terdownload! (${collected.length} produk)`;
+   426→   426→      setTimeout(() => { downloadCsvBtn.textContent = '💾 Download File CSV (Format JB)'; }, 3000);
+   427→   427→    });
+   428→   428→  }
+   429→   429→
+   430→   430→  // Clear
+   431→   431→  if (clearBtn) {
+   432→   432→    clearBtn.addEventListener('click', () => {
+   433→   433→      if (collected.length === 0) return;
+   434→   434→      collected = [];
+   435→   435→      saveCollected();
+   436→   436→    });
+   437→   437→  }
+   438→   438→
+   439→   439→  // ===== TAB 2: CONVERT ACCESSTRADE =====
+   440→   440→  const selectFileBtn = document.getElementById('selectFileBtn');
+   441→   441→  const fileInput = document.getElementById('fileInput');
+   442→   442→  const convertBtn = document.getElementById('convertBtn');
+   443→   443→  const convertStatus = document.getElementById('convertStatus');
+   444→   444→
+   445→   445→  if (selectFileBtn) {
+   446→   446→    selectFileBtn.addEventListener('click', () => {
+   447→   447→      fileInput.click();
+   448→   448→    });
+   449→   449→  }
+   450→   450→
+   451→   451→  if (fileInput) {
+   452→   452→    fileInput.addEventListener('change', async (e) => {
+   453→   453→      const file = e.target.files[0];
+   454→   454→      if (!file) return;
+   455→   455→
+   456→   456→      selectFileBtn.textContent = '⏳ Membaca file...';
+   457→   457→
+   458→   458→      try {
+   459→   459→        const text = await file.text();
+   460→   460→
+   461→   461→        convertStatus.style.display = 'block';
+   462→   462→        convertStatus.textContent = '⏳ Parsing CSV Accesstrade...';
+   463→   463→        convertStatus.className = 'page-status info';
+   464→   464→
+   465→   465→        // Parse CSV
+   466→   466→        accesstradeProducts = parseAccesstradeCSV(text);
+   467→   467→
+   468→   468→        convertStatus.textContent = `✅ Ditemukan ${accesstradeProducts.length} produk! Atur filter lalu klik Convert.`;
+   469→   469→        convertStatus.className = 'page-status ok';
+   470→   470→
+   471→   471→        selectFileBtn.textContent = `📂 ${file.name} (${accesstradeProducts.length} produk)`;
+   472→   472→        convertBtn.disabled = false;
+   473→   473→
+   474→   474→      } catch (err) {
+   475→   475→        convertStatus.textContent = `❌ Error: ${err.message}`;
+   476→   476→        convertStatus.className = 'page-status no';
+   477→   477→        selectFileBtn.textContent = '📂 Pilih File CSV Accesstrade';
+   478→   478→      }
+   479→   479→    });
+   480→   480→  }
+   481→   481→
+   482→   482→  if (convertBtn) {
+   483→   483→    convertBtn.addEventListener('click', () => {
+   484→   484→      const minPrice = parseInt(document.getElementById('minPrice')?.value || '0', 10);
+   485→   485→      const maxPrice = parseInt(document.getElementById('maxPrice')?.value || '999999999', 10);
+   486→   486→      const maxProducts = parseInt(document.getElementById('maxProducts')?.value || '200', 10);
+   487→   487→      const catFilter = (document.getElementById('catFilter')?.value || '').toLowerCase().trim();
+   488→   488→
+   489→   489→      convertBtn.disabled = true;
+   490→   490→      convertBtn.textContent = '⏳ Converting...';
+   491→   491→
+   492→   492→      // Filter produk
+   493→   493→      let filtered = accesstradeProducts.filter(p => {
+   494→   494→        if (p.price < minPrice) return false;
+   495→   495→        if (maxPrice && p.price > maxPrice) return false;
+   496→   496→        if (catFilter && !(p.category || '').toLowerCase().includes(catFilter)) return false;
+   497→   497→        return true;
+   498→   498→      });
+   499→   499→
+   500→   500→      // Limit jumlah
+   501→   501→      filtered = filtered.slice(0, maxProducts);
+   502→   502→
+   503→   503→      if (filtered.length === 0) {
+   504→   504→        convertStatus.textContent = '❌ Gak ada produk yang lolos filter. Coba ubah filter.';
+   505→   505→        convertStatus.className = 'page-status no';
+   506→   506→        convertBtn.disabled = false;
+   507→   507→        convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
+   508→   508→        return;
+   509→   509→      }
+   510→   510→
+   511→   511→      // Build & download CSV
+   512→   512→      const csv = buildCSV(filtered);
+   513→   513→      const now = new Date();
+   514→   514→      const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+   515→   515→      downloadCSV(csv, `jb-accesstrade-${dateStr}-${filtered.length}produk.csv`);
+   516→   516→
+   517→   517→      convertStatus.textContent = `✅ Done! ${filtered.length} produk di-download (dari ${accesstradeProducts.length} total).`;
+   518→   518→      convertStatus.className = 'page-status ok';
+   519→   519→
+   520→   520→      convertBtn.disabled = false;
+   521→   521→      convertBtn.textContent = '💾 Convert & Download CSV (Format JB)';
+   522→   522→    });
+   523→   523→  }
+   524→   524→
+   525→   525→  updateUI();
+   526→   526→});
+   527→   527→
+   528→   528→
+   529→   529→// ================================================================
+   530→   530→//  SCRAPING — jalan DI DALAM halaman Shopee
+   531→   531→// ================================================================
+   532→   532→
+   533→   533→function scrapeSearchPage(category) {
+   534→   534→  const products = [];
+   535→   535→  const links = document.querySelectorAll('a[href*="-i."]');
+   536→   536→
+   537→   537→  for (const link of links) {
+   538→   538→    try {
+   539→   539→      const product = { category, marketplace: 'shopee' };
+   540→   540→      const text = link.innerText || '';
+   541→   541→      const href = link.getAttribute('href') || '';
+   542→   542→
+   543→   543→      product.url = href.startsWith('/') ? 'https://shopee.co.id' + href : href;
+   544→   544→
+   545→   545→      const idMatch = href.match(/-i\.(\d+)\.(\d+)/);
+   546→   546→      if (!idMatch) continue;
+   547→   547→
+   548→   548→      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+   549→   549→      if (lines.length > 0) product.title = lines[0];
+   550→   550→      if (!product.title || product.title.length < 3) continue;
+   551→   551→
+   552→   552→      const priceMatch = text.match(/Rp([\d.]+)/);
+   553→   553→      if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+   554→   554→
+   555→   555→      const allPrices = [...text.matchAll(/Rp([\d.]+)/g)];
+   556→   556→      if (allPrices.length > 1) {
+   557→   557→        const firstPrice = parseInt(allPrices[0][1].replace(/\./g, ''), 10);
+   558→   558→        const secondPrice = parseInt(allPrices[1][1].replace(/\./g, ''), 10);
+   559→   559→        if (secondPrice > firstPrice) {
+   560→   560→          product.originalPrice = secondPrice;
+   561→   561→          if (product.originalPrice > 0 && product.price > 0) {
+   562→   562→            product.discountPercent = Math.round((1 - product.price / product.originalPrice) * 100);
+   563→   563→          }
+   564→   564→        }
+   565→   565→      }
+   566→   566→
+   567→   567→      const soldMatch = text.match(/([\d.]+)\s*terjual/i);
+   568→   568→      if (soldMatch) {
+   569→   569→        product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
+   570→   570→      } else {
+   571→   571→        const rbMatch = text.match(/([\d,]+)\s*rb\s*terjual/i);
+   572→   572→        if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
+   573→   573→      }
+   574→   574→
+   575→   575→      // Rating: cari pola "4.9" atau "4,9" yang dekat dengan bintang atau setelah terjual
+   576→   576→      const ratingPatterns = [
+   577→   577→        /(\d+[.,]\d+)\s*(?:bintang|⭐|🌟)/i,
+   578→   578→        /terjual[\s\S]*?(\d+[.,]\d+)/i,
+   579→   579→        /(\d+[.,]\d+)\s*\((\d[\d.]*)\s*(?:rating|review|evaluasi)/i,
+   580→   580→      ];
+   581→   581→      for (const pat of ratingPatterns) {
+   582→   582→        const m = text.match(pat);
+   583→   583→        if (m) {
+   584→   584→          product.rating = parseFloat(m[1].replace(',', '.'));
+   585→   585→          break;
+   586→   586→        }
+   587→   587→      }
+   588→   588→
+   589→   589→      // Gambar: prioritas yang pasti produk, bukan logo
+   590→   590→      const img = link.querySelector('img');
+   591→   591→      if (img) {
+   592→   592→        const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+   593→   593→        // Skip logo/icon kecil dan data URI
+   594→   594→        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo') && src.includes('susercontent')) {
+   595→   595→          product.image = src;
+   596→   596→        }
+   597→   597→      }
+   598→   598→
+   599→   599→      if (product.title && product.price) {
+   600→   600→        products.push(product);
+   601→   601→      }
+   602→   602→    } catch {}
+   603→   603→  }
+   604→   604→
+   605→   605→  const seen = new Set();
+   606→   606→  return products.filter(p => {
+   607→   607→    if (seen.has(p.url)) return false;
+   608→   608→    seen.add(p.url);
+   609→   609→    return true;
+   610→   610→  });
+   611→   611→}
+   612→   612→
+   613→   613→// v5: Scrape detail — diperbaiki supaya gambar, rating, review, terjual benar
+   614→   614→function scrapeProductDetail(category) {
+   615→   615→  const url = window.location.href;
+   616→   616→  const product = { category, marketplace: 'shopee', url };
+   617→   617→
+   618→   618→  // ── Title ──
+   619→   619→  const titleSelectors = [
+   620→   620→    'h1',
+   621→   621→    '[class*="qaNIZv"]',
+   622→   622→    '[class*="WBVL_7"]',
+   623→   623→    '[class*="_44qnta"]',
+   624→   624→    'span[class*="title"]',
+   625→   625→    '[data-testid="product-name"]',
+   626→   626→  ];
+   627→   627→  for (const sel of titleSelectors) {
+   628→   628→    const el = document.querySelector(sel);
+   629→   629→    if (el && el.textContent.trim().length > 3) {
+   630→   630→      product.title = el.textContent.trim();
+   631→   631→      break;
+   632→   632→    }
+   633→   633→  }
+   634→   634→
+   635→   635→  // ── Gambar: prioritaskan og:image dari meta tag ──
+   636→   636→  // og:image paling reliable, bukan logo Shopee
+   637→   637→  const ogImage = document.querySelector('meta[property="og:image"]');
+   638→   638→  if (ogImage) {
+   639→   639→    const imgContent = ogImage.getAttribute('content');
+   640→   640→    if (imgContent && imgContent.includes('susercontent')) {
+   641→   641→      product.image = imgContent;
+   642→   642→    }
+   643→   643→  }
+   644→   644→
+   645→   645→  // Fallback: cari gambar produk yang benar
+   646→   646→  if (!product.image) {
+   647→   647→    const imgSelectors = [
+   648→   648→      'img[src*="down-id.img.susercontent.com"]',
+   649→   649→      'img[src*="susercontent.com/file/sg-"]',
+   650→   650→      'img[class*="product-image"]',
+   651→   651→      '[class*="product-img"] img',
+   652→   652→      '[class*="MIVED"] img',
+   653→   653→      '[class*="ZPN9su"] img',
+   654→   654→    ];
+   655→   655→    for (const sel of imgSelectors) {
+   656→   656→      const el = document.querySelector(sel);
+   657→   657→      if (el) {
+   658→   658→        const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
+   659→   659→        // Pastikan bukan logo dan bukan data URI
+   660→   660→        if (src && !src.startsWith('data:') && !src.includes('icon') && !src.includes('logo')) {
+   661→   661→          product.image = src;
+   662→   662→          break;
+   663→   663→        }
+   664→   664→      }
+   665→   665→    }
+   666→   666→  }
+   667→   667→
+   668→   668→  // ── Harga ──
+   669→   669→  const bodyText = document.body.innerText;
+   670→   670→  const priceMatch = bodyText.match(/Rp([\d.]+)/);
+   671→   671→  if (priceMatch) product.price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+   672→   672→
+   673→   673→  const allPrices = [...bodyText.matchAll(/Rp([\d.]+)/g)];
+   674→   674→  if (allPrices.length > 1) {
+   675→   675→    const secondPrice = parseInt(allPrices[1][1].replace(/\./g, ''), 10);
+   676→   676→    if (secondPrice > (product.price || 0)) {
+   677→   677→      product.originalPrice = secondPrice;
+   678→   678→      if (product.originalPrice > 0 && product.price > 0) {
+   679→   679→        product.discountPercent = Math.round((1 - product.price / product.originalPrice) * 100);
+   680→   680→      }
+   681→   681→    }
+   682→   682→  }
+   683→   683→
+   684→   684→  // ── Terjual ──
+   685→   685→  const soldMatch = bodyText.match(/([\d.]+)\s*terjual/i);
+   686→   686→  if (soldMatch) {
+   687→   687→    product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
+   688→   688→  } else {
+   689→   689→    const rbMatch = bodyText.match(/([\d,]+)\s*rb\s*terjual/i);
+   690→   690→    if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
+   691→   691→  }
+   692→   692→
+   693→   693→  // ── Rating & Review Count ──
+   694→   694→  // Cari pola "4.9 (1.2rb rating)" atau "4.9 • 1.2rb rating"
+   695→   695→  const ratingReviewMatch = bodyText.match(/(\d+[.,]\d+)\s*(?:\(([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review)\)|[•|]\s*([\d.,]+)\s*(?:rb|ribu)?\s*(?:rating|evaluasi|review))/i);
+   696→   696→  if (ratingReviewMatch) {
+   697→   697→    product.rating = parseFloat(ratingReviewMatch[1].replace(',', '.'));
+   698→   698→    const reviewStr = ratingReviewMatch[2] || ratingReviewMatch[3] || '';
+   699→   699→    if (reviewStr.includes('rb') || reviewStr.includes('ribu')) {
+   700→   700→      product.reviewCount = Math.round(parseFloat(reviewStr.replace(/[rbibu\s,]/g, '').replace(',', '.')) * 1000);
+   701→   701→    } else {
+   702→   702→      product.reviewCount = parseInt(reviewStr.replace(/\./g, '').replace(',', ''), 10);
+   703→   703→    }
+   704→   704→  }
+   705→   705→
+   706→   706→  // Fallback: cari rating saja
+   707→   707→  if (!product.rating) {
+   708→   708→    // Cari di area rating — biasa di dekat bintang
+   709→   709→    const ratingEl = document.querySelector('[class*="rating"], [class*="Rating"]');
+   710→   710→    if (ratingEl) {
+   711→   711→      const rText = ratingEl.textContent;
+   712→   712→      const rMatch = rText.match(/(\d+[.,]\d+)/);
+   713→   713→      if (rMatch) product.rating = parseFloat(rMatch[1].replace(',', '.'));
+   714→   714→    }
+   715→   715→  }
+   716→   716→
+   717→   717→  // ── Lokasi ──
+   718→   718→  const locMatch = bodyText.match(/Dikirim dari\s*([^\n,]+)/i);
+   719→   719→  if (locMatch) product.location = locMatch[1].trim();
+   720→   720→
+   721→   721→  return product;
+   722→   722→}
+   723→   723→
+   724→   724→// v5: Fetch Shopee API v4 dari dalam halaman (paling akurat!)
+   725→   725→function fetchShopeeApiInPage(shopId, itemId) {
+   726→   726→  const apiUrl = `https://shopee.co.id/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`;
+   727→   727→
+   728→   728→  return fetch(apiUrl, {
+   729→   729→    credentials: 'include', // Pakai cookies dari halaman Shopee yang sedang dibuka
+   730→   730→    headers: {
+   731→   731→      'Accept': 'application/json',
+   732→   732→      'X-Shopee-Language': 'id',
+   733→   733→      'X-API-SOURCE': 'pc',
+   734→   734→    },
+   735→   735→  })
+   736→   736→    .then(res => res.json())
+   737→   737→    .then(data => {
+   738→   738→      if (!data.data) return null;
+   739→   739→      const item = data.data;
+   740→   740→      const result = {};
+   741→   741→
+   742→   742→      if (item.name) result.title = item.name;
+   743→   743→
+   744→   744→      // Gambar — paling reliable dari API
+   745→   745→      if (item.image) {
+   746→   746→        result.image = `https://down-id.img.susercontent.com/file/${item.image}`;
+   747→   747→      } else if (item.images && item.images.length > 0) {
+   748→   748→        result.image = `https://down-id.img.susercontent.com/file/${item.images[0]}`;
+   749→   749→      }
+   750→   750→
+   751→   751→      // Harga
+   752→   752→      const priceMin = item.price_min || item.price;
+   753→   753→      if (priceMin) {
+   754→   754→        const priceVal = Array.isArray(priceMin) ? priceMin[0] : priceMin;
+   755→   755→        result.price = typeof priceVal === 'number' ? priceVal : parseInt(String(priceVal), 10);
+   756→   756→      }
+   757→   757→
+   758→   758→      const priceBeforeDiscount = item.price_min_before_discount || item.price_before_discount;
+   759→   759→      if (priceBeforeDiscount) {
+   760→   760→        const origVal = Array.isArray(priceBeforeDiscount) ? priceBeforeDiscount[0] : priceBeforeDiscount;
+   761→   761→        const origPrice = typeof origVal === 'number' ? origVal : parseInt(String(origVal), 10);
+   762→   762→        if (origPrice > 0) {
+   763→   763→          result.originalPrice = origPrice;
+   764→   764→          const p = result.price || 0;
+   765→   765→          if (origPrice > p) {
+   766→   766→            result.discountPercent = Math.round(((origPrice - p) / origPrice) * 100);
+   767→   767→          }
+   768→   768→        }
+   769→   769→      }
+   770→   770→
+   771→   771→      // Rating & Review
+   772→   772→      if (item.item_rating) {
+   773→   773→        result.rating = item.item_rating.rating_star || 0;
+   774→   774→        const ratingCount = item.item_rating.rating_count || [];
+   775→   775→        result.reviewCount = Array.isArray(ratingCount)
+   776→   776→          ? ratingCount.reduce((sum, c) => sum + (c || 0), 0)
+   777→   777→          : 0;
+   778→   778→      }
+   779→   779→
+   780→   780→      // Terjual
+   781→   781→      if (item.historical_sold !== undefined && item.historical_sold !== null) {
+   782→   782→        result.soldCount = item.historical_sold;
+   783→   783→      } else if (item.sold !== undefined && item.sold !== null) {
+   784→   784→        result.soldCount = item.sold;
+   785→   785→      }
+   786→   786→
+   787→   787→      // Lokasi
+   788→   788→      if (item.shop_location) result.location = item.shop_location;
+   789→   789→
+   790→   790→      return result;
+   791→   791→    })
+   792→   792→    .catch(() => null);
+   793→   793→}
+   794→   794→

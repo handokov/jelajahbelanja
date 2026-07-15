@@ -1,0 +1,1059 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import Link from "next/link";
+     5→import {
+     6→  AlertDialog,
+     7→  AlertDialogAction,
+     8→  AlertDialogCancel,
+     9→  AlertDialogContent,
+    10→  AlertDialogDescription,
+    11→  AlertDialogFooter,
+    12→  AlertDialogHeader,
+    13→  AlertDialogTitle,
+    14→} from "@/components/ui/alert-dialog";
+    15→import { Button } from "@/components/ui/button";
+    16→import { Input } from "@/components/ui/input";
+    17→import { Label } from "@/components/ui/label";
+    18→import { Switch } from "@/components/ui/switch";
+    19→import { Badge } from "@/components/ui/badge";
+    20→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    21→import {
+    22→  ArrowLeft,
+    23→  Settings2,
+    24→  Plus,
+    25→  Trash2,
+    26→  ArrowUp,
+    27→  ArrowDown,
+    28→  RotateCcw,
+    29→  Pencil,
+    30→  Save,
+    31→  X,
+    32→  Link2,
+    33→  ExternalLink,
+    34→  CheckCircle2,
+    35→  ShoppingBag,
+    36→  Package,
+    37→  ImageIcon,
+    38→  DollarSign,
+    39→  Star,
+    40→  MapPin,
+    41→} from "lucide-react";
+    42→import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+    43→import { useToast } from "@/hooks/use-toast";
+    44→import type {
+    45→  CategoryDTO,
+    46→  CreateCategoryInput,
+    47→  AffiliateTagDTO,
+    48→  UpdateAffiliateTagInput,
+    49→  Marketplace,
+    50→} from "@/lib/types";
+    51→
+    52→// ─── Shared constants ───
+    53→
+    54→const EMPTY_FORM: CreateCategoryInput = {
+    55→  name: "",
+    56→  emoji: "",
+    57→  keywords: "",
+    58→  amazonNode: "",
+    59→  aliexpressCat: "",
+    60→  shopeeCat: "",
+    61→  tokopediaCat: "",
+    62→  lazadaCat: "",
+    63→  enabled: true,
+    64→};
+    65→
+    66→const EMPTY_PRODUCT: ProductFormInput = {
+    67→  title: "",
+    68→  image: "",
+    69→  price: "",
+    70→  originalPrice: "",
+    71→  discountPercent: "",
+    72→  rating: "4.8",
+    73→  reviewCount: "1500",
+    74→  soldCount: "5000",
+    75→  location: "Jakarta Barat",
+    76→  category: "",
+    77→  url: "",
+    78→  affiliateUrl: "",
+    79→  marketplace: "shopee",
+    80→  enabled: true,
+    81→  isViral: false,
+    82→};
+    83→
+    84→interface ProductFormInput {
+    85→  title: string;
+    86→  image: string;
+    87→  price: string;
+    88→  originalPrice: string;
+    89→  discountPercent: string;
+    90→  rating: string;
+    91→  reviewCount: string;
+    92→  soldCount: string;
+    93→  location: string;
+    94→  category: string;
+    95→  url: string;
+    96→  affiliateUrl: string;
+    97→  marketplace: string;
+    98→  enabled: boolean;
+    99→  isViral: boolean;
+   100→}
+   101→
+   102→const MARKETPLACE_OPTIONS = [
+   103→  { value: "shopee", label: "Shopee" },
+   104→  { value: "tokopedia", label: "Tokopedia" },
+   105→  { value: "lazada", label: "Lazada" },
+   106→  { value: "aliexpress", label: "AliExpress" },
+   107→];
+   108→
+   109→const AFFILIATE_INFO: Array<{
+   110→  id: Marketplace;
+   111→  label: string;
+   112→  param: string;
+   113→  signupUrl: string;
+   114→  hint: string;
+   115→}> = [
+   116→  {
+   117→    id: "shopee",
+   118→    label: "Shopee Affiliate",
+   119→    param: "aff_atk",
+   120→    signupUrl: "https://affiliate.shopee.co.id",
+   121→    hint: "Daftar gratis di affiliate.shopee.co.id. Setelah approve, salin tracking ID Anda (mis. abcDE123).",
+   122→  },
+   123→  {
+   124→    id: "tokopedia",
+   125→    label: "Tokopedia Affiliate",
+   126→    param: "aff_code",
+   127→    signupUrl: "https://affiliate.tokopedia.com",
+   128→    hint: "Daftar di affiliate.tokopedia.com. Salin affiliate code Anda (mis. jelajahbelanja).",
+   129→  },
+   130→  {
+   131→    id: "lazada",
+   132→    label: "Lazada Affiliate",
+   133→    param: "aff_id",
+   134→    signupUrl: "https://www.lazada.co.id/wow/camp/pdhl/id/lazadaaffiliate/index",
+   135→    hint: "Daftar di lazada.co.id affiliate program. Salin Aff ID Anda (mis. 12345).",
+   136→  },
+   137→  {
+   138→    id: "aliexpress",
+   139→    label: "AliExpress Affiliate",
+   140→    param: "aff_fcid",
+   141→    signupUrl: "https://portals.aliexpress.com",
+   142→    hint: "Daftar di portals.aliexpress.com. Salin tracking ID Anda.",
+   143→  },
+   144→];
+   145→
+   146→// ─── Helper: format Rupiah ───
+   147→function formatRp(n: number): string {
+   148→  return "Rp " + n.toLocaleString("id-ID");
+   149→}
+   150→
+   151→// ─── Main component ───
+   152→
+   153→export default function AdminPage() {
+   154→  const queryClient = useQueryClient();
+   155→  const { toast } = useToast();
+   156→
+   157→  // ─── Queries ───
+   158→
+   159→  const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
+   160→    queryKey: ["categories"],
+   161→    queryFn: async () => {
+   162→      const res = await fetch("/api/categories");
+   163→      if (!res.ok) throw new Error("Gagal memuat kategori");
+   164→      const json = await res.json();
+   165→      return json.categories as CategoryDTO[];
+   166→    },
+   167→    staleTime: 60 * 60 * 1000,
+   168→  });
+   169→
+   170→  const { data: affiliateData, isLoading: affiliateLoading } = useQuery({
+   171→    queryKey: ["affiliate-tags"],
+   172→    queryFn: async () => {
+   173→      const res = await fetch("/api/affiliate");
+   174→      if (!res.ok) throw new Error("Gagal memuat tag affiliate");
+   175→      const json = await res.json();
+   176→      return json.tags as AffiliateTagDTO[];
+   177→    },
+   178→    staleTime: 60 * 1000,
+   179→  });
+   180→
+   181→  const { data: productsData, isLoading: productsLoading } = useQuery({
+   182→    queryKey: ["admin-products"],
+   183→    queryFn: async () => {
+   184→      const res = await fetch("/api/shopee-products");
+   185→      if (!res.ok) throw new Error("Gagal memuat produk");
+   186→      const json = await res.json();
+   187→      return json.products as any[];
+   188→    },
+   189→    staleTime: 30 * 1000,
+   190→  });
+   191→
+   192→  // ─── Category state ───
+   193→  const [editingId, setEditingId] = React.useState<string | null>(null);
+   194→  const [form, setForm] = React.useState<CreateCategoryInput>(EMPTY_FORM);
+   195→  const [deleteTarget, setDeleteTarget] = React.useState<CategoryDTO | null>(null);
+   196→  const [resetConfirmOpen, setResetConfirmOpen] = React.useState(false);
+   197→
+   198→  // ─── Product state ───
+   199→  const [productForm, setProductForm] = React.useState<ProductFormInput>(EMPTY_PRODUCT);
+   200→  const [editingProductId, setEditingProductId] = React.useState<string | null>(null);
+   201→  const [deleteProductTarget, setDeleteProductTarget] = React.useState<any>(null);
+   202→  const [showAdvanced, setShowAdvanced] = React.useState(false);
+   203→
+   204→  // ─── Affiliate state ───
+   205→  const [affDrafts, setAffDrafts] = React.useState<Record<string, { tag: string; enabled: boolean }>>({});
+   206→  React.useEffect(() => {
+   207→    if (affiliateData) {
+   208→      const drafts: Record<string, { tag: string; enabled: boolean }> = {};
+   209→      for (const t of affiliateData) {
+   210→        drafts[t.marketplace] = { tag: t.tag, enabled: t.enabled };
+   211→      }
+   212→      setAffDrafts(drafts);
+   213→    }
+   214→  }, [affiliateData]);
+   215→
+   216→  const categories = categoriesData ?? [];
+   217→
+   218→  // ─── Category mutations ───
+   219→
+   220→  const createMutation = useMutation({
+   221→    mutationFn: async (input: CreateCategoryInput) => {
+   222→      const res = await fetch("/api/categories", {
+   223→        method: "POST",
+   224→        headers: { "Content-Type": "application/json" },
+   225→        body: JSON.stringify(input),
+   226→      });
+   227→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal membuat kategori"); }
+   228→      return res.json();
+   229→    },
+   230→    onSuccess: () => {
+   231→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   232→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   233→      toast({ title: "Kategori dibuat", description: "Kategori baru berhasil ditambahkan." });
+   234→      setForm(EMPTY_FORM);
+   235→    },
+   236→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   237→  });
+   238→
+   239→  const updateMutation = useMutation({
+   240→    mutationFn: async (input: Partial<CreateCategoryInput> & { id: string }) => {
+   241→      const res = await fetch("/api/categories", {
+   242→        method: "PATCH",
+   243→        headers: { "Content-Type": "application/json" },
+   244→        body: JSON.stringify(input),
+   245→      });
+   246→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal memperbarui kategori"); }
+   247→      return res.json();
+   248→    },
+   249→    onSuccess: () => {
+   250→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   251→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   252→      toast({ title: "Kategori diperbarui" });
+   253→      setEditingId(null); setForm(EMPTY_FORM);
+   254→    },
+   255→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   256→  });
+   257→
+   258→  const deleteMutation = useMutation({
+   259→    mutationFn: async (id: string) => {
+   260→      const res = await fetch(`/api/categories?id=${id}`, { method: "DELETE" });
+   261→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal menghapus kategori"); }
+   262→    },
+   263→    onSuccess: () => {
+   264→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   265→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   266→      toast({ title: "Kategori dihapus" }); setDeleteTarget(null);
+   267→    },
+   268→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   269→  });
+   270→
+   271→  const reorderMutation = useMutation({
+   272→    mutationFn: async (cats: CategoryDTO[]) => {
+   273→      const payload = cats.map((c, i) => ({ id: c.id, order: i }));
+   274→      const res = await fetch("/api/categories", {
+   275→        method: "PATCH",
+   276→        headers: { "Content-Type": "application/json" },
+   277→        body: JSON.stringify({ categories: payload }),
+   278→      });
+   279→      if (!res.ok) throw new Error("Gagal mengurutkan kategori");
+   280→      return res.json();
+   281→    },
+   282→    onSuccess: () => {
+   283→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   284→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   285→    },
+   286→  });
+   287→
+   288→  const resetMutation = useMutation({
+   289→    mutationFn: async () => {
+   290→      const res = await fetch("/api/categories", { method: "PUT" });
+   291→      if (!res.ok) throw new Error("Gagal reset kategori");
+   292→      return res.json();
+   293→    },
+   294→    onSuccess: () => {
+   295→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   296→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   297→      toast({ title: "Kategori direset ke default" }); setResetConfirmOpen(false);
+   298→    },
+   299→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   300→  });
+   301→
+   302→  // ─── Product mutations ───
+   303→
+   304→  const createProductMutation = useMutation({
+   305→    mutationFn: async (input: any) => {
+   306→      const res = await fetch("/api/shopee-products", {
+   307→        method: "POST",
+   308→        headers: { "Content-Type": "application/json" },
+   309→        body: JSON.stringify(input),
+   310→      });
+   311→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal membuat produk"); }
+   312→      return res.json();
+   313→    },
+   314→    onSuccess: () => {
+   315→      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+   316→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   317→      toast({ title: "Produk ditambahkan", description: "Produk baru berhasil diupload." });
+   318→      setProductForm(EMPTY_PRODUCT);
+   319→    },
+   320→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   321→  });
+   322→
+   323→  const updateProductMutation = useMutation({
+   324→    mutationFn: async (input: any) => {
+   325→      const res = await fetch("/api/shopee-products", {
+   326→        method: "PATCH",
+   327→        headers: { "Content-Type": "application/json" },
+   328→        body: JSON.stringify(input),
+   329→      });
+   330→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal memperbarui produk"); }
+   331→      return res.json();
+   332→    },
+   333→    onSuccess: () => {
+   334→      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+   335→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   336→      toast({ title: "Produk diperbarui" });
+   337→      setEditingProductId(null); setProductForm(EMPTY_PRODUCT);
+   338→    },
+   339→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   340→  });
+   341→
+   342→  const deleteProductMutation = useMutation({
+   343→    mutationFn: async (id: string) => {
+   344→      const res = await fetch(`/api/shopee-products?id=${id}`, { method: "DELETE" });
+   345→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal menghapus produk"); }
+   346→    },
+   347→    onSuccess: () => {
+   348→      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+   349→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   350→      toast({ title: "Produk dihapus" }); setDeleteProductTarget(null);
+   351→    },
+   352→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   353→  });
+   354→
+   355→  // ─── Affiliate mutations ───
+   356→
+   357→  const updateAffiliateMutation = useMutation({
+   358→    mutationFn: async (input: UpdateAffiliateTagInput) => {
+   359→      const res = await fetch("/api/affiliate", {
+   360→        method: "PATCH",
+   361→        headers: { "Content-Type": "application/json" },
+   362→        body: JSON.stringify(input),
+   363→      });
+   364→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal menyimpan tag affiliate"); }
+   365→      return res.json();
+   366→    },
+   367→    onSuccess: () => {
+   368→      queryClient.invalidateQueries({ queryKey: ["affiliate-tags"] });
+   369→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   370→      toast({ title: "Tag affiliate disimpan" });
+   371→    },
+   372→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   373→  });
+   374→
+   375→  const resetAffiliateMutation = useMutation({
+   376→    mutationFn: async () => {
+   377→      const res = await fetch("/api/affiliate?reset=true", { method: "POST" });
+   378→      if (!res.ok) throw new Error("Gagal reset tag affiliate");
+   379→      return res.json();
+   380→    },
+   381→    onSuccess: () => {
+   382→      queryClient.invalidateQueries({ queryKey: ["affiliate-tags"] });
+   383→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   384→      toast({ title: "Tag affiliate direset" });
+   385→    },
+   386→  });
+   387→
+   388→  // ─── Category handlers ───
+   389→
+   390→  function handleEditCat(c: CategoryDTO) {
+   391→    setEditingId(c.id);
+   392→    setForm({
+   393→      name: c.name, emoji: c.emoji, keywords: c.keywords,
+   394→      amazonNode: c.amazonNode ?? "", aliexpressCat: c.aliexpressCat ?? "",
+   395→      shopeeCat: c.shopeeCat ?? "", tokopediaCat: c.tokopediaCat ?? "",
+   396→      lazadaCat: c.lazadaCat ?? "", enabled: c.enabled,
+   397→    });
+   398→  }
+   399→
+   400→  function handleSubmitCat() {
+   401→    if (!form.name.trim() || !form.emoji.trim() || !form.keywords.trim()) {
+   402→      toast({ title: "Validasi gagal", description: "Nama, emoji, dan keywords wajib diisi.", variant: "destructive" });
+   403→      return;
+   404→    }
+   405→    if (editingId) { updateMutation.mutate({ id: editingId, ...form }); }
+   406→    else { createMutation.mutate(form); }
+   407→  }
+   408→
+   409→  function handleMoveCat(index: number, direction: "up" | "down") {
+   410→    if (!categoriesData) return;
+   411→    const next = [...categoriesData];
+   412→    const target = direction === "up" ? index - 1 : index + 1;
+   413→    if (target < 0 || target >= next.length) return;
+   414→    [next[index], next[target]] = [next[target], next[index]];
+   415→    reorderMutation.mutate(next);
+   416→  }
+   417→
+   418→  function handleToggleEnabled(c: CategoryDTO, enabled: boolean) {
+   419→    updateMutation.mutate({ id: c.id, enabled });
+   420→  }
+   421→
+   422→  // ─── Product handlers ───
+   423→
+   424→  function handleSubmitProduct() {
+   425→    if (!productForm.title.trim() || !productForm.price || !productForm.category) {
+   426→      toast({ title: "Validasi gagal", description: "Judul produk, harga, dan kategori wajib diisi.", variant: "destructive" });
+   427→      return;
+   428→    }
+   429→    // URL produk: pakai url field, kalau gak diisi pakai affiliateUrl, kalau affiliateUrl juga gak ada, generate dari title
+   430→    const productUrl = productForm.url.trim() || productForm.affiliateUrl.trim() || `https://shopee.co.id/search?keyword=${encodeURIComponent(productForm.title)}`;
+   431→    // Auto-calc discount kalau ada harga asli
+   432→    const price = Number(productForm.price);
+   433→    const originalPrice = productForm.originalPrice ? Number(productForm.originalPrice) : null;
+   434→    let discountPercent = productForm.discountPercent ? Number(productForm.discountPercent) : null;
+   435→    if (!discountPercent && originalPrice && originalPrice > price) {
+   436→      discountPercent = Math.round(((originalPrice - price) / originalPrice) * 100);
+   437→    }
+   438→    const payload = {
+   439→      title: productForm.title,
+   440→      image: productForm.image.trim() || `https://down-id.img.susercontent.com/file/placeholder`,
+   441→      price,
+   442→      originalPrice,
+   443→      discountPercent,
+   444→      rating: Number(productForm.rating) || 4.8,
+   445→      reviewCount: Number(productForm.reviewCount) || 1500,
+   446→      soldCount: Number(productForm.soldCount) || 5000,
+   447→      location: productForm.location || "Jakarta Barat",
+   448→      category: productForm.category,
+   449→      url: productUrl,
+   450→      affiliateUrl: productForm.affiliateUrl || null,
+   451→      marketplace: productForm.marketplace || "shopee",
+   452→      enabled: productForm.enabled,
+   453→      isViral: productForm.isViral,
+   454→    };
+   455→    if (editingProductId) {
+   456→      updateProductMutation.mutate({ id: editingProductId, ...payload });
+   457→    } else {
+   458→      createProductMutation.mutate(payload);
+   459→    }
+   460→  }
+   461→
+   462→  function handleEditProduct(p: any) {
+   463→    setEditingProductId(p.id);
+   464→    setProductForm({
+   465→      title: p.title,
+   466→      image: p.image,
+   467→      price: String(p.price),
+   468→      originalPrice: p.originalPrice ? String(p.originalPrice) : "",
+   469→      discountPercent: p.discountPercent ? String(p.discountPercent) : "",
+   470→      rating: String(p.rating),
+   471→      reviewCount: String(p.reviewCount),
+   472→      soldCount: String(p.soldCount),
+   473→      location: p.location || "",
+   474→      category: p.category,
+   475→      url: p.url,
+   476→      affiliateUrl: p.affiliateUrl || "",
+   477→      marketplace: p.marketplace || "shopee",
+   478→      enabled: p.enabled ?? true,
+   479→      isViral: p.isViral ?? false,
+   480→    });
+   481→  }
+   482→
+   483→  // ─── Affiliate handlers ───
+   484→
+   485→  function handleSaveAffiliate(m: Marketplace) {
+   486→    const draft = affDrafts[m];
+   487→    if (!draft) return;
+   488→    updateAffiliateMutation.mutate({ marketplace: m, tag: draft.tag, enabled: draft.enabled });
+   489→  }
+   490→
+   491→  // ─── Render ───
+   492→
+   493→  return (
+   494→    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+   495→      {/* Header */}
+   496→      <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+   497→        <div className="container mx-auto px-4 max-w-5xl py-4 flex items-center justify-between">
+   498→          <div className="flex items-center gap-3">
+   499→            <Link
+   500→              href="/"
+   501→              className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+   502→            >
+   503→              <ArrowLeft className="w-4 h-4" />
+   504→              Kembali
+   505→            </Link>
+   506→            <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800" />
+   507→            <div className="flex items-center gap-2">
+   508→              <ShoppingBag className="w-5 h-5 text-fuchsia-600" />
+   509→              <span className="font-bold text-lg">JelajahBelanja</span>
+   510→              <Badge className="bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 hover:bg-fuchsia-100 text-[10px]">
+   511→                Admin
+   512→              </Badge>
+   513→            </div>
+   514→          </div>
+   515→          <h1 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+   516→            Panel Admin
+   517→          </h1>
+   518→        </div>
+   519→      </header>
+   520→
+   521→      {/* Main */}
+   522→      <main className="container mx-auto px-4 max-w-5xl py-6">
+   523→        <Tabs defaultValue="products" className="space-y-6">
+   524→          <TabsList className="grid w-full max-w-lg grid-cols-3 h-11">
+   525→            <TabsTrigger value="products" className="text-sm">
+   526→              <Package className="w-4 h-4 mr-1.5" />
+   527→              Produk
+   528→            </TabsTrigger>
+   529→            <TabsTrigger value="categories" className="text-sm">
+   530→              <Settings2 className="w-4 h-4 mr-1.5" />
+   531→              Kategori
+   532→            </TabsTrigger>
+   533→            <TabsTrigger value="affiliate" className="text-sm">
+   534→              <Link2 className="w-4 h-4 mr-1.5" />
+   535→              Affiliate
+   536→            </TabsTrigger>
+   537→          </TabsList>
+   538→
+   539→          {/* ===== TAB PRODUK ===== */}
+   540→          <TabsContent value="products" className="space-y-4">
+   541→            {/* Cara pakai */}
+   542→            <div className="rounded-2xl border border-fuchsia-200 dark:border-fuchsia-900/50 bg-fuchsia-50 dark:bg-fuchsia-900/20 p-4">
+   543→              <p className="text-sm font-semibold text-fuchsia-900 dark:text-fuchsia-100 mb-2">
+   544→                Cara Tambah Produk dari Shopee
+   545→              </p>
+   546→              <ol className="text-xs text-fuchsia-900 dark:text-fuchsia-100 space-y-1 list-decimal list-inside">
+   547→                <li>Buka Shopee, cari produk viral yang mau lo promote</li>
+   548→                <li>Copy info: <strong>Nama produk, URL gambar, Harga</strong></li>
+   549→                <li>Generate <strong>link affiliate</strong> di dashboard Shopee Affiliate (affiliate.shopee.co.id)</li>
+   550→                <li>Paste semua di form di bawah, klik Upload</li>
+   551→              </ol>
+   552→              <p className="text-[11px] text-fuchsia-700 dark:text-fuchsia-300 mt-2">
+   553→                Field bertanda * wajib diisi. Sisanya udah auto-default (rating 4.9, terjual 5rb, dll). Bisa diedit nanti.
+   554→              </p>
+   555→            </div>
+   556→
+   557→            {/* Quick-add form */}
+   558→            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+   559→              <div className="flex items-center justify-between mb-4">
+   560→                <div className="flex items-center gap-2">
+   561→                  {editingProductId ? (
+   562→                    <Pencil className="w-4 h-4 text-fuchsia-600" />
+   563→                  ) : (
+   564→                    <Plus className="w-4 h-4 text-fuchsia-600" />
+   565→                  )}
+   566→                  <h2 className="font-semibold text-sm">
+   567→                    {editingProductId ? "Edit Produk" : "Quick Add Produk"}
+   568→                  </h2>
+   569→                </div>
+   570→                {!editingProductId && (
+   571→                  <Button
+   572→                    variant="ghost"
+   573→                    size="sm"
+   574→                    className="text-xs text-zinc-500"
+   575→                    onClick={() => setShowAdvanced(!showAdvanced)}
+   576→                  >
+   577→                    {showAdvanced ? "Sembunyikan Detail" : "Lihat Semua Field"}
+   578→                  </Button>
+   579→                )}
+   580→              </div>
+   581→
+   582→              {/* Wajib fields - selalu tampil */}
+   583→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   584→                <div className="flex flex-col gap-1.5 md:col-span-2">
+   585→                  <Label htmlFor="prod-title" className="text-xs font-semibold">Judul Produk *</Label>
+   586→                  <Input
+   587→                    id="prod-title"
+   588→                    placeholder="Nama produk..."
+   589→                    value={productForm.title}
+   590→                    onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
+   591→                  />
+   592→                </div>
+   593→                <div className="flex flex-col gap-1.5 md:col-span-2">
+   594→                  <Label htmlFor="prod-url" className="text-xs font-semibold flex items-center gap-1">
+   595→                    <ExternalLink className="w-3 h-3" /> URL Shopee *
+   596→                  </Label>
+   597→                  <Input
+   598→                    id="prod-url"
+   599→                    placeholder="https://shopee.co.id/..."
+   600→                    value={productForm.url}
+   601→                    onChange={(e) => setProductForm({ ...productForm, url: e.target.value })}
+   602→                  />
+   603→                </div>
+   604→                <div className="flex flex-col gap-1.5 md:col-span-2">
+   605→                  <Label htmlFor="prod-image" className="text-xs font-semibold flex items-center gap-1">
+   606→                    <ImageIcon className="w-3 h-3" /> URL Foto Produk
+   607→                  </Label>
+   608→                  <Input
+   609→                    id="prod-image"
+   610→                    placeholder="https://down-id.img.susercontent.com/file/..."
+   611→                    value={productForm.image}
+   612→                    onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
+   613→                  />
+   614→                </div>
+   615→                <div className="flex flex-col gap-1.5">
+   616→                  <Label htmlFor="prod-price" className="text-xs font-semibold flex items-center gap-1">
+   617→                    <DollarSign className="w-3 h-3" /> Harga (Rp) *
+   618→                  </Label>
+   619→                  <Input
+   620→                    id="prod-price"
+   621→                    type="number"
+   622→                    placeholder="19500"
+   623→                    value={productForm.price}
+   624→                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+   625→                  />
+   626→                </div>
+   627→                <div className="flex flex-col gap-1.5">
+   628→                  <Label htmlFor="prod-original" className="text-xs font-semibold">Harga Asli / Coret (Rp)</Label>
+   629→                  <Input
+   630→                    id="prod-original"
+   631→                    type="number"
+   632→                    placeholder="99000"
+   633→                    value={productForm.originalPrice}
+   634→                    onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
+   635→                  />
+   636→                </div>
+   637→                <div className="flex flex-col gap-1.5">
+   638→                  <Label htmlFor="prod-category" className="text-xs font-semibold">Kategori *</Label>
+   639→                  <select
+   640→                    id="prod-category"
+   641→                    value={productForm.category}
+   642→                    onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+   643→                    className="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+   644→                  >
+   645→                    <option value="">Pilih kategori...</option>
+   646→                    {categories.map((c) => (
+   647→                      <option key={c.id} value={c.name}>{c.emoji} {c.name}</option>
+   648→                    ))}
+   649→                  </select>
+   650→                </div>
+   651→                <div className="flex flex-col gap-1.5 md:col-span-2">
+   652→                  <Label htmlFor="prod-affiliate" className="text-xs font-semibold flex items-center gap-1">
+   653→                    <Link2 className="w-3 h-3" /> Link Affiliate Shopee (opsional)
+   654→                  </Label>
+   655→                  <Input
+   656→                    id="prod-affiliate"
+   657→                    placeholder="https://shope.ee/abcde"
+   658→                    value={productForm.affiliateUrl}
+   659→                    onChange={(e) => setProductForm({ ...productForm, affiliateUrl: e.target.value })}
+   660→                  />
+   661→                  <p className="text-[10px] text-zinc-400">
+   662→                    ini kalau udah punya link affiliate, Shortlink /beli/xxx otomatis redirect ke sini
+   663→                  </p>
+   664→                </div>
+   665→              </div>
+   666→
+   667→              {/* Advanced fields - collapsible */}
+   668→              {showAdvanced && (
+   669→                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+   670→                  <div className="flex flex-col gap-1.5">
+   671→                    <Label htmlFor="prod-rating" className="text-xs flex items-center gap-1">
+   672→                      <Star className="w-3 h-3" /> Rating
+   673→                    </Label>
+   674→                    <Input
+   675→                      id="prod-rating"
+   676→                      type="number"
+   677→                      step="0.1"
+   678→                      placeholder="4.8"
+   679→                      value={productForm.rating}
+   680→                      onChange={(e) => setProductForm({ ...productForm, rating: e.target.value })}
+   681→                    />
+   682→                  </div>
+   683→                  <div className="flex flex-col gap-1.5">
+   684→                    <Label htmlFor="prod-reviews" className="text-xs">Jumlah Review</Label>
+   685→                    <Input
+   686→                      id="prod-reviews"
+   687→                      type="number"
+   688→                      placeholder="1500"
+   689→                      value={productForm.reviewCount}
+   690→                      onChange={(e) => setProductForm({ ...productForm, reviewCount: e.target.value })}
+   691→                    />
+   692→                  </div>
+   693→                  <div className="flex flex-col gap-1.5">
+   694→                    <Label htmlFor="prod-sold" className="text-xs">Jumlah Terjual</Label>
+   695→                    <Input
+   696→                      id="prod-sold"
+   697→                      type="number"
+   698→                      placeholder="5000"
+   699→                      value={productForm.soldCount}
+   700→                      onChange={(e) => setProductForm({ ...productForm, soldCount: e.target.value })}
+   701→                    />
+   702→                  </div>
+   703→                  <div className="flex flex-col gap-1.5">
+   704→                    <Label htmlFor="prod-location" className="text-xs flex items-center gap-1">
+   705→                      <MapPin className="w-3 h-3" /> Lokasi
+   706→                    </Label>
+   707→                    <Input
+   708→                      id="prod-location"
+   709→                      placeholder="Jakarta Barat"
+   710→                      value={productForm.location}
+   711→                      onChange={(e) => setProductForm({ ...productForm, location: e.target.value })}
+   712→                    />
+   713→                  </div>
+   714→                  <div className="flex flex-col gap-1.5">
+   715→                    <Label htmlFor="prod-marketplace" className="text-xs">Marketplace</Label>
+   716→                    <select
+   717→                      id="prod-marketplace"
+   718→                      value={productForm.marketplace}
+   719→                      onChange={(e) => setProductForm({ ...productForm, marketplace: e.target.value })}
+   720→                      className="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+   721→                    >
+   722→                      {MARKETPLACE_OPTIONS.map((m) => (
+   723→                        <option key={m.value} value={m.value}>{m.label}</option>
+   724→                      ))}
+   725→                    </select>
+   726→                  </div>
+   727→                  <div className="flex flex-col gap-1.5">
+   728→                    <Label htmlFor="prod-disc" className="text-xs">Diskon (%)</Label>
+   729→                    <Input
+   730→                      id="prod-disc"
+   731→                      type="number"
+   732→                      placeholder="Auto dari harga coret"
+   733→                      value={productForm.discountPercent}
+   734→                      onChange={(e) => setProductForm({ ...productForm, discountPercent: e.target.value })}
+   735→                    />
+   736→                  </div>
+   737→                </div>
+   738→              )}
+   739→
+   740→              <div className="flex items-center justify-between mt-4 gap-2">
+   741→                <div className="flex items-center gap-4">
+   742→                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+   743→                    <Switch
+   744→                      checked={productForm.enabled}
+   745→                      onCheckedChange={(checked) => setProductForm({ ...productForm, enabled: checked })}
+   746→                    />
+   747→                    Aktif
+   748→                  </label>
+   749→                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+   750→                    <Switch
+   751→                      checked={productForm.isViral}
+   752→                      onCheckedChange={(checked) => setProductForm({ ...productForm, isViral: checked })}
+   753→                    />
+   754→                    DO Viral 🔥
+   755→                  </label>
+   756→                </div>
+   757→                <div className="flex gap-2">
+   758→                  {(editingProductId || productForm.title) && (
+   759→                    <Button
+   760→                      variant="ghost"
+   761→                      size="sm"
+   762→                      onClick={() => { setEditingProductId(null); setProductForm(EMPTY_PRODUCT); }}
+   763→                    >
+   764→                      <X className="w-3.5 h-3.5 mr-1" /> Batal
+   765→                    </Button>
+   766→                  )}
+   767→                  <Button
+   768→                    size="sm"
+   769→                    onClick={handleSubmitProduct}
+   770→                    disabled={createProductMutation.isPending || updateProductMutation.isPending}
+   771→                  >
+   772→                    {editingProductId ? (
+   773→                      <><Save className="w-3.5 h-3.5 mr-1" /> Simpan</>
+   774→                    ) : (
+   775→                      <><Plus className="w-3.5 h-3.5 mr-1" /> Upload Produk</>
+   776→                    )}
+   777→                  </Button>
+   778→                </div>
+   779→              </div>
+   780→            </div>
+   781→
+   782→            {/* Daftar produk */}
+   783→            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+   784→              <h2 className="font-semibold text-sm flex items-center gap-2 mb-4">
+   785→                <Package className="w-4 h-4" />
+   786→                Produk Manual ({productsData?.length ?? 0})
+   787→              </h2>
+   788→              {productsLoading ? (
+   789→                <div className="text-center py-8 text-sm text-zinc-500">Memuat...</div>
+   790→              ) : !productsData || productsData.length === 0 ? (
+   791→                <div className="text-center py-8 text-sm text-zinc-500">
+   792→                  Belum ada produk. Upload produk pertama lo di atas!
+   793→                </div>
+   794→              ) : (
+   795→                <ul className="flex flex-col gap-2">
+   796→                  {productsData.map((p) => (
+   797→                    <li
+   798→                      key={p.id}
+   799→                      className="flex items-start gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50"
+   800→                    >
+   801→                      <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-700">
+   802→                        <img src={p.image} alt={p.title} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.png"; }} />
+   803→                      </div>
+   804→                      <div className="flex-1 min-w-0">
+   805→                        <div className="flex items-center gap-2 flex-wrap">
+   806→                          <span className="font-semibold text-sm line-clamp-1">{p.title}</span>
+   807→                          <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] px-1.5 py-0 h-4">
+   808→                            {p.marketplace || "shopee"}
+   809→                          </Badge>
+   810→                          <Badge variant="outline" className="text-[10px]">{p.category}</Badge>
+   811→                          {!p.enabled && (
+   812→                            <Badge className="bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400 text-[10px]">Nonaktif</Badge>
+   813→                          )}
+   814→                        </div>
+   815→                        <div className="flex items-center gap-2 text-xs text-zinc-500 mt-1">
+   816→                          <span className="font-bold text-zinc-900 dark:text-zinc-100">{formatRp(p.price)}</span>
+   817→                          {p.originalPrice && p.originalPrice > p.price && (
+   818→                            <span className="line-through">{formatRp(p.originalPrice)}</span>
+   819→                          )}
+   820→                          {p.discountPercent && <span className="text-red-500">-{p.discountPercent}%</span>}
+   821→                          <span>· ★ {p.rating?.toFixed(1)}</span>
+   822→                          <span>· {p.soldCount?.toLocaleString()} terjual</span>
+   823→                        </div>
+   824→                        {p.affiliateUrl && (
+   825→                          <p className="text-[10px] text-fuchsia-600 dark:text-fuchsia-400 mt-0.5 truncate">
+   826→                            Affiliate: {p.affiliateUrl}
+   827→                          </p>
+   828→                        )}
+   829→                      </div>
+   830→                      <div className="flex items-center gap-1 pt-1">
+   831→                        <Switch
+   832→                          checked={p.enabled ?? true}
+   833→                          onCheckedChange={(checked) => updateProductMutation.mutate({ id: p.id, enabled: checked })}
+   834→                          aria-label="Toggle aktif"
+   835→                        />
+   836→                        <Button
+   837→                          variant="ghost"
+   838→                          size="icon"
+   839→                          className="h-7 w-7"
+   840→                          onClick={() => handleEditProduct(p)}
+   841→                          aria-label="Edit"
+   842→                        >
+   843→                          <Pencil className="w-3.5 h-3.5" />
+   844→                        </Button>
+   845→                        <Button
+   846→                          variant="ghost"
+   847→                          size="icon"
+   848→                          className="h-7 w-7 text-red-600 hover:text-red-700"
+   849→                          onClick={() => setDeleteProductTarget(p)}
+   850→                          aria-label="Hapus"
+   851→                        >
+   852→                          <Trash2 className="w-3.5 h-3.5" />
+   853→                        </Button>
+   854→                      </div>
+   855→                    </li>
+   856→                  ))}
+   857→                </ul>
+   858→              )}
+   859→            </div>
+   860→          </TabsContent>
+   861→
+   862→          {/* ===== TAB KATEGORI ===== */}
+   863→          <TabsContent value="categories" className="space-y-4">
+   864→            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+   865→              <div className="flex items-center gap-2 mb-4">
+   866→                {editingId ? <Pencil className="w-4 h-4 text-fuchsia-600" /> : <Plus className="w-4 h-4 text-fuchsia-600" />}
+   867→                <h2 className="font-semibold text-sm">{editingId ? "Edit Kategori" : "Tambah Kategori Baru"}</h2>
+   868→              </div>
+   869→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   870→                <div className="flex flex-col gap-1.5">
+   871→                  <Label htmlFor="cat-emoji" className="text-xs">Emoji</Label>
+   872→                  <Input id="cat-emoji" placeholder="🔌" value={form.emoji} onChange={(e) => setForm({ ...form, emoji: e.target.value })} className="w-20 text-center text-xl" maxLength={2} />
+   873→                </div>
+   874→                <div className="flex flex-col gap-1.5">
+   875→                  <Label htmlFor="cat-name" className="text-xs">Nama Kategori</Label>
+   876→                  <Input id="cat-name" placeholder="Elektronik" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+   877→                </div>
+   878→                <div className="flex flex-col gap-1.5 md:col-span-2">
+   879→                  <Label htmlFor="cat-keywords" className="text-xs">Keywords (pisahkan dengan koma)</Label>
+   880→                  <Input id="cat-keywords" placeholder="elektronik,gadget,smartphone" value={form.keywords} onChange={(e) => setForm({ ...form, keywords: e.target.value })} />
+   881→                </div>
+   882→                <div className="flex flex-col gap-1.5">
+   883→                  <Label htmlFor="cat-shopee" className="text-xs">Shopee Category</Label>
+   884→                  <Input id="cat-shopee" placeholder="elektronik" value={form.shopeeCat ?? ""} onChange={(e) => setForm({ ...form, shopeeCat: e.target.value })} />
+   885→                </div>
+   886→                <div className="flex flex-col gap-1.5">
+   887→                  <Label htmlFor="cat-tokopedia" className="text-xs">Tokopedia Category</Label>
+   888→                  <Input id="cat-tokopedia" placeholder="elektronik" value={form.tokopediaCat ?? ""} onChange={(e) => setForm({ ...form, tokopediaCat: e.target.value })} />
+   889→                </div>
+   890→                <div className="flex flex-col gap-1.5">
+   891→                  <Label htmlFor="cat-lazada" className="text-xs">Lazada Category</Label>
+   892→                  <Input id="cat-lazada" placeholder="elektronik" value={form.lazadaCat ?? ""} onChange={(e) => setForm({ ...form, lazadaCat: e.target.value })} />
+   893→                </div>
+   894→                <div className="flex flex-col gap-1.5">
+   895→                  <Label htmlFor="cat-amazon" className="text-xs">Amazon Node (opsional)</Label>
+   896→                  <Input id="cat-amazon" placeholder="172282" value={form.amazonNode ?? ""} onChange={(e) => setForm({ ...form, amazonNode: e.target.value })} />
+   897→                </div>
+   898→              </div>
+   899→              <div className="flex items-center justify-between mt-4 gap-2">
+   900→                <label className="flex items-center gap-2 text-xs cursor-pointer">
+   901→                  <Switch checked={form.enabled} onCheckedChange={(checked) => setForm({ ...form, enabled: checked })} />
+   902→                  Aktif
+   903→                </label>
+   904→                <div className="flex gap-2">
+   905→                  {(editingId || form.name) && (
+   906→                    <Button variant="ghost" size="sm" onClick={() => { setEditingId(null); setForm(EMPTY_FORM); }}>
+   907→                      <X className="w-3.5 h-3.5 mr-1" /> Batal
+   908→                    </Button>
+   909→                  )}
+   910→                  <Button size="sm" onClick={handleSubmitCat} disabled={createMutation.isPending || updateMutation.isPending}>
+   911→                    {editingId ? <><Save className="w-3.5 h-3.5 mr-1" /> Simpan</> : <><Plus className="w-3.5 h-3.5 mr-1" /> Tambah</>}
+   912→                  </Button>
+   913→                </div>
+   914→              </div>
+   915→            </div>
+   916→
+   917→            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+   918→              <div className="flex items-center justify-between mb-4">
+   919→                <h2 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Daftar Kategori ({categories.length})</h2>
+   920→                <Button variant="outline" size="sm" onClick={() => setResetConfirmOpen(true)} disabled={resetMutation.isPending}>
+   921→                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset Default
+   922→                </Button>
+   923→              </div>
+   924→              {categoriesLoading ? (
+   925→                <div className="text-center py-8 text-sm text-zinc-500">Memuat...</div>
+   926→              ) : (
+   927→                <ul className="flex flex-col gap-2">
+   928→                  {categories.map((c, i) => (
+   929→                    <li key={c.id} className="flex items-start gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+   930→                      <div className="flex flex-col gap-0.5 pt-1">
+   931→                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveCat(i, "up")} disabled={i === 0}><ArrowUp className="w-3.5 h-3.5" /></Button>
+   932→                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveCat(i, "down")} disabled={i === categories.length - 1}><ArrowDown className="w-3.5 h-3.5" /></Button>
+   933→                      </div>
+   934→                      <div className="flex-1 min-w-0">
+   935→                        <div className="flex items-center gap-2 flex-wrap">
+   936→                          <span className="text-xl">{c.emoji}</span>
+   937→                          <span className="font-semibold text-sm">{c.name}</span>
+   938→                          <Badge variant="outline" className="text-[10px]">#{c.order}</Badge>
+   939→                          {!c.enabled && <Badge className="bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400 text-[10px]">Nonaktif</Badge>}
+   940→                          {c.shopeeCat && <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] px-1.5 py-0 h-4">Shopee</Badge>}
+   941→                          {c.tokopediaCat && <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-[10px] px-1.5 py-0 h-4">Tokopedia</Badge>}
+   942→                          {c.lazadaCat && <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] px-1.5 py-0 h-4">Lazada</Badge>}
+   943→                        </div>
+   944→                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 truncate">Keywords: {c.keywords}</p>
+   945→                      </div>
+   946→                      <div className="flex items-center gap-2 pt-1">
+   947→                        <Switch checked={c.enabled} onCheckedChange={(checked) => handleToggleEnabled(c, checked)} />
+   948→                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditCat(c)}><Pencil className="w-3.5 h-3.5" /></Button>
+   949→                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => setDeleteTarget(c)}><Trash2 className="w-3.5 h-3.5" /></Button>
+   950→                      </div>
+   951→                    </li>
+   952→                  ))}
+   953→                </ul>
+   954→              )}
+   955→            </div>
+   956→          </TabsContent>
+   957→
+   958→          {/* ===== TAB AFFILIATE ===== */}
+   959→          <TabsContent value="affiliate" className="space-y-4">
+   960→            <div className="rounded-2xl border border-fuchsia-200 dark:border-fuchsia-900/50 bg-fuchsia-50 dark:bg-fuchsia-900/20 p-4">
+   961→              <p className="text-sm text-fuchsia-900 dark:text-fuchsia-100">
+   962→                <strong>Cara kerja:</strong> Setelah tag affiliate terisi, semua link &quot;Beli Sekarang&quot; di JelajahBelanja otomatis disisipi parameter tracking Anda. Setiap transaksi yang berasal dari link ini akan memberikan komisi ke Anda.
+   963→              </p>
+   964→            </div>
+   965→            {affiliateLoading ? (
+   966→              <div className="text-center py-8 text-sm text-zinc-500">Memuat...</div>
+   967→            ) : (
+   968→              <div className="flex flex-col gap-3">
+   969→                {AFFILIATE_INFO.map((m) => {
+   970→                  const draft = affDrafts[m.id] ?? { tag: "", enabled: false };
+   971→                  const isSaved = affiliateData?.find((t) => t.marketplace === m.id)?.tag === draft.tag &&
+   972→                    affiliateData?.find((t) => t.marketplace === m.id)?.enabled === draft.enabled;
+   973→                  return (
+   974→                    <div key={m.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+   975→                      <div className="flex items-center justify-between mb-2">
+   976→                        <div className="flex items-center gap-2">
+   977→                          <span className="font-semibold">{m.label}</span>
+   978→                          {draft.tag && draft.enabled && (
+   979→                            <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-[10px]">
+   980→                              <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> Aktif
+   981→                            </Badge>
+   982→                          )}
+   983→                        </div>
+   984→                        <a href={m.signupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-fuchsia-600 dark:text-fuchsia-400 hover:underline inline-flex items-center gap-0.5">
+   985→                          Daftar <ExternalLink className="w-3 h-3" />
+   986→                        </a>
+   987→                      </div>
+   988→                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">{m.hint}</p>
+   989→                      <div className="flex items-center gap-2">
+   990→                        <code className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">?{m.param}=</code>
+   991→                        <Input placeholder={`Tag ${m.label} Anda`} value={draft.tag} onChange={(e) => setAffDrafts({ ...affDrafts, [m.id]: { ...draft, tag: e.target.value } })} className="h-9 text-sm" />
+   992→                        <Switch checked={draft.enabled} onCheckedChange={(checked) => setAffDrafts({ ...affDrafts, [m.id]: { ...draft, enabled: checked } })} />
+   993→                        <Button size="sm" variant={isSaved ? "outline" : "default"} onClick={() => handleSaveAffiliate(m.id)} disabled={updateAffiliateMutation.isPending} className="h-9">
+   994→                          <Save className="w-3.5 h-3.5" />
+   995→                        </Button>
+   996→                      </div>
+   997→                    </div>
+   998→                  );
+   999→                })}
+  1000→              </div>
+  1001→            )}
+  1002→            <div className="mt-3">
+  1003→              <Button variant="outline" size="sm" onClick={() => resetAffiliateMutation.mutate()} disabled={resetAffiliateMutation.isPending}>
+  1004→                <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset Semua Tag
+  1005→              </Button>
+  1006→            </div>
+  1007→          </TabsContent>
+  1008→        </Tabs>
+  1009→      </main>
+  1010→
+  1011→      {/* Delete product dialog */}
+  1012→      <AlertDialog open={!!deleteProductTarget} onOpenChange={(o) => !o && setDeleteProductTarget(null)}>
+  1013→        <AlertDialogContent>
+  1014→          <AlertDialogHeader>
+  1015→            <AlertDialogTitle>Hapus produk?</AlertDialogTitle>
+  1016→            <AlertDialogDescription>
+  1017→              Produk <strong>{deleteProductTarget?.title}</strong> akan dihapus permanen.
+  1018→            </AlertDialogDescription>
+  1019→          </AlertDialogHeader>
+  1020→          <AlertDialogFooter>
+  1021→            <AlertDialogCancel>Batal</AlertDialogCancel>
+  1022→            <AlertDialogAction onClick={() => deleteProductTarget && deleteProductMutation.mutate(deleteProductTarget.id)} className="bg-red-600 hover:bg-red-700">Hapus</AlertDialogAction>
+  1023→          </AlertDialogFooter>
+  1024→        </AlertDialogContent>
+  1025→      </AlertDialog>
+  1026→
+  1027→      {/* Delete category dialog */}
+  1028→      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+  1029→        <AlertDialogContent>
+  1030→          <AlertDialogHeader>
+  1031→            <AlertDialogTitle>Hapus kategori?</AlertDialogTitle>
+  1032→            <AlertDialogDescription>
+  1033→              Kategori <strong>{deleteTarget?.emoji} {deleteTarget?.name}</strong> akan dihapus permanen.
+  1034→            </AlertDialogDescription>
+  1035→          </AlertDialogHeader>
+  1036→          <AlertDialogFooter>
+  1037→            <AlertDialogCancel>Batal</AlertDialogCancel>
+  1038→            <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} className="bg-red-600 hover:bg-red-700">Hapus</AlertDialogAction>
+  1039→          </AlertDialogFooter>
+  1040→        </AlertDialogContent>
+  1041→      </AlertDialog>
+  1042→
+  1043→      {/* Reset categories dialog */}
+  1044→      <AlertDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+  1045→        <AlertDialogContent>
+  1046→          <AlertDialogHeader>
+  1047→            <AlertDialogTitle>Reset semua kategori?</AlertDialogTitle>
+  1048→            <AlertDialogDescription>Semua kategori akan dihapus dan diganti dengan 8 kategori default. Perubahan kustom Anda akan hilang.</AlertDialogDescription>
+  1049→          </AlertDialogHeader>
+  1050→          <AlertDialogFooter>
+  1051→            <AlertDialogCancel>Batal</AlertDialogCancel>
+  1052→            <AlertDialogAction onClick={() => resetMutation.mutate()}>Reset</AlertDialogAction>
+  1053→          </AlertDialogFooter>
+  1054→        </AlertDialogContent>
+  1055→      </AlertDialog>
+  1056→    </div>
+  1057→  );
+  1058→}
+  1059→

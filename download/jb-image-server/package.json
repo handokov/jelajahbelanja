@@ -1,0 +1,13 @@
+{
+  "name": "jb-image-server",
+  "version": "2.0.0",
+  "description": "Upload gambar produk Tokopedia/Shopee ke Cloudinary — URL permanen, laptop mati pun tetap bisa akses!",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cloudinary": "^2.10.0",
+    "express": "^4.21.0"
+  }
+}

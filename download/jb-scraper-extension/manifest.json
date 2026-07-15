@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "JB Scraper",
+  "version": "11.0.0",
+  "description": "Scrape Shopee & Tokopedia → copy CSV → paste ke JB upload massal (v11.0: auto-save draft + manual image URL + Cloudinary!)",
+  "permissions": ["activeTab", "scripting", "clipboardWrite", "tabs"],
+  "host_permissions": [
+    "https://shopee.co.id/*",
+    "https://s.shopee.co.id/*",
+    "https://shope.ee/*",
+    "https://shp.ee/*",
+    "https://atid.me/*",
+    "https://www.tokopedia.com/*",
+    "https://tokopedia.com/*",
+    "https://ta.tokopedia.com/*",
+    "https://tokopedia.link/*",
+    "https://toko.link/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "JB Scraper",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+}

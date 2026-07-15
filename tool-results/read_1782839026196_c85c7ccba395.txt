@@ -1,0 +1,1473 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import Link from "next/link";
+     5→import {
+     6→  AlertDialog,
+     7→  AlertDialogAction,
+     8→  AlertDialogCancel,
+     9→  AlertDialogContent,
+    10→  AlertDialogDescription,
+    11→  AlertDialogFooter,
+    12→  AlertDialogHeader,
+    13→  AlertDialogTitle,
+    14→} from "@/components/ui/alert-dialog";
+    15→import { Button } from "@/components/ui/button";
+    16→import { Input } from "@/components/ui/input";
+    17→import { Label } from "@/components/ui/label";
+    18→import { Switch } from "@/components/ui/switch";
+    19→import { Badge } from "@/components/ui/badge";
+    20→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    21→import {
+    22→  ArrowLeft,
+    23→  Settings2,
+    24→  Plus,
+    25→  Trash2,
+    26→  ArrowUp,
+    27→  ArrowDown,
+    28→  RotateCcw,
+    29→  Pencil,
+    30→  Save,
+    31→  X,
+    32→  Link2,
+    33→  ExternalLink,
+    34→  CheckCircle2,
+    35→  ShoppingBag,
+    36→  Package,
+    37→  ImageIcon,
+    38→  DollarSign,
+    39→  Star,
+    40→  MapPin,
+    41→  Image as ImageLucide,
+    42→  Upload,
+    43→  Wand2,
+    44→  Loader2,
+    45→} from "lucide-react";
+    46→import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+    47→import { useToast } from "@/hooks/use-toast";
+    48→import type {
+    49→  CategoryDTO,
+    50→  CreateCategoryInput,
+    51→  AffiliateTagDTO,
+    52→  UpdateAffiliateTagInput,
+    53→  Marketplace,
+    54→} from "@/lib/types";
+    55→
+    56→// ─── Shared constants ───
+    57→
+    58→const EMPTY_FORM: CreateCategoryInput = {
+    59→  name: "",
+    60→  emoji: "",
+    61→  keywords: "",
+    62→  amazonNode: "",
+    63→  aliexpressCat: "",
+    64→  shopeeCat: "",
+    65→  tokopediaCat: "",
+    66→  lazadaCat: "",
+    67→  enabled: true,
+    68→};
+    69→
+    70→const EMPTY_PRODUCT: ProductFormInput = {
+    71→  title: "",
+    72→  image: "",
+    73→  price: "",
+    74→  originalPrice: "",
+    75→  discountPercent: "",
+    76→  rating: "",
+    77→  reviewCount: "",
+    78→  soldCount: "",
+    79→  location: "",
+    80→  category: "",
+    81→  url: "",
+    82→  affiliateUrl: "",
+    83→  marketplace: "shopee",
+    84→  enabled: true,
+    85→  isViral: false,
+    86→};
+    87→
+    88→interface ProductFormInput {
+    89→  title: string;
+    90→  image: string;
+    91→  price: string;
+    92→  originalPrice: string;
+    93→  discountPercent: string;
+    94→  rating: string;
+    95→  reviewCount: string;
+    96→  soldCount: string;
+    97→  location: string;
+    98→  category: string;
+    99→  url: string;
+   100→  affiliateUrl: string;
+   101→  marketplace: string;
+   102→  enabled: boolean;
+   103→  isViral: boolean;
+   104→}
+   105→
+   106→const MARKETPLACE_OPTIONS = [
+   107→  { value: "shopee", label: "Shopee" },
+   108→  { value: "tokopedia", label: "Tokopedia" },
+   109→  { value: "lazada", label: "Lazada" },
+   110→  { value: "aliexpress", label: "AliExpress" },
+   111→];
+   112→
+   113→const AFFILIATE_INFO: Array<{
+   114→  id: Marketplace;
+   115→  label: string;
+   116→  param: string;
+   117→  signupUrl: string;
+   118→  hint: string;
+   119→}> = [
+   120→  {
+   121→    id: "shopee",
+   122→    label: "Shopee Affiliate",
+   123→    param: "aff_atk",
+   124→    signupUrl: "https://affiliate.shopee.co.id",
+   125→    hint: "Daftar gratis di affiliate.shopee.co.id. Setelah approve, salin tracking ID Anda (mis. abcDE123).",
+   126→  },
+   127→  {
+   128→    id: "tokopedia",
+   129→    label: "Tokopedia Affiliate",
+   130→    param: "aff_code",
+   131→    signupUrl: "https://affiliate.tokopedia.com",
+   132→    hint: "Daftar di affiliate.tokopedia.com. Salin affiliate code Anda (mis. jelajahbelanja).",
+   133→  },
+   134→  {
+   135→    id: "lazada",
+   136→    label: "Lazada Affiliate",
+   137→    param: "aff_id",
+   138→    signupUrl: "https://www.lazada.co.id/wow/camp/pdhl/id/lazadaaffiliate/index",
+   139→    hint: "Daftar di lazada.co.id affiliate program. Salin Aff ID Anda (mis. 12345).",
+   140→  },
+   141→  {
+   142→    id: "aliexpress",
+   143→    label: "AliExpress Affiliate",
+   144→    param: "aff_fcid",
+   145→    signupUrl: "https://portals.aliexpress.com",
+   146→    hint: "Daftar di portals.aliexpress.com. Salin tracking ID Anda.",
+   147→  },
+   148→];
+   149→
+   150→// ─── Helper: format Rupiah ───
+   151→function formatRp(n: number): string {
+   152→  return "Rp " + n.toLocaleString("id-ID");
+   153→}
+   154→
+   155→// ─── Main component ───
+   156→
+   157→export default function AdminPage() {
+   158→  const queryClient = useQueryClient();
+   159→  const { toast } = useToast();
+   160→
+   161→  // ─── Queries ───
+   162→
+   163→  const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
+   164→    queryKey: ["categories"],
+   165→    queryFn: async () => {
+   166→      const res = await fetch("/api/categories");
+   167→      if (!res.ok) throw new Error("Gagal memuat kategori");
+   168→      const json = await res.json();
+   169→      return json.categories as CategoryDTO[];
+   170→    },
+   171→    staleTime: 60 * 60 * 1000,
+   172→  });
+   173→
+   174→  const { data: affiliateData, isLoading: affiliateLoading } = useQuery({
+   175→    queryKey: ["affiliate-tags"],
+   176→    queryFn: async () => {
+   177→      const res = await fetch("/api/affiliate");
+   178→      if (!res.ok) throw new Error("Gagal memuat tag affiliate");
+   179→      const json = await res.json();
+   180→      return json.tags as AffiliateTagDTO[];
+   181→    },
+   182→    staleTime: 60 * 1000,
+   183→  });
+   184→
+   185→  const { data: productsData, isLoading: productsLoading } = useQuery({
+   186→    queryKey: ["admin-products"],
+   187→    queryFn: async () => {
+   188→      const res = await fetch("/api/shopee-products");
+   189→      if (!res.ok) throw new Error("Gagal memuat produk");
+   190→      const json = await res.json();
+   191→      return json.products as any[];
+   192→    },
+   193→    staleTime: 30 * 1000,
+   194→  });
+   195→
+   196→  // ─── Category state ───
+   197→  const [editingId, setEditingId] = React.useState<string | null>(null);
+   198→  const [form, setForm] = React.useState<CreateCategoryInput>(EMPTY_FORM);
+   199→  const [deleteTarget, setDeleteTarget] = React.useState<CategoryDTO | null>(null);
+   200→  const [resetConfirmOpen, setResetConfirmOpen] = React.useState(false);
+   201→
+   202→  // ─── Product state ───
+   203→  const [productForm, setProductForm] = React.useState<ProductFormInput>(EMPTY_PRODUCT);
+   204→  const [editingProductId, setEditingProductId] = React.useState<string | null>(null);
+   205→  const [deleteProductTarget, setDeleteProductTarget] = React.useState<any>(null);
+   206→  const [showAdvanced, setShowAdvanced] = React.useState(false);
+   207→  const [autoFillUrl, setAutoFillUrl] = React.useState("");
+   208→  const [autoFillLoading, setAutoFillLoading] = React.useState(false);
+   209→
+   210→  // ─── Banner state ───
+   211→  const { data: bannersData, isLoading: bannersLoading } = useQuery({
+   212→    queryKey: ["banners"],
+   213→    queryFn: async () => {
+   214→      const res = await fetch("/api/banners");
+   215→      if (!res.ok) throw new Error("Gagal memuat banner");
+   216→      const json = await res.json();
+   217→      return json.banners as any[];
+   218→    },
+   219→    staleTime: 30 * 1000,
+   220→  });
+   221→
+   222→  const EMPTY_BANNER = { title: "", subtitle: "", image: "", linkUrl: "", linkLabel: "", bgColor: "#7c3aed", order: "0", isActive: true, startDate: "", endDate: "" };
+   223→  const [bannerForm, setBannerForm] = React.useState(EMPTY_BANNER);
+   224→  const [editingBannerId, setEditingBannerId] = React.useState<string | null>(null);
+   225→  const [deleteBannerTarget, setDeleteBannerTarget] = React.useState<any>(null);
+   226→  const [bannerUploading, setBannerUploading] = React.useState(false);
+   227→
+   228→  // Upload gambar banner ke server (Vercel Blob), fallback ke base64
+   229→  const handleBannerImageUpload = React.useCallback(async (file: File) => {
+   230→    if (!file.type.startsWith("image/")) {
+   231→      toast({ title: "Hanya file gambar yang diperbolehkan", variant: "destructive" });
+   232→      return;
+   233→    }
+   234→    if (file.size > 5 * 1024 * 1024) {
+   235→      toast({ title: "Ukuran file maksimal 5MB", variant: "destructive" });
+   236→      return;
+   237→    }
+   238→
+   239→    setBannerUploading(true);
+   240→    try {
+   241→      const formData = new FormData();
+   242→      formData.append("file", file);
+   243→      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+   244→
+   245→      if (uploadRes.ok) {
+   246→        const { url } = await uploadRes.json();
+   247→        setBannerForm((prev: typeof EMPTY_BANNER) => ({ ...prev, image: url }));
+   248→        toast({ title: "Gambar berhasil diupload!" });
+   249→      } else {
+   250→        // Fallback: konversi ke base64
+   251→        console.warn("[Banner upload] API upload gagal, fallback ke base64");
+   252→        const dataUrl = await new Promise<string>((resolve) => {
+   253→          const reader = new FileReader();
+   254→          reader.onload = () => {
+   255→            const img = document.createElement("img");
+   256→            img.onload = () => {
+   257→              const canvas = document.createElement("canvas");
+   258→              const maxW = 1200;
+   259→              const maxH = 400;
+   260→              let w = img.width;
+   261→              let h = img.height;
+   262→              if (w > maxW) { h = h * maxW / w; w = maxW; }
+   263→              if (h > maxH) { w = w * maxH / h; h = maxH; }
+   264→              canvas.width = w;
+   265→              canvas.height = h;
+   266→              const ctx = canvas.getContext("2d");
+   267→              ctx?.drawImage(img, 0, 0, w, h);
+   268→              resolve(canvas.toDataURL("image/jpeg", 0.85));
+   269→            };
+   270→            img.src = reader.result as string;
+   271→          };
+   272→          reader.readAsDataURL(file);
+   273→        });
+   274→        setBannerForm((prev: typeof EMPTY_BANNER) => ({ ...prev, image: dataUrl }));
+   275→        toast({ title: "Gambar berhasil dimuat (mode lokal)" });
+   276→      }
+   277→    } catch (err) {
+   278→      console.error("[Banner upload] Error:", err);
+   279→      toast({ title: "Gagal mengupload gambar", variant: "destructive" });
+   280→    } finally {
+   281→      setBannerUploading(false);
+   282→    }
+   283→  }, [toast]);
+   284→
+   285→  const saveBannerMutation = useMutation({
+   286→    mutationFn: async () => {
+   287→      const payload: Record<string, unknown> = {
+   288→        title: bannerForm.title,
+   289→        subtitle: bannerForm.subtitle || null,
+   290→        image: bannerForm.image,
+   291→        linkUrl: bannerForm.linkUrl || null,
+   292→        linkLabel: bannerForm.linkLabel || null,
+   293→        bgColor: bannerForm.bgColor || "#7c3aed",
+   294→        order: Number(bannerForm.order) || 0,
+   295→        isActive: bannerForm.isActive,
+   296→        startDate: bannerForm.startDate || null,
+   297→        endDate: bannerForm.endDate || null,
+   298→      };
+   299→      if (editingBannerId) {
+   300→        payload.id = editingBannerId;
+   301→        const res = await fetch("/api/banners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+   302→        if (!res.ok) throw new Error("Gagal update banner");
+   303→        return res.json();
+   304→      } else {
+   305→        const res = await fetch("/api/banners", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+   306→        if (!res.ok) throw new Error("Gagal buat banner");
+   307→        return res.json();
+   308→      }
+   309→    },
+   310→    onSuccess: () => {
+   311→      toast({ title: editingBannerId ? "Banner diperbarui" : "Banner dibuat" });
+   312→      setBannerForm(EMPTY_BANNER);
+   313→      setEditingBannerId(null);
+   314→      queryClient.invalidateQueries({ queryKey: ["banners"] });
+   315→      queryClient.invalidateQueries({ queryKey: ["active-banners"] });
+   316→    },
+   317→    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+   318→  });
+   319→
+   320→  const deleteBannerMutation = useMutation({
+   321→    mutationFn: async (id: string) => {
+   322→      const res = await fetch(`/api/banners?id=${id}`, { method: "DELETE" });
+   323→      if (!res.ok) throw new Error("Gagal hapus banner");
+   324→    },
+   325→    onSuccess: () => {
+   326→      toast({ title: "Banner dihapus" });
+   327→      setDeleteBannerTarget(null);
+   328→      queryClient.invalidateQueries({ queryKey: ["banners"] });
+   329→      queryClient.invalidateQueries({ queryKey: ["active-banners"] });
+   330→    },
+   331→    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+   332→  });
+   333→
+   334→  // ─── Affiliate state ───
+   335→  const [affDrafts, setAffDrafts] = React.useState<Record<string, { tag: string; enabled: boolean }>>({});
+   336→  React.useEffect(() => {
+   337→    if (affiliateData) {
+   338→      const drafts: Record<string, { tag: string; enabled: boolean }> = {};
+   339→      for (const t of affiliateData) {
+   340→        drafts[t.marketplace] = { tag: t.tag, enabled: t.enabled };
+   341→      }
+   342→      setAffDrafts(drafts);
+   343→    }
+   344→  }, [affiliateData]);
+   345→
+   346→  const categories = categoriesData ?? [];
+   347→
+   348→  // ─── Category mutations ───
+   349→
+   350→  const createMutation = useMutation({
+   351→    mutationFn: async (input: CreateCategoryInput) => {
+   352→      const res = await fetch("/api/categories", {
+   353→        method: "POST",
+   354→        headers: { "Content-Type": "application/json" },
+   355→        body: JSON.stringify(input),
+   356→      });
+   357→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal membuat kategori"); }
+   358→      return res.json();
+   359→    },
+   360→    onSuccess: () => {
+   361→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   362→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   363→      toast({ title: "Kategori dibuat", description: "Kategori baru berhasil ditambahkan." });
+   364→      setForm(EMPTY_FORM);
+   365→    },
+   366→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   367→  });
+   368→
+   369→  const updateMutation = useMutation({
+   370→    mutationFn: async (input: Partial<CreateCategoryInput> & { id: string }) => {
+   371→      const res = await fetch("/api/categories", {
+   372→        method: "PATCH",
+   373→        headers: { "Content-Type": "application/json" },
+   374→        body: JSON.stringify(input),
+   375→      });
+   376→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal memperbarui kategori"); }
+   377→      return res.json();
+   378→    },
+   379→    onSuccess: () => {
+   380→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   381→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   382→      toast({ title: "Kategori diperbarui" });
+   383→      setEditingId(null); setForm(EMPTY_FORM);
+   384→    },
+   385→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   386→  });
+   387→
+   388→  const deleteMutation = useMutation({
+   389→    mutationFn: async (id: string) => {
+   390→      const res = await fetch(`/api/categories?id=${id}`, { method: "DELETE" });
+   391→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal menghapus kategori"); }
+   392→    },
+   393→    onSuccess: () => {
+   394→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   395→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   396→      toast({ title: "Kategori dihapus" }); setDeleteTarget(null);
+   397→    },
+   398→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   399→  });
+   400→
+   401→  const reorderMutation = useMutation({
+   402→    mutationFn: async (cats: CategoryDTO[]) => {
+   403→      const payload = cats.map((c, i) => ({ id: c.id, order: i }));
+   404→      const res = await fetch("/api/categories", {
+   405→        method: "PATCH",
+   406→        headers: { "Content-Type": "application/json" },
+   407→        body: JSON.stringify({ categories: payload }),
+   408→      });
+   409→      if (!res.ok) throw new Error("Gagal mengurutkan kategori");
+   410→      return res.json();
+   411→    },
+   412→    onSuccess: () => {
+   413→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   414→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   415→    },
+   416→  });
+   417→
+   418→  const resetMutation = useMutation({
+   419→    mutationFn: async () => {
+   420→      const res = await fetch("/api/categories", { method: "PUT" });
+   421→      if (!res.ok) throw new Error("Gagal reset kategori");
+   422→      return res.json();
+   423→    },
+   424→    onSuccess: () => {
+   425→      queryClient.invalidateQueries({ queryKey: ["categories"] });
+   426→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   427→      toast({ title: "Kategori direset ke default" }); setResetConfirmOpen(false);
+   428→    },
+   429→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   430→  });
+   431→
+   432→  // ─── Product mutations ───
+   433→
+   434→  const createProductMutation = useMutation({
+   435→    mutationFn: async (input: any) => {
+   436→      const res = await fetch("/api/shopee-products", {
+   437→        method: "POST",
+   438→        headers: { "Content-Type": "application/json" },
+   439→        body: JSON.stringify(input),
+   440→      });
+   441→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal membuat produk"); }
+   442→      return res.json();
+   443→    },
+   444→    onSuccess: () => {
+   445→      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+   446→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   447→      toast({ title: "Produk ditambahkan", description: "Produk baru berhasil diupload." });
+   448→      setProductForm(EMPTY_PRODUCT);
+   449→      setAutoFillUrl("");
+   450→    },
+   451→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   452→  });
+   453→
+   454→  const updateProductMutation = useMutation({
+   455→    mutationFn: async (input: any) => {
+   456→      const res = await fetch("/api/shopee-products", {
+   457→        method: "PATCH",
+   458→        headers: { "Content-Type": "application/json" },
+   459→        body: JSON.stringify(input),
+   460→      });
+   461→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal memperbarui produk"); }
+   462→      return res.json();
+   463→    },
+   464→    onSuccess: () => {
+   465→      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+   466→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   467→      toast({ title: "Produk diperbarui" });
+   468→      setEditingProductId(null); setProductForm(EMPTY_PRODUCT); setAutoFillUrl("");
+   469→    },
+   470→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   471→  });
+   472→
+   473→  const deleteProductMutation = useMutation({
+   474→    mutationFn: async (id: string) => {
+   475→      const res = await fetch(`/api/shopee-products?id=${id}`, { method: "DELETE" });
+   476→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal menghapus produk"); }
+   477→    },
+   478→    onSuccess: () => {
+   479→      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+   480→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   481→      toast({ title: "Produk dihapus" }); setDeleteProductTarget(null);
+   482→    },
+   483→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   484→  });
+   485→
+   486→  // ─── Affiliate mutations ───
+   487→
+   488→  const updateAffiliateMutation = useMutation({
+   489→    mutationFn: async (input: UpdateAffiliateTagInput) => {
+   490→      const res = await fetch("/api/affiliate", {
+   491→        method: "PATCH",
+   492→        headers: { "Content-Type": "application/json" },
+   493→        body: JSON.stringify(input),
+   494→      });
+   495→      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal menyimpan tag affiliate"); }
+   496→      return res.json();
+   497→    },
+   498→    onSuccess: () => {
+   499→      queryClient.invalidateQueries({ queryKey: ["affiliate-tags"] });
+   500→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   501→      toast({ title: "Tag affiliate disimpan" });
+   502→    },
+   503→    onError: (err: Error) => { toast({ title: "Gagal", description: err.message, variant: "destructive" }); },
+   504→  });
+   505→
+   506→  const resetAffiliateMutation = useMutation({
+   507→    mutationFn: async () => {
+   508→      const res = await fetch("/api/affiliate?reset=true", { method: "POST" });
+   509→      if (!res.ok) throw new Error("Gagal reset tag affiliate");
+   510→      return res.json();
+   511→    },
+   512→    onSuccess: () => {
+   513→      queryClient.invalidateQueries({ queryKey: ["affiliate-tags"] });
+   514→      queryClient.invalidateQueries({ queryKey: ["products"] });
+   515→      toast({ title: "Tag affiliate direset" });
+   516→    },
+   517→  });
+   518→
+   519→  // ─── Category handlers ───
+   520→
+   521→  function handleEditCat(c: CategoryDTO) {
+   522→    setEditingId(c.id);
+   523→    setForm({
+   524→      name: c.name, emoji: c.emoji, keywords: c.keywords,
+   525→      amazonNode: c.amazonNode ?? "", aliexpressCat: c.aliexpressCat ?? "",
+   526→      shopeeCat: c.shopeeCat ?? "", tokopediaCat: c.tokopediaCat ?? "",
+   527→      lazadaCat: c.lazadaCat ?? "", enabled: c.enabled,
+   528→    });
+   529→  }
+   530→
+   531→  function handleSubmitCat() {
+   532→    if (!form.name.trim() || !form.emoji.trim() || !form.keywords.trim()) {
+   533→      toast({ title: "Validasi gagal", description: "Nama, emoji, dan keywords wajib diisi.", variant: "destructive" });
+   534→      return;
+   535→    }
+   536→    if (editingId) { updateMutation.mutate({ id: editingId, ...form }); }
+   537→    else { createMutation.mutate(form); }
+   538→  }
+   539→
+   540→  function handleMoveCat(index: number, direction: "up" | "down") {
+   541→    if (!categoriesData) return;
+   542→    const next = [...categoriesData];
+   543→    const target = direction === "up" ? index - 1 : index + 1;
+   544→    if (target < 0 || target >= next.length) return;
+   545→    [next[index], next[target]] = [next[target], next[index]];
+   546→    reorderMutation.mutate(next);
+   547→  }
+   548→
+   549→  function handleToggleEnabled(c: CategoryDTO, enabled: boolean) {
+   550→    updateMutation.mutate({ id: c.id, enabled });
+   551→  }
+   552→
+   553→  // ─── Product handlers ───
+   554→
+   555→  async function handleAutoFill() {
+   556→    const url = autoFillUrl.trim();
+   557→    if (!url) {
+   558→      toast({ title: "URL kosong", description: "Paste link produk Shopee dulu.", variant: "destructive" });
+   559→      return;
+   560→    }
+   561→    if (!url.includes("shopee") && !url.includes("shope")) {
+   562→      toast({ title: "URL tidak valid", description: "Masukkan link produk Shopee yang valid.", variant: "destructive" });
+   563→      return;
+   564→    }
+   565→
+   566→    setAutoFillLoading(true);
+   567→    try {
+   568→      const res = await fetch("/api/scrape-shopee", {
+   569→        method: "POST",
+   570→        headers: {
+   571→          "Content-Type": "application/json",
+   572→          Authorization: `Bearer ${process.env.NEXT_PUBLIC_ADMIN_SECRET || "jelajahbelanja2024"}`,
+   573→        },
+   574→        body: JSON.stringify({ url }),
+   575→      });
+   576→
+   577→      const data = await res.json();
+   578→
+   579→      if (!res.ok || !data.success) {
+   580→        toast({
+   581→          title: "Gagal ambil data",
+   582→          description: data.error || "Tidak bisa mengambil data produk. Coba link lain.",
+   583→          variant: "destructive",
+   584→        });
+   585→        return;
+   586→      }
+   587→
+   588→      const p = data.product;
+   589→      setProductForm({
+   590→        ...productForm,
+   591→        title: p.title || productForm.title,
+   592→        image: p.image || productForm.image,
+   593→        price: p.price ? String(p.price) : productForm.price,
+   594→        originalPrice: p.originalPrice ? String(p.originalPrice) : productForm.originalPrice,
+   595→        discountPercent: p.discountPercent ? String(p.discountPercent) : productForm.discountPercent,
+   596→        rating: p.rating ? String(p.rating) : productForm.rating,
+   597→        reviewCount: p.reviewCount ? String(p.reviewCount) : productForm.reviewCount,
+   598→        soldCount: p.soldCount ? String(p.soldCount) : productForm.soldCount,
+   599→        location: p.location || productForm.location,
+   600→        category: p.category || productForm.category,
+   601→        url: url,
+   602→        marketplace: "shopee",
+   603→      });
+   604→
+   605→      // Auto-show advanced fields supaya user bisa review semua data
+   606→      if (p.rating || p.reviewCount || p.soldCount || p.location) {
+   607→        setShowAdvanced(true);
+   608→      }
+   609→
+   610→      toast({
+   611→        title: "Data produk berhasil diambil! ✨",
+   612→        description: `${p.title?.substring(0, 50)}${(p.title?.length || 0) > 50 ? "..." : ""} — Rp${(p.price || 0).toLocaleString("id-ID")}`,
+   613→      });
+   614→    } catch (err) {
+   615→      toast({
+   616→        title: "Error",
+   617→        description: "Gagal menghubungi server. Coba lagi.",
+   618→        variant: "destructive",
+   619→      });
+   620→    } finally {
+   621→      setAutoFillLoading(false);
+   622→    }
+   623→  }
+   624→
+   625→  function handleSubmitProduct() {
+   626→    if (!productForm.title.trim() || !productForm.price || !productForm.category) {
+   627→      toast({ title: "Validasi gagal", description: "Judul produk, harga, dan kategori wajib diisi.", variant: "destructive" });
+   628→      return;
+   629→    }
+   630→    // URL produk: pakai url field, kalau gak diisi pakai affiliateUrl, kalau affiliateUrl juga gak ada, generate dari title
+   631→    const productUrl = productForm.url.trim() || productForm.affiliateUrl.trim() || `https://shopee.co.id/search?keyword=${encodeURIComponent(productForm.title)}`;
+   632→    // Auto-calc discount kalau ada harga asli
+   633→    const price = Number(productForm.price);
+   634→    const originalPrice = productForm.originalPrice ? Number(productForm.originalPrice) : null;
+   635→    let discountPercent = productForm.discountPercent ? Number(productForm.discountPercent) : null;
+   636→    if (!discountPercent && originalPrice && originalPrice > price) {
+   637→      discountPercent = Math.round(((originalPrice - price) / originalPrice) * 100);
+   638→    }
+   639→    const payload = {
+   640→      title: productForm.title,
+   641→      image: productForm.image.trim() || `https://down-id.img.susercontent.com/file/placeholder`,
+   642→      price,
+   643→      originalPrice,
+   644→      discountPercent,
+   645→      rating: productForm.rating !== "" ? Number(productForm.rating) : 4.8,
+   646→      reviewCount: productForm.reviewCount !== "" ? Number(productForm.reviewCount) : 1500,
+   647→      soldCount: productForm.soldCount !== "" ? Number(productForm.soldCount) : 5000,
+   648→      location: productForm.location || "Jakarta Barat",
+   649→      category: productForm.category,
+   650→      url: productUrl,
+   651→      affiliateUrl: productForm.affiliateUrl || null,
+   652→      marketplace: productForm.marketplace || "shopee",
+   653→      enabled: productForm.enabled,
+   654→      isViral: productForm.isViral,
+   655→    };
+   656→    if (editingProductId) {
+   657→      updateProductMutation.mutate({ id: editingProductId, ...payload });
+   658→    } else {
+   659→      createProductMutation.mutate(payload);
+   660→    }
+   661→  }
+   662→
+   663→  function handleEditProduct(p: any) {
+   664→    setEditingProductId(p.id);
+   665→    setProductForm({
+   666→      title: p.title,
+   667→      image: p.image,
+   668→      price: String(p.price),
+   669→      originalPrice: p.originalPrice ? String(p.originalPrice) : "",
+   670→      discountPercent: p.discountPercent ? String(p.discountPercent) : "",
+   671→      rating: String(p.rating),
+   672→      reviewCount: String(p.reviewCount),
+   673→      soldCount: String(p.soldCount),
+   674→      location: p.location || "",
+   675→      category: p.category,
+   676→      url: p.url,
+   677→      affiliateUrl: p.affiliateUrl || "",
+   678→      marketplace: p.marketplace || "shopee",
+   679→      enabled: p.enabled ?? true,
+   680→      isViral: p.isViral ?? false,
+   681→    });
+   682→  }
+   683→
+   684→  // ─── Affiliate handlers ───
+   685→
+   686→  function handleSaveAffiliate(m: Marketplace) {
+   687→    const draft = affDrafts[m];
+   688→    if (!draft) return;
+   689→    updateAffiliateMutation.mutate({ marketplace: m, tag: draft.tag, enabled: draft.enabled });
+   690→  }
+   691→
+   692→  // ─── Render ───
+   693→
+   694→  return (
+   695→    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+   696→      {/* Header */}
+   697→      <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+   698→        <div className="container mx-auto px-4 max-w-5xl py-4 flex items-center justify-between">
+   699→          <div className="flex items-center gap-3">
+   700→            <Link
+   701→              href="/"
+   702→              className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+   703→            >
+   704→              <ArrowLeft className="w-4 h-4" />
+   705→              Kembali
+   706→            </Link>
+   707→            <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800" />
+   708→            <div className="flex items-center gap-2">
+   709→              <ShoppingBag className="w-5 h-5 text-fuchsia-600" />
+   710→              <span className="font-bold text-lg">JelajahBelanja</span>
+   711→              <Badge className="bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 hover:bg-fuchsia-100 text-[10px]">
+   712→                Admin
+   713→              </Badge>
+   714→            </div>
+   715→          </div>
+   716→          <h1 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+   717→            Panel Admin
+   718→          </h1>
+   719→        </div>
+   720→      </header>
+   721→
+   722→      {/* Main */}
+   723→      <main className="container mx-auto px-4 max-w-5xl py-6">
+   724→        <Tabs defaultValue="products" className="space-y-6">
+   725→          <TabsList className="grid w-full max-w-xl grid-cols-4 h-11">
+   726→            <TabsTrigger value="products" className="text-sm">
+   727→              <Package className="w-4 h-4 mr-1.5" />
+   728→              Produk
+   729→            </TabsTrigger>
+   730→            <TabsTrigger value="banners" className="text-sm">
+   731→              <ImageLucide className="w-4 h-4 mr-1.5" />
+   732→              Banner
+   733→            </TabsTrigger>
+   734→            <TabsTrigger value="categories" className="text-sm">
+   735→              <Settings2 className="w-4 h-4 mr-1.5" />
+   736→              Kategori
+   737→            </TabsTrigger>
+   738→            <TabsTrigger value="affiliate" className="text-sm">
+   739→              <Link2 className="w-4 h-4 mr-1.5" />
+   740→              Affiliate
+   741→            </TabsTrigger>
+   742→          </TabsList>
+   743→
+   744→          {/* ===== TAB PRODUK ===== */}
+   745→          <TabsContent value="products" className="space-y-4">
+   746→            {/* Cara pakai */}
+   747→            <div className="rounded-2xl border border-fuchsia-200 dark:border-fuchsia-900/50 bg-fuchsia-50 dark:bg-fuchsia-900/20 p-4">
+   748→              <p className="text-sm font-semibold text-fuchsia-900 dark:text-fuchsia-100 mb-2">
+   749→                Cara Tambah Produk dari Shopee
+   750→              </p>
+   751→              <ol className="text-xs text-fuchsia-900 dark:text-fuchsia-100 space-y-1 list-decimal list-inside">
+   752→                <li>Buka Shopee, cari produk viral yang mau lo promote</li>
+   753→                <li>Copy info: <strong>Nama produk, URL gambar, Harga</strong></li>
+   754→                <li>Generate <strong>link affiliate</strong> di dashboard Shopee Affiliate (affiliate.shopee.co.id)</li>
+   755→                <li>Paste semua di form di bawah, klik Upload</li>
+   756→              </ol>
+   757→              <p className="text-[11px] text-fuchsia-700 dark:text-fuchsia-300 mt-2">
+   758→                Field bertanda * wajib diisi. Sisanya udah auto-default (rating 4.9, terjual 5rb, dll). Bisa diedit nanti.
+   759→              </p>
+   760→            </div>
+   761→
+   762→            {/* Quick-add form */}
+   763→            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+   764→              <div className="flex items-center justify-between mb-4">
+   765→                <div className="flex items-center gap-2">
+   766→                  {editingProductId ? (
+   767→                    <Pencil className="w-4 h-4 text-fuchsia-600" />
+   768→                  ) : (
+   769→                    <Plus className="w-4 h-4 text-fuchsia-600" />
+   770→                  )}
+   771→                  <h2 className="font-semibold text-sm">
+   772→                    {editingProductId ? "Edit Produk" : "Quick Add Produk"}
+   773→                  </h2>
+   774→                </div>
+   775→                {!editingProductId && (
+   776→                  <Button
+   777→                    variant="ghost"
+   778→                    size="sm"
+   779→                    className="text-xs text-zinc-500"
+   780→                    onClick={() => setShowAdvanced(!showAdvanced)}
+   781→                  >
+   782→                    {showAdvanced ? "Sembunyikan Detail" : "Lihat Semua Field"}
+   783→                  </Button>
+   784→                )}
+   785→              </div>
+   786→
+   787→              {/* Auto-fill dari link Shopee */}
+   788→              <div className="rounded-xl border-2 border-dashed border-fuchsia-200 dark:border-fuchsia-800/40 bg-fuchsia-50/50 dark:bg-fuchsia-950/20 p-4 mb-4">
+   789→                <Label className="text-xs font-semibold flex items-center gap-1.5 mb-2">
+   790→                  <Wand2 className="w-3.5 h-3.5 text-fuchsia-600" />
+   791→                  Auto-Fill dari Link Shopee
+   792→                </Label>
+   793→                <div className="flex gap-2">
+   794→                  <Input
+   795→                    placeholder="Paste link produk Shopee di sini... (https://shopee.co.id/... atau https://shope.ee/...)"
+   796→                    value={autoFillUrl}
+   797→                    onChange={(e) => setAutoFillUrl(e.target.value)}
+   798→                    onKeyDown={(e) => { if (e.key === "Enter" && !autoFillLoading) handleAutoFill(); }}
+   799→                    className="flex-1"
+   800→                  />
+   801→                  <Button
+   802→                    type="button"
+   803→                    size="sm"
+   804→                    onClick={handleAutoFill}
+   805→                    disabled={autoFillLoading || !autoFillUrl.trim()}
+   806→                    className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white shrink-0"
+   807→                  >
+   808→                    {autoFillLoading ? (
+   809→                      <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Mengambil...</>
+   810→                    ) : (
+   811→                      <><Wand2 className="w-3.5 h-3.5 mr-1" /> Ambil Data</>
+   812→                    )}
+   813→                  </Button>
+   814→                </div>
+   815→                <p className="text-[10px] text-zinc-400 mt-1.5">
+   816→                  Otomatis isi judul, harga, gambar, rating, terjual, lokasi & kategori dari link Shopee
+   817→                </p>
+   818→              </div>
+   819→
+   820→              {/* Wajib fields - selalu tampil */}
+   821→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   822→                <div className="flex flex-col gap-1.5 md:col-span-2">
+   823→                  <Label htmlFor="prod-title" className="text-xs font-semibold">Judul Produk *</Label>
+   824→                  <Input
+   825→                    id="prod-title"
+   826→                    placeholder="Nama produk..."
+   827→                    value={productForm.title}
+   828→                    onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
+   829→                  />
+   830→                </div>
+   831→                <div className="flex flex-col gap-1.5 md:col-span-2">
+   832→                  <Label htmlFor="prod-url" className="text-xs font-semibold flex items-center gap-1">
+   833→                    <ExternalLink className="w-3 h-3" /> URL Shopee *
+   834→                  </Label>
+   835→                  <Input
+   836→                    id="prod-url"
+   837→                    placeholder="https://shopee.co.id/..."
+   838→                    value={productForm.url}
+   839→                    onChange={(e) => setProductForm({ ...productForm, url: e.target.value })}
+   840→                  />
+   841→                </div>
+   842→                <div className="flex flex-col gap-1.5 md:col-span-2">
+   843→                  <Label htmlFor="prod-image" className="text-xs font-semibold flex items-center gap-1">
+   844→                    <ImageIcon className="w-3 h-3" /> URL Foto Produk
+   845→                  </Label>
+   846→                  <Input
+   847→                    id="prod-image"
+   848→                    placeholder="https://down-id.img.susercontent.com/file/..."
+   849→                    value={productForm.image}
+   850→                    onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
+   851→                  />
+   852→                </div>
+   853→                <div className="flex flex-col gap-1.5">
+   854→                  <Label htmlFor="prod-price" className="text-xs font-semibold flex items-center gap-1">
+   855→                    <DollarSign className="w-3 h-3" /> Harga (Rp) *
+   856→                  </Label>
+   857→                  <Input
+   858→                    id="prod-price"
+   859→                    type="number"
+   860→                    placeholder="19500"
+   861→                    value={productForm.price}
+   862→                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+   863→                  />
+   864→                </div>
+   865→                <div className="flex flex-col gap-1.5">
+   866→                  <Label htmlFor="prod-original" className="text-xs font-semibold">Harga Asli / Coret (Rp)</Label>
+   867→                  <Input
+   868→                    id="prod-original"
+   869→                    type="number"
+   870→                    placeholder="99000"
+   871→                    value={productForm.originalPrice}
+   872→                    onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
+   873→                  />
+   874→                </div>
+   875→                <div className="flex flex-col gap-1.5">
+   876→                  <Label htmlFor="prod-category" className="text-xs font-semibold">Kategori *</Label>
+   877→                  <select
+   878→                    id="prod-category"
+   879→                    value={productForm.category}
+   880→                    onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+   881→                    className="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+   882→                  >
+   883→                    <option value="">Pilih kategori...</option>
+   884→                    {categories.map((c) => (
+   885→                      <option key={c.id} value={c.name}>{c.emoji} {c.name}</option>
+   886→                    ))}
+   887→                  </select>
+   888→                </div>
+   889→                <div className="flex flex-col gap-1.5 md:col-span-2">
+   890→                  <Label htmlFor="prod-affiliate" className="text-xs font-semibold flex items-center gap-1">
+   891→                    <Link2 className="w-3 h-3" /> Link Affiliate Shopee (opsional)
+   892→                  </Label>
+   893→                  <Input
+   894→                    id="prod-affiliate"
+   895→                    placeholder="https://shope.ee/abcde"
+   896→                    value={productForm.affiliateUrl}
+   897→                    onChange={(e) => setProductForm({ ...productForm, affiliateUrl: e.target.value })}
+   898→                  />
+   899→                  <p className="text-[10px] text-zinc-400">
+   900→                    ini kalau udah punya link affiliate, Shortlink /beli/xxx otomatis redirect ke sini
+   901→                  </p>
+   902→                </div>
+   903→              </div>
+   904→
+   905→              {/* Advanced fields - collapsible */}
+   906→              {showAdvanced && (
+   907→                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+   908→                  <div className="flex flex-col gap-1.5">
+   909→                    <Label htmlFor="prod-rating" className="text-xs flex items-center gap-1">
+   910→                      <Star className="w-3 h-3" /> Rating
+   911→                    </Label>
+   912→                    <Input
+   913→                      id="prod-rating"
+   914→                      type="number"
+   915→                      step="0.1"
+   916→                      placeholder="4.8"
+   917→                      value={productForm.rating}
+   918→                      onChange={(e) => setProductForm({ ...productForm, rating: e.target.value })}
+   919→                    />
+   920→                  </div>
+   921→                  <div className="flex flex-col gap-1.5">
+   922→                    <Label htmlFor="prod-reviews" className="text-xs">Jumlah Review</Label>
+   923→                    <Input
+   924→                      id="prod-reviews"
+   925→                      type="number"
+   926→                      placeholder="1500"
+   927→                      value={productForm.reviewCount}
+   928→                      onChange={(e) => setProductForm({ ...productForm, reviewCount: e.target.value })}
+   929→                    />
+   930→                  </div>
+   931→                  <div className="flex flex-col gap-1.5">
+   932→                    <Label htmlFor="prod-sold" className="text-xs">Jumlah Terjual</Label>
+   933→                    <Input
+   934→                      id="prod-sold"
+   935→                      type="number"
+   936→                      placeholder="5000"
+   937→                      value={productForm.soldCount}
+   938→                      onChange={(e) => setProductForm({ ...productForm, soldCount: e.target.value })}
+   939→                    />
+   940→                  </div>
+   941→                  <div className="flex flex-col gap-1.5">
+   942→                    <Label htmlFor="prod-location" className="text-xs flex items-center gap-1">
+   943→                      <MapPin className="w-3 h-3" /> Lokasi
+   944→                    </Label>
+   945→                    <Input
+   946→                      id="prod-location"
+   947→                      placeholder="Jakarta Barat"
+   948→                      value={productForm.location}
+   949→                      onChange={(e) => setProductForm({ ...productForm, location: e.target.value })}
+   950→                    />
+   951→                  </div>
+   952→                  <div className="flex flex-col gap-1.5">
+   953→                    <Label htmlFor="prod-marketplace" className="text-xs">Marketplace</Label>
+   954→                    <select
+   955→                      id="prod-marketplace"
+   956→                      value={productForm.marketplace}
+   957→                      onChange={(e) => setProductForm({ ...productForm, marketplace: e.target.value })}
+   958→                      className="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+   959→                    >
+   960→                      {MARKETPLACE_OPTIONS.map((m) => (
+   961→                        <option key={m.value} value={m.value}>{m.label}</option>
+   962→                      ))}
+   963→                    </select>
+   964→                  </div>
+   965→                  <div className="flex flex-col gap-1.5">
+   966→                    <Label htmlFor="prod-disc" className="text-xs">Diskon (%)</Label>
+   967→                    <Input
+   968→                      id="prod-disc"
+   969→                      type="number"
+   970→                      placeholder="Auto dari harga coret"
+   971→                      value={productForm.discountPercent}
+   972→                      onChange={(e) => setProductForm({ ...productForm, discountPercent: e.target.value })}
+   973→                    />
+   974→                  </div>
+   975→                </div>
+   976→              )}
+   977→
+   978→              <div className="flex items-center justify-between mt-4 gap-2">
+   979→                <div className="flex items-center gap-4">
+   980→                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+   981→                    <Switch
+   982→                      checked={productForm.enabled}
+   983→                      onCheckedChange={(checked) => setProductForm({ ...productForm, enabled: checked })}
+   984→                    />
+   985→                    Aktif
+   986→                  </label>
+   987→                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+   988→                    <Switch
+   989→                      checked={productForm.isViral}
+   990→                      onCheckedChange={(checked) => setProductForm({ ...productForm, isViral: checked })}
+   991→                    />
+   992→                    DO Viral 🔥
+   993→                  </label>
+   994→                </div>
+   995→                <div className="flex gap-2">
+   996→                  {(editingProductId || productForm.title) && (
+   997→                    <Button
+   998→                      variant="ghost"
+   999→                      size="sm"
+  1000→                      onClick={() => { setEditingProductId(null); setProductForm(EMPTY_PRODUCT); setAutoFillUrl(""); }}
+  1001→                    >
+  1002→                      <X className="w-3.5 h-3.5 mr-1" /> Batal
+  1003→                    </Button>
+  1004→                  )}
+  1005→                  <Button
+  1006→                    size="sm"
+  1007→                    onClick={handleSubmitProduct}
+  1008→                    disabled={createProductMutation.isPending || updateProductMutation.isPending}
+  1009→                  >
+  1010→                    {editingProductId ? (
+  1011→                      <><Save className="w-3.5 h-3.5 mr-1" /> Simpan</>
+  1012→                    ) : (
+  1013→                      <><Plus className="w-3.5 h-3.5 mr-1" /> Upload Produk</>
+  1014→                    )}
+  1015→                  </Button>
+  1016→                </div>
+  1017→              </div>
+  1018→            </div>
+  1019→
+  1020→            {/* Daftar produk */}
+  1021→            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+  1022→              <h2 className="font-semibold text-sm flex items-center gap-2 mb-4">
+  1023→                <Package className="w-4 h-4" />
+  1024→                Produk Manual ({productsData?.length ?? 0})
+  1025→              </h2>
+  1026→              {productsLoading ? (
+  1027→                <div className="text-center py-8 text-sm text-zinc-500">Memuat...</div>
+  1028→              ) : !productsData || productsData.length === 0 ? (
+  1029→                <div className="text-center py-8 text-sm text-zinc-500">
+  1030→                  Belum ada produk. Upload produk pertama lo di atas!
+  1031→                </div>
+  1032→              ) : (
+  1033→                <ul className="flex flex-col gap-2">
+  1034→                  {productsData.map((p) => (
+  1035→                    <li
+  1036→                      key={p.id}
+  1037→                      className="flex items-start gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50"
+  1038→                    >
+  1039→                      <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-700">
+  1040→                        <img src={p.image} alt={p.title} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.png"; }} />
+  1041→                      </div>
+  1042→                      <div className="flex-1 min-w-0">
+  1043→                        <div className="flex items-center gap-2 flex-wrap">
+  1044→                          <span className="font-semibold text-sm line-clamp-1">{p.title}</span>
+  1045→                          <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] px-1.5 py-0 h-4">
+  1046→                            {p.marketplace || "shopee"}
+  1047→                          </Badge>
+  1048→                          <Badge variant="outline" className="text-[10px]">{p.category}</Badge>
+  1049→                          {!p.enabled && (
+  1050→                            <Badge className="bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400 text-[10px]">Nonaktif</Badge>
+  1051→                          )}
+  1052→                        </div>
+  1053→                        <div className="flex items-center gap-2 text-xs text-zinc-500 mt-1">
+  1054→                          <span className="font-bold text-zinc-900 dark:text-zinc-100">{formatRp(p.price)}</span>
+  1055→                          {p.originalPrice && p.originalPrice > p.price && (
+  1056→                            <span className="line-through">{formatRp(p.originalPrice)}</span>
+  1057→                          )}
+  1058→                          {p.discountPercent && <span className="text-red-500">-{p.discountPercent}%</span>}
+  1059→                          <span>· ★ {p.rating?.toFixed(1)}</span>
+  1060→                          <span>· {p.soldCount?.toLocaleString()} terjual</span>
+  1061→                        </div>
+  1062→                        {p.affiliateUrl && (
+  1063→                          <p className="text-[10px] text-fuchsia-600 dark:text-fuchsia-400 mt-0.5 truncate">
+  1064→                            Affiliate: {p.affiliateUrl}
+  1065→                          </p>
+  1066→                        )}
+  1067→                      </div>
+  1068→                      <div className="flex items-center gap-1 pt-1">
+  1069→                        <Switch
+  1070→                          checked={p.enabled ?? true}
+  1071→                          onCheckedChange={(checked) => updateProductMutation.mutate({ id: p.id, enabled: checked })}
+  1072→                          aria-label="Toggle aktif"
+  1073→                        />
+  1074→                        <Button
+  1075→                          variant="ghost"
+  1076→                          size="icon"
+  1077→                          className="h-7 w-7"
+  1078→                          onClick={() => handleEditProduct(p)}
+  1079→                          aria-label="Edit"
+  1080→                        >
+  1081→                          <Pencil className="w-3.5 h-3.5" />
+  1082→                        </Button>
+  1083→                        <Button
+  1084→                          variant="ghost"
+  1085→                          size="icon"
+  1086→                          className="h-7 w-7 text-red-600 hover:text-red-700"
+  1087→                          onClick={() => setDeleteProductTarget(p)}
+  1088→                          aria-label="Hapus"
+  1089→                        >
+  1090→                          <Trash2 className="w-3.5 h-3.5" />
+  1091→                        </Button>
+  1092→                      </div>
+  1093→                    </li>
+  1094→                  ))}
+  1095→                </ul>
+  1096→              )}
+  1097→            </div>
+  1098→          </TabsContent>
+  1099→
+  1100→          {/* ===== TAB BANNER ===== */}
+  1101→          <TabsContent value="banners" className="space-y-4">
+  1102→            {/* Info */}
+  1103→            <div className="rounded-2xl border border-violet-200 dark:border-violet-900/50 bg-violet-50 dark:bg-violet-900/20 p-4">
+  1104→              <p className="text-sm font-semibold text-violet-900 dark:text-violet-100 mb-1">
+  1105→                Kelola Banner Promo
+  1106→              </p>
+  1107→              <p className="text-xs text-violet-900/80 dark:text-violet-100/80">
+  1108→                Banner muncul di homepage sebagai slider. Upload gambar landscape (disarankan 1200x400px). Atur tanggal mulai & selesai untuk auto-tayang.
+  1109→              </p>
+  1110→            </div>
+  1111→
+  1112→            {/* Form */}
+  1113→            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-3">
+  1114→              <h3 className="text-sm font-semibold flex items-center gap-2">
+  1115→                {editingBannerId ? <><Pencil className="w-3.5 h-3.5" /> Edit Banner</> : <><Plus className="w-3.5 h-3.5" /> Tambah Banner Baru</>}
+  1116→              </h3>
+  1117→              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+  1118→                <div>
+  1119→                  <Label className="text-xs">Judul Banner *</Label>
+  1120→                  <Input placeholder="cth: Flash Sale Akhir Tahun" value={bannerForm.title} onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })} />
+  1121→                </div>
+  1122→                <div>
+  1123→                  <Label className="text-xs">Sub Judul</Label>
+  1124→                  <Input placeholder="cth: Diskon sampai 70%" value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })} />
+  1125→                </div>
+  1126→                <div className="md:col-span-2">
+  1127→                  <Label className="text-xs font-semibold flex items-center gap-1 mb-1">
+  1128→                    <ImageIcon className="w-3 h-3" /> Gambar Banner * (disarankan 1200x400px)
+  1129→                  </Label>
+  1130→                  <div className="flex gap-2">
+  1131→                    <Input
+  1132→                      placeholder="https://... paste URL gambar di sini"
+  1133→                      value={bannerForm.image}
+  1134→                      onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })}
+  1135→                    />
+  1136→                    <Button
+  1137→                      type="button"
+  1138→                      variant="outline"
+  1139→                      size="sm"
+  1140→                      className="shrink-0"
+  1141→                      disabled={bannerUploading}
+  1142→                      onClick={() => {
+  1143→                        const input = document.createElement("input");
+  1144→                        input.type = "file";
+  1145→                        input.accept = "image/*";
+  1146→                        input.onchange = (e) => {
+  1147→                          const file = (e.target as HTMLInputElement).files?.[0];
+  1148→                          if (file) handleBannerImageUpload(file);
+  1149→                        };
+  1150→                        input.click();
+  1151→                      }}
+  1152→                    >
+  1153→                      {bannerUploading ? (
+  1154→                        <><div className="w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /></>
+  1155→                      ) : (
+  1156→                        <><Upload className="w-3.5 h-3.5 mr-1" /> Upload</>
+  1157→                      )}
+  1158→                    </Button>
+  1159→                  </div>
+  1160→                  {bannerForm.image && (
+  1161→                    <img
+  1162→                      src={bannerForm.image}
+  1163→                      alt="Preview"
+  1164→                      className="mt-2 h-20 rounded-lg object-contain bg-zinc-100 dark:bg-zinc-800"
+  1165→                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+  1166→                    />
+  1167→                  )}
+  1168→                </div>
+  1169→                <div>
+  1170→                  <Label className="text-xs">Link Tujuan</Label>
+  1171→                  <Input placeholder="https://... (opsional)" value={bannerForm.linkUrl} onChange={(e) => setBannerForm({ ...bannerForm, linkUrl: e.target.value })} />
+  1172→                </div>
+  1173→                <div>
+  1174→                  <Label className="text-xs">Text Tombol</Label>
+  1175→                  <Input placeholder="cth: Belanja Sekarang" value={bannerForm.linkLabel} onChange={(e) => setBannerForm({ ...bannerForm, linkLabel: e.target.value })} />
+  1176→                </div>
+  1177→                <div>
+  1178→                  <Label className="text-xs">Warna Background</Label>
+  1179→                  <div className="flex gap-2 items-center">
+  1180→                    <input type="color" value={bannerForm.bgColor} onChange={(e) => setBannerForm({ ...bannerForm, bgColor: e.target.value })} className="w-9 h-9 rounded border cursor-pointer" />
+  1181→                    <Input value={bannerForm.bgColor} onChange={(e) => setBannerForm({ ...bannerForm, bgColor: e.target.value })} className="flex-1" />
+  1182→                  </div>
+  1183→                </div>
+  1184→                <div>
+  1185→                  <Label className="text-xs">Urutan</Label>
+  1186→                  <Input type="number" value={bannerForm.order} onChange={(e) => setBannerForm({ ...bannerForm, order: e.target.value })} />
+  1187→                </div>
+  1188→                <div>
+  1189→                  <Label className="text-xs">Mulai Tayang</Label>
+  1190→                  <Input type="datetime-local" value={bannerForm.startDate} onChange={(e) => setBannerForm({ ...bannerForm, startDate: e.target.value })} />
+  1191→                </div>
+  1192→                <div>
+  1193→                  <Label className="text-xs">Selesai Tayang</Label>
+  1194→                  <Input type="datetime-local" value={bannerForm.endDate} onChange={(e) => setBannerForm({ ...bannerForm, endDate: e.target.value })} />
+  1195→                </div>
+  1196→                <div className="flex items-center gap-2 pt-5">
+  1197→                  <Switch checked={bannerForm.isActive} onCheckedChange={(v) => setBannerForm({ ...bannerForm, isActive: v })} />
+  1198→                  <Label className="text-xs">Aktif</Label>
+  1199→                </div>
+  1200→              </div>
+  1201→              <div className="flex gap-2 pt-2">
+  1202→                <Button size="sm" onClick={() => saveBannerMutation.mutate()} disabled={saveBannerMutation.isPending || bannerUploading || !bannerForm.title || !bannerForm.image}>
+  1203→                  <Save className="w-3.5 h-3.5 mr-1" /> {editingBannerId ? "Simpan" : "Tambah"}
+  1204→                </Button>
+  1205→                {editingBannerId && (
+  1206→                  <Button size="sm" variant="outline" onClick={() => { setEditingBannerId(null); setBannerForm(EMPTY_BANNER); }}>Batal</Button>
+  1207→                )}
+  1208→              </div>
+  1209→            </div>
+  1210→
+  1211→            {/* List */}
+  1212→            {bannersLoading ? (
+  1213→              <p className="text-xs text-zinc-500">Memuat banner...</p>
+  1214→            ) : (bannersData ?? []).length === 0 ? (
+  1215→              <div className="text-center py-8 text-sm text-zinc-500">
+  1216→                <ImageLucide className="w-8 h-8 mx-auto mb-2 opacity-40" />
+  1217→                Belum ada banner. Tambahkan di atas.
+  1218→              </div>
+  1219→            ) : (
+  1220→              <div className="space-y-3">
+  1221→                {(bannersData ?? []).map((b: any) => (
+  1222→                  <div key={b.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+  1223→                    <div className="flex gap-3 p-3">
+  1224→                      <div className="w-32 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+  1225→                        {b.image && <img src={b.image} alt={b.title} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+  1226→                      </div>
+  1227→                      <div className="flex-1 min-w-0">
+  1228→                        <div className="flex items-center gap-2">
+  1229→                          <span className="text-sm font-semibold truncate">{b.title}</span>
+  1230→                          {!b.isActive && <Badge className="bg-zinc-200 text-zinc-600 text-[9px]">Nonaktif</Badge>}
+  1231→                          {b.isActive && <Badge className="bg-emerald-100 text-emerald-700 text-[9px]">Aktif</Badge>}
+  1232→                        </div>
+  1233→                        {b.subtitle && <p className="text-xs text-zinc-500 truncate">{b.subtitle}</p>}
+  1234→                        {b.linkLabel && <p className="text-[10px] text-violet-600 mt-0.5">Tombol: {b.linkLabel}</p>}
+  1235→                      </div>
+  1236→                      <div className="flex flex-col gap-1">
+  1237→                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
+  1238→                          setEditingBannerId(b.id);
+  1239→                          setBannerForm({
+  1240→                            title: b.title,
+  1241→                            subtitle: b.subtitle || "",
+  1242→                            image: b.image,
+  1243→                            linkUrl: b.linkUrl || "",
+  1244→                            linkLabel: b.linkLabel || "",
+  1245→                            bgColor: b.bgColor || "#7c3aed",
+  1246→                            order: String(b.order ?? 0),
+  1247→                            isActive: b.isActive,
+  1248→                            startDate: b.startDate ? new Date(b.startDate).toISOString().slice(0, 16) : "",
+  1249→                            endDate: b.endDate ? new Date(b.endDate).toISOString().slice(0, 16) : "",
+  1250→                          });
+  1251→                        }}><Pencil className="w-3 h-3" /></Button>
+  1252→                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDeleteBannerTarget(b)}><Trash2 className="w-3 h-3" /></Button>
+  1253→                      </div>
+  1254→                    </div>
+  1255→                  </div>
+  1256→                ))}
+  1257→              </div>
+  1258→            )}
+  1259→          </TabsContent>
+  1260→
+  1261→          <TabsContent value="categories" className="space-y-4">
+  1262→            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+  1263→              <div className="flex items-center gap-2 mb-4">
+  1264→                {editingId ? <Pencil className="w-4 h-4 text-fuchsia-600" /> : <Plus className="w-4 h-4 text-fuchsia-600" />}
+  1265→                <h2 className="font-semibold text-sm">{editingId ? "Edit Kategori" : "Tambah Kategori Baru"}</h2>
+  1266→              </div>
+  1267→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  1268→                <div className="flex flex-col gap-1.5">
+  1269→                  <Label htmlFor="cat-emoji" className="text-xs">Emoji</Label>
+  1270→                  <Input id="cat-emoji" placeholder="🔌" value={form.emoji} onChange={(e) => setForm({ ...form, emoji: e.target.value })} className="w-20 text-center text-xl" maxLength={2} />
+  1271→                </div>
+  1272→                <div className="flex flex-col gap-1.5">
+  1273→                  <Label htmlFor="cat-name" className="text-xs">Nama Kategori</Label>
+  1274→                  <Input id="cat-name" placeholder="Elektronik" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+  1275→                </div>
+  1276→                <div className="flex flex-col gap-1.5 md:col-span-2">
+  1277→                  <Label htmlFor="cat-keywords" className="text-xs">Keywords (pisahkan dengan koma)</Label>
+  1278→                  <Input id="cat-keywords" placeholder="elektronik,gadget,smartphone" value={form.keywords} onChange={(e) => setForm({ ...form, keywords: e.target.value })} />
+  1279→                </div>
+  1280→                <div className="flex flex-col gap-1.5">
+  1281→                  <Label htmlFor="cat-shopee" className="text-xs">Shopee Category</Label>
+  1282→                  <Input id="cat-shopee" placeholder="elektronik" value={form.shopeeCat ?? ""} onChange={(e) => setForm({ ...form, shopeeCat: e.target.value })} />
+  1283→                </div>
+  1284→                <div className="flex flex-col gap-1.5">
+  1285→                  <Label htmlFor="cat-tokopedia" className="text-xs">Tokopedia Category</Label>
+  1286→                  <Input id="cat-tokopedia" placeholder="elektronik" value={form.tokopediaCat ?? ""} onChange={(e) => setForm({ ...form, tokopediaCat: e.target.value })} />
+  1287→                </div>
+  1288→                <div className="flex flex-col gap-1.5">
+  1289→                  <Label htmlFor="cat-lazada" className="text-xs">Lazada Category</Label>
+  1290→                  <Input id="cat-lazada" placeholder="elektronik" value={form.lazadaCat ?? ""} onChange={(e) => setForm({ ...form, lazadaCat: e.target.value })} />
+  1291→                </div>
+  1292→                <div className="flex flex-col gap-1.5">
+  1293→                  <Label htmlFor="cat-amazon" className="text-xs">Amazon Node (opsional)</Label>
+  1294→                  <Input id="cat-amazon" placeholder="172282" value={form.amazonNode ?? ""} onChange={(e) => setForm({ ...form, amazonNode: e.target.value })} />
+  1295→                </div>
+  1296→              </div>
+  1297→              <div className="flex items-center justify-between mt-4 gap-2">
+  1298→                <label className="flex items-center gap-2 text-xs cursor-pointer">
+  1299→                  <Switch checked={form.enabled} onCheckedChange={(checked) => setForm({ ...form, enabled: checked })} />
+  1300→                  Aktif
+  1301→                </label>
+  1302→                <div className="flex gap-2">
+  1303→                  {(editingId || form.name) && (
+  1304→                    <Button variant="ghost" size="sm" onClick={() => { setEditingId(null); setForm(EMPTY_FORM); }}>
+  1305→                      <X className="w-3.5 h-3.5 mr-1" /> Batal
+  1306→                    </Button>
+  1307→                  )}
+  1308→                  <Button size="sm" onClick={handleSubmitCat} disabled={createMutation.isPending || updateMutation.isPending}>
+  1309→                    {editingId ? <><Save className="w-3.5 h-3.5 mr-1" /> Simpan</> : <><Plus className="w-3.5 h-3.5 mr-1" /> Tambah</>}
+  1310→                  </Button>
+  1311→                </div>
+  1312→              </div>
+  1313→            </div>
+  1314→
+  1315→            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+  1316→              <div className="flex items-center justify-between mb-4">
+  1317→                <h2 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Daftar Kategori ({categories.length})</h2>
+  1318→                <Button variant="outline" size="sm" onClick={() => setResetConfirmOpen(true)} disabled={resetMutation.isPending}>
+  1319→                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset Default
+  1320→                </Button>
+  1321→              </div>
+  1322→              {categoriesLoading ? (
+  1323→                <div className="text-center py-8 text-sm text-zinc-500">Memuat...</div>
+  1324→              ) : (
+  1325→                <ul className="flex flex-col gap-2">
+  1326→                  {categories.map((c, i) => (
+  1327→                    <li key={c.id} className="flex items-start gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+  1328→                      <div className="flex flex-col gap-0.5 pt-1">
+  1329→                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveCat(i, "up")} disabled={i === 0}><ArrowUp className="w-3.5 h-3.5" /></Button>
+  1330→                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveCat(i, "down")} disabled={i === categories.length - 1}><ArrowDown className="w-3.5 h-3.5" /></Button>
+  1331→                      </div>
+  1332→                      <div className="flex-1 min-w-0">
+  1333→                        <div className="flex items-center gap-2 flex-wrap">
+  1334→                          <span className="text-xl">{c.emoji}</span>
+  1335→                          <span className="font-semibold text-sm">{c.name}</span>
+  1336→                          <Badge variant="outline" className="text-[10px]">#{c.order}</Badge>
+  1337→                          {!c.enabled && <Badge className="bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400 text-[10px]">Nonaktif</Badge>}
+  1338→                          {c.shopeeCat && <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] px-1.5 py-0 h-4">Shopee</Badge>}
+  1339→                          {c.tokopediaCat && <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-[10px] px-1.5 py-0 h-4">Tokopedia</Badge>}
+  1340→                          {c.lazadaCat && <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] px-1.5 py-0 h-4">Lazada</Badge>}
+  1341→                        </div>
+  1342→                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 truncate">Keywords: {c.keywords}</p>
+  1343→                      </div>
+  1344→                      <div className="flex items-center gap-2 pt-1">
+  1345→                        <Switch checked={c.enabled} onCheckedChange={(checked) => handleToggleEnabled(c, checked)} />
+  1346→                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditCat(c)}><Pencil className="w-3.5 h-3.5" /></Button>
+  1347→                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => setDeleteTarget(c)}><Trash2 className="w-3.5 h-3.5" /></Button>
+  1348→                      </div>
+  1349→                    </li>
+  1350→                  ))}
+  1351→                </ul>
+  1352→              )}
+  1353→            </div>
+  1354→          </TabsContent>
+  1355→
+  1356→          {/* ===== TAB AFFILIATE ===== */}
+  1357→          <TabsContent value="affiliate" className="space-y-4">
+  1358→            <div className="rounded-2xl border border-fuchsia-200 dark:border-fuchsia-900/50 bg-fuchsia-50 dark:bg-fuchsia-900/20 p-4">
+  1359→              <p className="text-sm text-fuchsia-900 dark:text-fuchsia-100">
+  1360→                <strong>Cara kerja:</strong> Setelah tag affiliate terisi, semua link &quot;Beli Sekarang&quot; di JelajahBelanja otomatis disisipi parameter tracking Anda. Setiap transaksi yang berasal dari link ini akan memberikan komisi ke Anda.
+  1361→              </p>
+  1362→            </div>
+  1363→            {affiliateLoading ? (
+  1364→              <div className="text-center py-8 text-sm text-zinc-500">Memuat...</div>
+  1365→            ) : (
+  1366→              <div className="flex flex-col gap-3">
+  1367→                {AFFILIATE_INFO.map((m) => {
+  1368→                  const draft = affDrafts[m.id] ?? { tag: "", enabled: false };
+  1369→                  const isSaved = affiliateData?.find((t) => t.marketplace === m.id)?.tag === draft.tag &&
+  1370→                    affiliateData?.find((t) => t.marketplace === m.id)?.enabled === draft.enabled;
+  1371→                  return (
+  1372→                    <div key={m.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+  1373→                      <div className="flex items-center justify-between mb-2">
+  1374→                        <div className="flex items-center gap-2">
+  1375→                          <span className="font-semibold">{m.label}</span>
+  1376→                          {draft.tag && draft.enabled && (
+  1377→                            <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-[10px]">
+  1378→                              <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> Aktif
+  1379→                            </Badge>
+  1380→                          )}
+  1381→                        </div>
+  1382→                        <a href={m.signupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-fuchsia-600 dark:text-fuchsia-400 hover:underline inline-flex items-center gap-0.5">
+  1383→                          Daftar <ExternalLink className="w-3 h-3" />
+  1384→                        </a>
+  1385→                      </div>
+  1386→                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">{m.hint}</p>
+  1387→                      <div className="flex items-center gap-2">
+  1388→                        <code className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">?{m.param}=</code>
+  1389→                        <Input placeholder={`Tag ${m.label} Anda`} value={draft.tag} onChange={(e) => setAffDrafts({ ...affDrafts, [m.id]: { ...draft, tag: e.target.value } })} className="h-9 text-sm" />
+  1390→                        <Switch checked={draft.enabled} onCheckedChange={(checked) => setAffDrafts({ ...affDrafts, [m.id]: { ...draft, enabled: checked } })} />
+  1391→                        <Button size="sm" variant={isSaved ? "outline" : "default"} onClick={() => handleSaveAffiliate(m.id)} disabled={updateAffiliateMutation.isPending} className="h-9">
+  1392→                          <Save className="w-3.5 h-3.5" />
+  1393→                        </Button>
+  1394→                      </div>
+  1395→                    </div>
+  1396→                  );
+  1397→                })}
+  1398→              </div>
+  1399→            )}
+  1400→            <div className="mt-3">
+  1401→              <Button variant="outline" size="sm" onClick={() => resetAffiliateMutation.mutate()} disabled={resetAffiliateMutation.isPending}>
+  1402→                <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset Semua Tag
+  1403→              </Button>
+  1404→            </div>
+  1405→          </TabsContent>
+  1406→        </Tabs>
+  1407→      </main>
+  1408→
+  1409→      {/* Delete product dialog */}
+  1410→      <AlertDialog open={!!deleteProductTarget} onOpenChange={(o) => !o && setDeleteProductTarget(null)}>
+  1411→        <AlertDialogContent>
+  1412→          <AlertDialogHeader>
+  1413→            <AlertDialogTitle>Hapus produk?</AlertDialogTitle>
+  1414→            <AlertDialogDescription>
+  1415→              Produk <strong>{deleteProductTarget?.title}</strong> akan dihapus permanen.
+  1416→            </AlertDialogDescription>
+  1417→          </AlertDialogHeader>
+  1418→          <AlertDialogFooter>
+  1419→            <AlertDialogCancel>Batal</AlertDialogCancel>
+  1420→            <AlertDialogAction onClick={() => deleteProductTarget && deleteProductMutation.mutate(deleteProductTarget.id)} className="bg-red-600 hover:bg-red-700">Hapus</AlertDialogAction>
+  1421→          </AlertDialogFooter>
+  1422→        </AlertDialogContent>
+  1423→      </AlertDialog>
+  1424→
+  1425→      {/* Delete category dialog */}
+  1426→      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+  1427→        <AlertDialogContent>
+  1428→          <AlertDialogHeader>
+  1429→            <AlertDialogTitle>Hapus kategori?</AlertDialogTitle>
+  1430→            <AlertDialogDescription>
+  1431→              Kategori <strong>{deleteTarget?.emoji} {deleteTarget?.name}</strong> akan dihapus permanen.
+  1432→            </AlertDialogDescription>
+  1433→          </AlertDialogHeader>
+  1434→          <AlertDialogFooter>
+  1435→            <AlertDialogCancel>Batal</AlertDialogCancel>
+  1436→            <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} className="bg-red-600 hover:bg-red-700">Hapus</AlertDialogAction>
+  1437→          </AlertDialogFooter>
+  1438→        </AlertDialogContent>
+  1439→      </AlertDialog>
+  1440→
+  1441→      {/* Delete banner dialog */}
+  1442→      <AlertDialog open={!!deleteBannerTarget} onOpenChange={(o) => !o && setDeleteBannerTarget(null)}>
+  1443→        <AlertDialogContent>
+  1444→          <AlertDialogHeader>
+  1445→            <AlertDialogTitle>Hapus banner?</AlertDialogTitle>
+  1446→            <AlertDialogDescription>
+  1447→              Banner <strong>{deleteBannerTarget?.title}</strong> akan dihapus permanen.
+  1448→            </AlertDialogDescription>
+  1449→          </AlertDialogHeader>
+  1450→          <AlertDialogFooter>
+  1451→            <AlertDialogCancel>Batal</AlertDialogCancel>
+  1452→            <AlertDialogAction onClick={() => deleteBannerTarget && deleteBannerMutation.mutate(deleteBannerTarget.id)} className="bg-red-600 hover:bg-red-700">Hapus</AlertDialogAction>
+  1453→          </AlertDialogFooter>
+  1454→        </AlertDialogContent>
+  1455→      </AlertDialog>
+  1456→
+  1457→      {/* Reset categories dialog */}
+  1458→      <AlertDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+  1459→        <AlertDialogContent>
+  1460→          <AlertDialogHeader>
+  1461→            <AlertDialogTitle>Reset semua kategori?</AlertDialogTitle>
+  1462→            <AlertDialogDescription>Semua kategori akan dihapus dan diganti dengan 8 kategori default. Perubahan kustom Anda akan hilang.</AlertDialogDescription>
+  1463→          </AlertDialogHeader>
+  1464→          <AlertDialogFooter>
+  1465→            <AlertDialogCancel>Batal</AlertDialogCancel>
+  1466→            <AlertDialogAction onClick={() => resetMutation.mutate()}>Reset</AlertDialogAction>
+  1467→          </AlertDialogFooter>
+  1468→        </AlertDialogContent>
+  1469→      </AlertDialog>
+  1470→    </div>
+  1471→  );
+  1472→}
+  1473→
