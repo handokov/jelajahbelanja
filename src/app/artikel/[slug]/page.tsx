@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { blogArticles, getArticleBySlug, getAllArticleSlugs } from "@/lib/blog-data";
+import { getArticleBySlug } from "@/lib/blog-data";
+import { blogArticles } from "@/lib/blog-data";
 import { db } from "@/lib/db";
 import { Clock, ArrowLeft, Tag } from "lucide-react";
 
@@ -18,11 +19,6 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-export async function generateStaticParams() {
-  const staticSlugs = getAllArticleSlugs().map((slug) => ({ slug }));
-  // Dynamic DB articles akan di-handle runtime (dynamicParams = true)
-  return staticSlugs;
-}
 
 export const dynamicParams = true;
 
