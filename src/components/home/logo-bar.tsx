@@ -52,7 +52,7 @@ export function LogoBar({ search = "", onSearchChange }: LogoBarProps) {
               value={search}
               onChange={onSearchChange}
               onSearch={onSearchChange}
-              placeholder="Cari produk viral..."
+              placeholder="Cari produk..."
               variant="dark"
             />
           </div>

@@ -212,7 +212,7 @@ export default async function ArtikelDetailPage({ params }: Props) {
         {/* CTA to Home */}
         <div className="mt-8 rounded-2xl bg-gradient-to-r from-fuchsia-50 to-purple-50 dark:from-fuchsia-900/20 dark:to-purple-900/20 border border-fuchsia-200 dark:border-fuchsia-800/50 p-5 text-center">
           <p className="text-sm font-semibold text-fuchsia-900 dark:text-fuchsia-100 mb-2">
-            Cari produk viral & best seller?
+            Cari produk anak terbaik?
           </p>
           <p className="text-xs text-fuchsia-700 dark:text-fuchsia-300 mb-3">
             Temukan produk terbaik dari Shopee, Tokopedia, dan Lazada di JelajahBelanja.
