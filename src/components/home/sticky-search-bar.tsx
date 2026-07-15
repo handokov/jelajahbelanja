@@ -19,7 +19,7 @@ export function StickySearchBar({ search, onSearchChange }: StickySearchBarProps
           value={search}
           onChange={onSearchChange}
           onSearch={onSearchChange}
-          placeholder="Cari produk viral..."
+          placeholder="Cari produk..."
           variant="light"
         />
       </div>
