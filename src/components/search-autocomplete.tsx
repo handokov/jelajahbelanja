@@ -47,7 +47,7 @@ export function SearchAutocomplete({
   value,
   onChange,
   onSearch,
-  placeholder = "Cari produk viral...",
+  placeholder = "Cari produk ...",
   className,
   variant = "light",
 }: SearchAutocompleteProps) {
