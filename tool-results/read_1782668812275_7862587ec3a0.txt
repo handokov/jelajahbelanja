@@ -1,0 +1,742 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import {
+     5→  Plus,
+     6→  Trash2,
+     7→  Pin,
+     8→  PinOff,
+     9→  EyeOff,
+    10→  Eye,
+    11→  Flame,
+    12→  Loader2,
+    13→  ShoppingBag,
+    14→  LogOut,
+    15→  ExternalLink,
+    16→  Image as ImageIcon,
+    17→  Link2,
+    18→  Copy,
+    19→  CheckCircle2,
+    20→  Wand2,
+    21→  Edit3,
+    22→  X,
+    23→} from "lucide-react";
+    24→import { Button } from "@/components/ui/button";
+    25→import { Input } from "@/components/ui/input";
+    26→import { Badge } from "@/components/ui/badge";
+    27→import { cn } from "@/lib/utils";
+    28→
+    29→const ADMIN_SECRET_DEFAULT = "jelajahbelanja2024";
+    30→const CATEGORIES = ["Fashion", "Beauty", "Elektronik", "Home", "Gaming", "Olahraga", "Mainan", "Otomotif"];
+    31→
+    32→interface ShopeeProduct {
+    33→  id: string;
+    34→  title: string;
+    35→  url: string;
+    36→  image: string;
+    37→  price: number;
+    38→  originalPrice: number | null;
+    39→  discountPercent: number | null;
+    40→  rating: number;
+    41→  reviewCount: number;
+    42→  soldCount: number;
+    43→  location: string | null;
+    44→  category: string;
+    45→  isViral: boolean;
+    46→  isPinned: boolean;
+    47→  isHidden: boolean;
+    48→  affiliateUrl: string | null;
+    49→  notes: string | null;
+    50→  createdAt: string;
+    51→  updatedAt: string;
+    52→}
+    53→
+    54→export default function AdminPage() {
+    55→  const [secret, setSecret] = React.useState("");
+    56→  const [authenticated, setAuthenticated] = React.useState(false);
+    57→  const [products, setProducts] = React.useState<ShopeeProduct[]>([]);
+    58→  const [loading, setLoading] = React.useState(false);
+    59→
+    60→  // Quick add — just paste URL
+    61→  const [quickUrl, setQuickUrl] = React.useState("");
+    62→  const [quickLoading, setQuickLoading] = React.useState(false);
+    63→  const [quickError, setQuickError] = React.useState("");
+    64→  const [quickSuccess, setQuickSuccess] = React.useState("");
+    65→
+    66→  // Edit mode
+    67→  const [editingProduct, setEditingProduct] = React.useState<ShopeeProduct | null>(null);
+    68→  const [editTitle, setEditTitle] = React.useState("");
+    69→  const [editUrl, setEditUrl] = React.useState("");
+    70→  const [editImage, setEditImage] = React.useState("");
+    71→  const [editPrice, setEditPrice] = React.useState("");
+    72→  const [editOriginalPrice, setEditOriginalPrice] = React.useState("");
+    73→  const [editRating, setEditRating] = React.useState("4.8");
+    74→  const [editReviewCount, setEditReviewCount] = React.useState("");
+    75→  const [editSoldCount, setEditSoldCount] = React.useState("");
+    76→  const [editLocation, setEditLocation] = React.useState("");
+    77→  const [editCategory, setEditCategory] = React.useState("Fashion");
+    78→  const [editIsViral, setEditIsViral] = React.useState(false);
+    79→  const [editAffiliateUrl, setEditAffiliateUrl] = React.useState("");
+    80→  const [editNotes, setEditNotes] = React.useState("");
+    81→  const [editSubmitting, setEditSubmitting] = React.useState(false);
+    82→
+    83→  const authHeaders = React.useMemo(
+    84→    () => ({ Authorization: `Bearer ${secret}`, "Content-Type": "application/json" }),
+    85→    [secret]
+    86→  );
+    87→
+    88→  function handleLogin() {
+    89→    if (secret.trim()) setAuthenticated(true);
+    90→  }
+    91→
+    92→  const [apiError, setApiError] = React.useState("");
+    93→
+    94→  async function fetchProducts() {
+    95→    setLoading(true);
+    96→    setApiError("");
+    97→    try {
+    98→      const res = await fetch("/api/admin/products", { headers: authHeaders });
+    99→      if (res.status === 401) {
+   100→        setAuthenticated(false);
+   101→        return;
+   102→      }
+   103→      if (!res.ok) {
+   104→        const data = await res.json().catch(() => ({}));
+   105→        setApiError(data.error || "Gagal memuat produk");
+   106→        setProducts([]);
+   107→        return;
+   108→      }
+   109→      const data = await res.json();
+   110→      setProducts(data.products || []);
+   111→    } catch {
+   112→      setApiError("Tidak bisa terhubung ke server");
+   113→      setProducts([]);
+   114→    } finally {
+   115→      setLoading(false);
+   116→    }
+   117→  }
+   118→
+   119→  React.useEffect(() => {
+   120→    if (authenticated) fetchProducts();
+   121→    // eslint-disable-next-line react-hooks/exhaustive-deps
+   122→  }, [authenticated]);
+   123→
+   124→  /**
+   125→   * Quick add: paste URL → auto scrape → auto save
+   126→   */
+   127→  async function handleQuickAdd(e: React.FormEvent) {
+   128→    e.preventDefault();
+   129→    if (!quickUrl.trim() || !quickUrl.includes("shopee")) {
+   130→      setQuickError("Masukkan URL Shopee yang valid");
+   131→      return;
+   132→    }
+   133→
+   134→    setQuickLoading(true);
+   135→    setQuickError("");
+   136→    setQuickSuccess("");
+   137→
+   138→    try {
+   139→      // Step 1: Scrape product data
+   140→      const scrapeRes = await fetch("/api/scrape-shopee", {
+   141→        method: "POST",
+   142→        headers: authHeaders,
+   143→        body: JSON.stringify({ url: quickUrl.trim() }),
+   144→      });
+   145→
+   146→      const scrapeData = await scrapeRes.json();
+   147→
+   148→      if (!scrapeRes.ok) {
+   149→        setQuickError(scrapeData.error || "Gagal mengambil data produk");
+   150→        return;
+   151→      }
+   152→
+   153→      const p = scrapeData.product;
+   154→
+   155→      // Step 2: Auto-save product
+   156→      const saveRes = await fetch("/api/admin/products", {
+   157→        method: "POST",
+   158→        headers: authHeaders,
+   159→        body: JSON.stringify({
+   160→          title: p.title || "Produk Shopee",
+   161→          url: quickUrl.trim(),
+   162→          image: p.image || "",
+   163→          price: p.price || 0,
+   164→          originalPrice: p.originalPrice || null,
+   165→          rating: p.rating || 4.5,
+   166→          reviewCount: p.reviewCount || 0,
+   167→          soldCount: p.soldCount || 0,
+   168→          location: p.location || null,
+   169→          category: p.category || "Fashion",
+   170→          isViral: false,
+   171→          affiliateUrl: null,
+   172→          notes: null,
+   173→        }),
+   174→      });
+   175→
+   176→      if (!saveRes.ok) {
+   177→        setQuickError("Gagal menyimpan produk. Coba tambah manual.");
+   178→        return;
+   179→      }
+   180→
+   181→      const savedData = await saveRes.json();
+   182→      setQuickSuccess(`"${savedData.product?.title || p.title}" berhasil ditambahkan!`);
+   183→      setQuickUrl("");
+   184→      await fetchProducts();
+   185→
+   186→      // Clear success message after 4 seconds
+   187→      setTimeout(() => setQuickSuccess(""), 4000);
+   188→    } catch {
+   189→      setQuickError("Tidak bisa terhubung ke server. Coba lagi.");
+   190→    } finally {
+   191→      setQuickLoading(false);
+   192→    }
+   193→  }
+   194→
+   195→  function openEditModal(p: ShopeeProduct) {
+   196→    setEditingProduct(p);
+   197→    setEditTitle(p.title);
+   198→    setEditUrl(p.url);
+   199→    setEditImage(p.image);
+   200→    setEditPrice(String(p.price));
+   201→    setEditOriginalPrice(p.originalPrice ? String(p.originalPrice) : "");
+   202→    setEditRating(String(p.rating));
+   203→    setEditReviewCount(String(p.reviewCount));
+   204→    setEditSoldCount(String(p.soldCount));
+   205→    setEditLocation(p.location || "");
+   206→    setEditCategory(p.category);
+   207→    setEditIsViral(p.isViral);
+   208→    setEditAffiliateUrl(p.affiliateUrl || "");
+   209→    setEditNotes(p.notes || "");
+   210→  }
+   211→
+   212→  async function handleEditSave(e: React.FormEvent) {
+   213→    e.preventDefault();
+   214→    if (!editingProduct) return;
+   215→    setEditSubmitting(true);
+   216→    try {
+   217→      const res = await fetch("/api/admin/products", {
+   218→        method: "PATCH",
+   219→        headers: authHeaders,
+   220→        body: JSON.stringify({
+   221→          id: editingProduct.id,
+   222→          title: editTitle,
+   223→          url: editUrl,
+   224→          image: editImage,
+   225→          price: Number(editPrice),
+   226→          originalPrice: editOriginalPrice ? Number(editOriginalPrice) : null,
+   227→          rating: parseFloat(editRating) || 4.5,
+   228→          reviewCount: Number(editReviewCount) || 0,
+   229→          soldCount: Number(editSoldCount) || 0,
+   230→          location: editLocation || null,
+   231→          category: editCategory,
+   232→          isViral: editIsViral,
+   233→          affiliateUrl: editAffiliateUrl || null,
+   234→          notes: editNotes || null,
+   235→        }),
+   236→      });
+   237→      if (!res.ok) throw new Error("Failed");
+   238→      setEditingProduct(null);
+   239→      await fetchProducts();
+   240→    } catch {
+   241→      alert("Gagal mengupdate produk");
+   242→    } finally {
+   243→      setEditSubmitting(false);
+   244→    }
+   245→  }
+   246→
+   247→  async function togglePin(id: string, current: boolean) {
+   248→    await fetch("/api/admin/products", {
+   249→      method: "PATCH",
+   250→      headers: authHeaders,
+   251→      body: JSON.stringify({ id, isPinned: !current }),
+   252→    });
+   253→    fetchProducts();
+   254→  }
+   255→
+   256→  async function toggleHide(id: string, current: boolean) {
+   257→    await fetch("/api/admin/products", {
+   258→      method: "PATCH",
+   259→      headers: authHeaders,
+   260→      body: JSON.stringify({ id, isHidden: !current }),
+   261→    });
+   262→    fetchProducts();
+   263→  }
+   264→
+   265→  async function toggleViral(id: string, current: boolean) {
+   266→    await fetch("/api/admin/products", {
+   267→      method: "PATCH",
+   268→      headers: authHeaders,
+   269→      body: JSON.stringify({ id, isViral: !current }),
+   270→    });
+   271→    fetchProducts();
+   272→  }
+   273→
+   274→  async function deleteProduct(id: string) {
+   275→    if (!confirm("Yakin hapus produk ini?")) return;
+   276→    await fetch("/api/admin/products", {
+   277→      method: "DELETE",
+   278→      headers: authHeaders,
+   279→      body: JSON.stringify({ id }),
+   280→    });
+   281→    fetchProducts();
+   282→  }
+   283→
+   284→  function formatRp(n: number) {
+   285→    return "Rp " + n.toLocaleString("id-ID");
+   286→  }
+   287→
+   288→  function copyShortlink(id: string) {
+   289→    const shortlink = `${window.location.origin}/beli/${id}`;
+   290→    navigator.clipboard.writeText(shortlink);
+   291→  }
+   292→
+   293→  // ====== LOGIN SCREEN ======
+   294→  if (!authenticated) {
+   295→    return (
+   296→      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-zinc-950 dark:to-zinc-900 p-4">
+   297→        <div className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800 p-6">
+   298→          <div className="flex items-center gap-3 mb-6">
+   299→            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+   300→              <ShoppingBag className="w-5 h-5" />
+   301→            </div>
+   302→            <div>
+   303→              <h1 className="text-lg font-bold">JB Admin</h1>
+   304→              <p className="text-xs text-zinc-500">Kelola produk Shopee</p>
+   305→            </div>
+   306→          </div>
+   307→          <form
+   308→            onSubmit={(e) => {
+   309→              e.preventDefault();
+   310→              handleLogin();
+   311→            }}
+   312→            className="space-y-4"
+   313→          >
+   314→            <div>
+   315→              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1 block">
+   316→                Password Admin
+   317→              </label>
+   318→              <Input
+   319→                type="password"
+   320→                placeholder="Masukkan password..."
+   321→                value={secret}
+   322→                onChange={(e) => setSecret(e.target.value)}
+   323→                className="h-11"
+   324→              />
+   325→              <p className="text-[11px] text-zinc-400 mt-1">
+   326→                Default: {ADMIN_SECRET_DEFAULT}
+   327→              </p>
+   328→            </div>
+   329→            <Button type="submit" className="w-full h-11 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold">
+   330→              Masuk
+   331→            </Button>
+   332→          </form>
+   333→        </div>
+   334→      </div>
+   335→    );
+   336→  }
+   337→
+   338→  // ====== MAIN ADMIN SCREEN ======
+   339→  const pinned = products.filter((p) => p.isPinned && !p.isHidden);
+   340→  const regular = products.filter((p) => !p.isPinned && !p.isHidden);
+   341→  const hidden = products.filter((p) => p.isHidden);
+   342→
+   343→  return (
+   344→    <div className="min-h-screen bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-zinc-950 dark:to-zinc-900">
+   345→      {/* Header */}
+   346→      <header className="sticky top-0 z-30 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
+   347→        <div className="container mx-auto px-4 max-w-5xl flex items-center justify-between h-14">
+   348→          <div className="flex items-center gap-2">
+   349→            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+   350→              <ShoppingBag className="w-4 h-4" />
+   351→            </div>
+   352→            <h1 className="text-base font-bold">JB Admin</h1>
+   353→            <Badge className="bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300 text-[10px]">
+   354→              {products.length} produk
+   355→            </Badge>
+   356→          </div>
+   357→          <Button
+   358→            variant="ghost"
+   359→            size="sm"
+   360→            onClick={() => setAuthenticated(false)}
+   361→            className="text-zinc-500"
+   362→          >
+   363→            <LogOut className="w-4 h-4" />
+   364→          </Button>
+   365→        </div>
+   366→      </header>
+   367→
+   368→      <main className="container mx-auto px-4 max-w-5xl py-6 space-y-6">
+   369→        {/* API Error */}
+   370→        {apiError && (
+   371→          <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 p-3 text-sm text-red-700 dark:text-red-300">
+   372→            {apiError}
+   373→          </div>
+   374→        )}
+   375→
+   376→        {/* ====== QUICK ADD — Just paste URL! ====== */}
+   377→        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-lg">
+   378→          <div className="flex items-center gap-2 mb-4">
+   379→            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+   380→              <Wand2 className="w-4 h-4" />
+   381→            </div>
+   382→            <div>
+   383→              <h2 className="text-base font-semibold">Tambah Produk</h2>
+   384→              <p className="text-[11px] text-zinc-500">Paste link Shopee, langsung otomatis terisi semua</p>
+   385→            </div>
+   386→          </div>
+   387→
+   388→          <form onSubmit={handleQuickAdd} className="flex gap-2">
+   389→            <div className="flex-1 relative">
+   390→              <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+   391→              <Input
+   392→                placeholder="https://shopee.co.id/... atau https://shope.ee/..."
+   393→                value={quickUrl}
+   394→                onChange={(e) => setQuickUrl(e.target.value)}
+   395→                className="pl-9 h-11"
+   396→                disabled={quickLoading}
+   397→              />
+   398→            </div>
+   399→            <Button
+   400→              type="submit"
+   401→              disabled={quickLoading || !quickUrl.trim()}
+   402→              className="h-11 px-6 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold shrink-0"
+   403→            >
+   404→              {quickLoading ? (
+   405→                <>
+   406→                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+   407→                  Mengambil...
+   408→                </>
+   409→              ) : (
+   410→                <>
+   411→                  <Plus className="w-4 h-4 mr-2" />
+   412→                  Tambah
+   413→                </>
+   414→              )}
+   415→            </Button>
+   416→          </form>
+   417→
+   418→          {quickError && (
+   419→            <div className="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 p-2.5 text-sm text-red-700 dark:text-red-300">
+   420→              {quickError}
+   421→            </div>
+   422→          )}
+   423→          {quickSuccess && (
+   424→            <div className="mt-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/30 p-2.5 text-sm text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+   425→              <CheckCircle2 className="w-4 h-4 shrink-0" />
+   426→              {quickSuccess}
+   427→            </div>
+   428→          )}
+   429→        </div>
+   430→
+   431→        {/* Loading */}
+   432→        {loading && (
+   433→          <div className="flex items-center justify-center py-12">
+   434→            <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+   435→          </div>
+   436→        )}
+   437→
+   438→        {/* Product List */}
+   439→        {!loading && products.length === 0 && (
+   440→          <div className="text-center py-16">
+   441→            <ImageIcon className="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-600 mb-3" />
+   442→            <p className="text-zinc-500">Belum ada produk. Paste link Shopee di atas untuk mulai!</p>
+   443→          </div>
+   444→        )}
+   445→
+   446→        {/* Pinned Section */}
+   447→        {pinned.length > 0 && (
+   448→          <section>
+   449→            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3 flex items-center gap-1.5">
+   450→              <Pin className="w-3.5 h-3.5 text-violet-500" />
+   451→              Di-pin ({pinned.length})
+   452→            </h3>
+   453→            <div className="space-y-2">
+   454→              {pinned.map((p) => (
+   455→                <ProductRow key={p.id} p={p} onTogglePin={togglePin} onToggleHide={toggleHide} onToggleViral={toggleViral} onDelete={deleteProduct} formatRp={formatRp} onCopyShortlink={copyShortlink} onEdit={openEditModal} />
+   456→              ))}
+   457→            </div>
+   458→          </section>
+   459→        )}
+   460→
+   461→        {/* Regular Section */}
+   462→        {regular.length > 0 && (
+   463→          <section>
+   464→            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3">
+   465→              Produk Aktif ({regular.length})
+   466→            </h3>
+   467→            <div className="space-y-2">
+   468→              {regular.map((p) => (
+   469→                <ProductRow key={p.id} p={p} onTogglePin={togglePin} onToggleHide={toggleHide} onToggleViral={toggleViral} onDelete={deleteProduct} formatRp={formatRp} onCopyShortlink={copyShortlink} onEdit={openEditModal} />
+   470→              ))}
+   471→            </div>
+   472→          </section>
+   473→        )}
+   474→
+   475→        {/* Hidden Section */}
+   476→        {hidden.length > 0 && (
+   477→          <section>
+   478→            <h3 className="text-sm font-semibold text-zinc-400 dark:text-zinc-500 mb-3 flex items-center gap-1.5">
+   479→              <EyeOff className="w-3.5 h-3.5" />
+   480→              Disembunyikan ({hidden.length})
+   481→            </h3>
+   482→            <div className="space-y-2 opacity-60">
+   483→              {hidden.map((p) => (
+   484→                <ProductRow key={p.id} p={p} onTogglePin={togglePin} onToggleHide={toggleHide} onToggleViral={toggleViral} onDelete={deleteProduct} formatRp={formatRp} onCopyShortlink={copyShortlink} onEdit={openEditModal} />
+   485→              ))}
+   486→            </div>
+   487→          </section>
+   488→        )}
+   489→      </main>
+   490→
+   491→      {/* ====== EDIT MODAL ====== */}
+   492→      {editingProduct && (
+   493→        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+   494→          <div className="w-full max-w-lg bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl max-h-[90vh] overflow-y-auto">
+   495→            <div className="sticky top-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-4 flex items-center justify-between">
+   496→              <h3 className="text-base font-semibold flex items-center gap-2">
+   497→                <Edit3 className="w-4 h-4 text-violet-600" />
+   498→                Edit Produk
+   499→              </h3>
+   500→              <button onClick={() => setEditingProduct(null)} className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800">
+   501→                <X className="w-5 h-5" />
+   502→              </button>
+   503→            </div>
+   504→            <form onSubmit={handleEditSave} className="p-4 space-y-3">
+   505→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   506→                <div className="sm:col-span-2">
+   507→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Judul Produk *</label>
+   508→                  <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
+   509→                </div>
+   510→                <div className="sm:col-span-2">
+   511→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">URL Shopee *</label>
+   512→                  <Input value={editUrl} onChange={(e) => setEditUrl(e.target.value)} required />
+   513→                </div>
+   514→                <div className="sm:col-span-2">
+   515→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">URL Foto *</label>
+   516→                  <Input value={editImage} onChange={(e) => setEditImage(e.target.value)} required />
+   517→                  {editImage && (
+   518→                    <div className="mt-1.5 w-16 h-16 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+   519→                      <img src={editImage} alt="Preview" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+   520→                    </div>
+   521→                  )}
+   522→                </div>
+   523→                <div>
+   524→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Harga (Rp) *</label>
+   525→                  <Input type="number" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} required />
+   526→                </div>
+   527→                <div>
+   528→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Harga Asli (Rp)</label>
+   529→                  <Input type="number" value={editOriginalPrice} onChange={(e) => setEditOriginalPrice(e.target.value)} />
+   530→                </div>
+   531→                <div>
+   532→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Rating</label>
+   533→                  <Input type="number" step="0.1" min="0" max="5" value={editRating} onChange={(e) => setEditRating(e.target.value)} />
+   534→                </div>
+   535→                <div>
+   536→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Jumlah Review</label>
+   537→                  <Input type="number" value={editReviewCount} onChange={(e) => setEditReviewCount(e.target.value)} />
+   538→                </div>
+   539→                <div>
+   540→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Jumlah Terjual</label>
+   541→                  <Input type="number" value={editSoldCount} onChange={(e) => setEditSoldCount(e.target.value)} />
+   542→                </div>
+   543→                <div>
+   544→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Lokasi</label>
+   545→                  <Input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} />
+   546→                </div>
+   547→                <div>
+   548→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Kategori</label>
+   549→                  <select
+   550→                    value={editCategory}
+   551→                    onChange={(e) => setEditCategory(e.target.value)}
+   552→                    className="w-full h-10 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-sm"
+   553→                  >
+   554→                    {CATEGORIES.map((c) => (
+   555→                      <option key={c} value={c}>{c}</option>
+   556→                    ))}
+   557→                  </select>
+   558→                </div>
+   559→                <div className="flex items-end gap-4">
+   560→                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+   561→                    <input
+   562→                      type="checkbox"
+   563→                      checked={editIsViral}
+   564→                      onChange={(e) => setEditIsViral(e.target.checked)}
+   565→                      className="w-4 h-4 rounded accent-fuchsia-600"
+   566→                    />
+   567→                    <Flame className="w-4 h-4 text-orange-500" />
+   568→                    Viral
+   569→                  </label>
+   570→                </div>
+   571→                <div className="sm:col-span-2">
+   572→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">
+   573→                    Link Affiliate Shopee
+   574→                    <span className="text-emerald-600 dark:text-emerald-400 ml-1">(diisi setelah approved)</span>
+   575→                  </label>
+   576→                  <Input
+   577→                    placeholder="https://shope.ee/abcde"
+   578→                    value={editAffiliateUrl}
+   579→                    onChange={(e) => setEditAffiliateUrl(e.target.value)}
+   580→                  />
+   581→                  <p className="text-[10px] text-zinc-400 mt-0.5">Isi ini kalau udah punya link affiliate. Semua shortlink /beli/xxx otomatis redirect ke sini.</p>
+   582→                </div>
+   583→                <div className="sm:col-span-2">
+   584→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Catatan</label>
+   585→                  <Input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+   586→                </div>
+   587→              </div>
+   588→              <div className="flex gap-2 pt-2">
+   589→                <Button
+   590→                  type="submit"
+   591→                  disabled={editSubmitting}
+   592→                  className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white"
+   593→                >
+   594→                  {editSubmitting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+   595→                  Simpan
+   596→                </Button>
+   597→                <Button type="button" variant="outline" onClick={() => setEditingProduct(null)}>
+   598→                  Batal
+   599→                </Button>
+   600→              </div>
+   601→            </form>
+   602→          </div>
+   603→        </div>
+   604→      )}
+   605→    </div>
+   606→  );
+   607→}
+   608→
+   609→function ProductRow({
+   610→  p,
+   611→  onTogglePin,
+   612→  onToggleHide,
+   613→  onToggleViral,
+   614→  onDelete,
+   615→  formatRp,
+   616→  onCopyShortlink,
+   617→  onEdit,
+   618→}: {
+   619→  p: ShopeeProduct;
+   620→  onTogglePin: (id: string, v: boolean) => void;
+   621→  onToggleHide: (id: string, v: boolean) => void;
+   622→  onToggleViral: (id: string, v: boolean) => void;
+   623→  onDelete: (id: string) => void;
+   624→  formatRp: (n: number) => string;
+   625→  onCopyShortlink: (id: string) => void;
+   626→  onEdit: (p: ShopeeProduct) => void;
+   627→}) {
+   628→  const [copied, setCopied] = React.useState(false);
+   629→
+   630→  function handleCopy() {
+   631→    onCopyShortlink(`shopee-${p.id}`);
+   632→    setCopied(true);
+   633→    setTimeout(() => setCopied(false), 2000);
+   634→  }
+   635→
+   636→  return (
+   637→    <div className={cn(
+   638→      "flex items-center gap-3 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 transition",
+   639→      p.isHidden && "opacity-50"
+   640→    )}>
+   641→      {/* Thumbnail */}
+   642→      <div className="w-14 h-14 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex-shrink-0">
+   643→        <img src={p.image} alt={p.title} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' fill='%23ddd'%3E%3Crect width='56' height='56'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' font-size='12' fill='%23999'%3E?%3C/text%3E%3C/svg%3E"; }} />
+   644→      </div>
+   645→
+   646→      {/* Info */}
+   647→      <div className="flex-1 min-w-0">
+   648→        <div className="flex items-center gap-1.5">
+   649→          <p className="text-sm font-medium truncate">{p.title}</p>
+   650→          {p.isViral && <Flame className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />}
+   651→        </div>
+   652→        <div className="flex items-center gap-2 text-xs text-zinc-500 mt-0.5 flex-wrap">
+   653→          <span className="font-semibold text-zinc-900 dark:text-zinc-100">{formatRp(p.price)}</span>
+   654→          {p.originalPrice && p.originalPrice > p.price && (
+   655→            <>
+   656→              <span className="line-through">{formatRp(p.originalPrice)}</span>
+   657→              <Badge className="bg-red-100 text-red-700 text-[9px] px-1 py-0 h-4">-{p.discountPercent}%</Badge>
+   658→            </>
+   659→          )}
+   660→          <span>·</span>
+   661→          <Badge className="bg-orange-100 text-orange-700 text-[9px] px-1 py-0 h-4">Shopee</Badge>
+   662→          <span>·</span>
+   663→          <span>{p.category}</span>
+   664→          {p.affiliateUrl && (
+   665→            <>
+   666→              <span>·</span>
+   667→              <Badge className="bg-emerald-100 text-emerald-700 text-[9px] px-1 py-0 h-4">Affiliate ✓</Badge>
+   668→            </>
+   669→          )}
+   670→        </div>
+   671→      </div>
+   672→
+   673→      {/* Actions */}
+   674→      <div className="flex items-center gap-1 flex-shrink-0">
+   675→        <Button
+   676→          variant="ghost"
+   677→          size="icon"
+   678→          className="h-8 w-8 text-zinc-400 hover:text-violet-600"
+   679→          onClick={() => onEdit(p)}
+   680→          title="Edit"
+   681→        >
+   682→          <Edit3 className="w-4 h-4" />
+   683→        </Button>
+   684→        <Button
+   685→          variant="ghost"
+   686→          size="icon"
+   687→          className={cn("h-8 w-8", copied ? "text-emerald-500" : "text-violet-400 hover:text-violet-600")}
+   688→          onClick={handleCopy}
+   689→          title="Copy shortlink"
+   690→        >
+   691→          {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+   692→        </Button>
+   693→        <Button
+   694→          variant="ghost"
+   695→          size="icon"
+   696→          className={cn("h-8 w-8", p.isPinned ? "text-violet-600" : "text-zinc-400")}
+   697→          onClick={() => onTogglePin(p.id, p.isPinned)}
+   698→          title={p.isPinned ? "Unpin" : "Pin"}
+   699→        >
+   700→          {p.isPinned ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
+   701→        </Button>
+   702→        <Button
+   703→          variant="ghost"
+   704→          size="icon"
+   705→          className={cn("h-8 w-8", p.isViral ? "text-orange-500" : "text-zinc-400")}
+   706→          onClick={() => onToggleViral(p.id, p.isViral)}
+   707→          title={p.isViral ? "Unmark viral" : "Mark viral"}
+   708→        >
+   709→          <Flame className="w-4 h-4" />
+   710→        </Button>
+   711→        <Button
+   712→          variant="ghost"
+   713→          size="icon"
+   714→          className={cn("h-8 w-8", p.isHidden ? "text-zinc-500" : "text-zinc-400")}
+   715→          onClick={() => onToggleHide(p.id, p.isHidden)}
+   716→          title={p.isHidden ? "Tampilkan" : "Sembunyikan"}
+   717→        >
+   718→          {p.isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+   719→        </Button>
+   720→        <a
+   721→          href={p.url}
+   722→          target="_blank"
+   723→          rel="noopener noreferrer"
+   724→          className="h-8 w-8 inline-flex items-center justify-center text-zinc-400 hover:text-blue-500"
+   725→          title="Buka di Shopee"
+   726→        >
+   727→          <ExternalLink className="w-4 h-4" />
+   728→        </a>
+   729→        <Button
+   730→          variant="ghost"
+   731→          size="icon"
+   732→          className="h-8 w-8 text-zinc-400 hover:text-red-500"
+   733→          onClick={() => onDelete(p.id)}
+   734→          title="Hapus"
+   735→        >
+   736→          <Trash2 className="w-4 h-4" />
+   737→        </Button>
+   738→      </div>
+   739→    </div>
+   740→  );
+   741→}
+   742→

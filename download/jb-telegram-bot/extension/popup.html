@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 420px;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 14px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .header h1 {
+      font-size: 14px;
+      color: #ee4d2d;
+      margin-bottom: 2px;
+    }
+    .header small { font-size: 10px; color: #666; }
+
+    .page-status {
+      font-size: 11px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .page-status.ok { background: #1b5e20; color: #a5d6a7; }
+    .page-status.no { background: #7f1d1d; color: #fca5a5; }
+    .page-status.info { background: #1a237e; color: #90caf9; }
+
+    .btn {
+      width: 100%;
+      padding: 11px;
+      margin-bottom: 6px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-orange { background: #ee4d2d; color: white; }
+    .btn-blue { background: #1565c0; color: white; }
+    .btn-green { background: #2e7d32; color: white; }
+    .btn-purple { background: #6a1b9a; color: white; }
+    .btn-dark { background: #16213e; color: #eee; border: 1px solid #333; }
+
+    .tip {
+      font-size: 10px;
+      color: #888;
+      text-align: center;
+      margin: 6px 0;
+      line-height: 1.4;
+    }
+
+    .divider { height: 1px; background: #2a2a4a; margin: 8px 0; }
+
+    .collected {
+      margin-top: 6px;
+      padding: 8px;
+      background: #0f0f23;
+      border-radius: 6px;
+      border: 1px solid #2a2a4a;
+    }
+    .collected-title {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .collected-count {
+      background: #ee4d2d;
+      color: white;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .collected-list {
+      font-size: 10px;
+      color: #aaa;
+      max-height: 80px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+    .collected-list div {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .category-row {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .category-row label {
+      font-size: 11px;
+      color: #aaa;
+      white-space: nowrap;
+      line-height: 28px;
+    }
+    .category-row select {
+      flex: 1;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .filter-row label {
+      font-size: 10px;
+      color: #888;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .filter-row input {
+      width: 100%;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+    .filter-row input::placeholder { color: #555; }
+
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #333;
+    }
+    .tab-bar button {
+      flex: 1;
+      padding: 8px;
+      background: #16213e;
+      color: #888;
+      border: none;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .tab-bar button.active {
+      background: #ee4d2d;
+      color: white;
+    }
+    .tab-bar button:hover:not(.active) {
+      background: #1e2a4a;
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>JB Shopee Scraper</h1>
+    <small>Scrape Shopee + Convert Accesstrade</small>
+  </div>
+
+  <div id="pageStatus" class="page-status info">Buka Shopee atau convert CSV Accesstrade</div>
+
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="scrape">🛒 Scrape Shopee</button>
+    <button class="tab-btn" data-tab="convert">💰 Convert Accesstrade</button>
+  </div>
+
+  <!-- ===== TAB 1: SCRAPE SHOPEE ===== -->
+  <div id="tab-scrape" class="tab-content active">
+    <div class="category-row">
+      <label>Kategori:</label>
+      <select id="categorySelect">
+        <option value="Fashion">Fashion</option>
+        <option value="Beauty">Beauty</option>
+        <option value="Home & Living">Home & Living</option>
+        <option value="Electronics">Electronics</option>
+        <option value="Sports">Sports</option>
+        <option value="Food & Beverage">Food & Beverage</option>
+        <option value="Health">Health</option>
+        <option value="Kids & Baby">Kids & Baby</option>
+        <option value="Automotive">Automotive</option>
+        <option value="Books & Stationery">Books & Stationery</option>
+      </select>
+    </div>
+
+    <button id="scrapePageBtn" class="btn btn-orange" disabled>
+      📦 Ambil Semua Produk di Halaman Ini
+    </button>
+
+    <button id="scrapeDetailBtn" class="btn btn-blue" disabled>
+      🔍 Ambil 1 Produk (Halaman Detail)
+    </button>
+
+    <div class="divider"></div>
+
+    <p class="tip">💡 Buka beberapa halaman Shopee, klik "Ambil" di tiap halaman,<br>data nyimpel otomatis. Lalu download file CSV!</p>
+
+    <div class="collected">
+      <div class="collected-title">
+        <span>Produk dikumpul:</span>
+        <span class="collected-count" id="countBadge">0</span>
+      </div>
+      <div class="collected-list" id="collectedList">
+        <div style="color:#666">Belum ada produk</div>
+      </div>
+    </div>
+
+    <button id="downloadCsvBtn" class="btn btn-green" disabled>
+      💾 Download File CSV (Format JB)
+    </button>
+
+    <button id="clearBtn" class="btn btn-dark">
+      🗑️ Hapus Semua
+    </button>
+  </div>
+
+  <!-- ===== TAB 2: CONVERT ACCESSTRADE ===== -->
+  <div id="tab-convert" class="tab-content">
+    <p class="tip" style="color:#a5d6a7;">💰 Download CSV dari Accesstrade Product Feed,<br>terus convert ke format JB di sini!</p>
+
+    <button id="selectFileBtn" class="btn btn-purple">
+      📂 Pilih File CSV Accesstrade
+    </button>
+    <input type="file" id="fileInput" accept=".csv,.txt" style="display:none;">
+
+    <div class="divider"></div>
+
+    <p class="tip">Filter produk (opsional):</p>
+
+    <div class="filter-row">
+      <div style="flex:1">
+        <label>Harga minimum (Rp)</label>
+        <input type="number" id="minPrice" placeholder="5000" value="5000">
+      </div>
+      <div style="flex:1">
+        <label>Harga maksimum (Rp)</label>
+        <input type="number" id="maxPrice" placeholder="10000000" value="">
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <div style="flex:1">
+        <label>Maks produk</label>
+        <input type="number" id="maxProducts" placeholder="200" value="200">
+      </div>
+      <div style="flex:1">
+        <label>Kategori filter</label>
+        <input type="text" id="catFilter" placeholder="Semua" value="">
+      </div>
+    </div>
+
+    <div id="convertStatus" class="page-status info" style="display:none;"></div>
+
+    <button id="convertBtn" class="btn btn-green" disabled>
+      💾 Convert & Download CSV (Format JB)
+    </button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

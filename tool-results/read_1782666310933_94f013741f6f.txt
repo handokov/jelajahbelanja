@@ -1,0 +1,716 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import {
+     5→  Plus,
+     6→  Trash2,
+     7→  Pin,
+     8→  PinOff,
+     9→  EyeOff,
+    10→  Eye,
+    11→  Flame,
+    12→  Loader2,
+    13→  ShoppingBag,
+    14→  LogOut,
+    15→  ExternalLink,
+    16→  Image as ImageIcon,
+    17→  Wand2,
+    18→  Link2,
+    19→  Copy,
+    20→  CheckCircle2,
+    21→} from "lucide-react";
+    22→import { Button } from "@/components/ui/button";
+    23→import { Input } from "@/components/ui/input";
+    24→import { Badge } from "@/components/ui/badge";
+    25→import { cn } from "@/lib/utils";
+    26→
+    27→const ADMIN_SECRET_DEFAULT = "jelajahbelanja2024";
+    28→const CATEGORIES = ["Fashion", "Beauty", "Elektronik", "Home", "Gaming", "Olahraga", "Mainan", "Otomotif"];
+    29→
+    30→interface ShopeeProduct {
+    31→  id: string;
+    32→  title: string;
+    33→  url: string;
+    34→  image: string;
+    35→  price: number;
+    36→  originalPrice: number | null;
+    37→  discountPercent: number | null;
+    38→  rating: number;
+    39→  reviewCount: number;
+    40→  soldCount: number;
+    41→  location: string | null;
+    42→  category: string;
+    43→  isViral: boolean;
+    44→  isPinned: boolean;
+    45→  isHidden: boolean;
+    46→  affiliateUrl: string | null;
+    47→  notes: string | null;
+    48→  createdAt: string;
+    49→  updatedAt: string;
+    50→}
+    51→
+    52→export default function AdminPage() {
+    53→  const [secret, setSecret] = React.useState("");
+    54→  const [authenticated, setAuthenticated] = React.useState(false);
+    55→  const [products, setProducts] = React.useState<ShopeeProduct[]>([]);
+    56→  const [loading, setLoading] = React.useState(false);
+    57→  const [showForm, setShowForm] = React.useState(false);
+    58→
+    59→  // Form state
+    60→  const [formTitle, setFormTitle] = React.useState("");
+    61→  const [formUrl, setFormUrl] = React.useState("");
+    62→  const [formImage, setFormImage] = React.useState("");
+    63→  const [formPrice, setFormPrice] = React.useState("");
+    64→  const [formOriginalPrice, setFormOriginalPrice] = React.useState("");
+    65→  const [formRating, setFormRating] = React.useState("4.8");
+    66→  const [formReviewCount, setFormReviewCount] = React.useState("");
+    67→  const [formSoldCount, setFormSoldCount] = React.useState("");
+    68→  const [formLocation, setFormLocation] = React.useState("");
+    69→  const [formCategory, setFormCategory] = React.useState("Fashion");
+    70→  const [formIsViral, setFormIsViral] = React.useState(false);
+    71→  const [formAffiliateUrl, setFormAffiliateUrl] = React.useState("");
+    72→  const [formNotes, setFormNotes] = React.useState("");
+    73→  const [formSubmitting, setFormSubmitting] = React.useState(false);
+    74→
+    75→  // Auto-fill state
+    76→  const [scraping, setScraping] = React.useState(false);
+    77→  const [scrapeError, setScrapeError] = React.useState("");
+    78→  const [scrapeSuccess, setScrapeSuccess] = React.useState(false);
+    79→
+    80→  const authHeaders = React.useMemo(
+    81→    () => ({ Authorization: `Bearer ${secret}`, "Content-Type": "application/json" }),
+    82→    [secret]
+    83→  );
+    84→
+    85→  function handleLogin() {
+    86→    if (secret.trim()) setAuthenticated(true);
+    87→  }
+    88→
+    89→  const [apiError, setApiError] = React.useState("");
+    90→
+    91→  async function fetchProducts() {
+    92→    setLoading(true);
+    93→    setApiError("");
+    94→    try {
+    95→      const res = await fetch("/api/admin/products", { headers: authHeaders });
+    96→      if (res.status === 401) {
+    97→        setAuthenticated(false);
+    98→        return;
+    99→      }
+   100→      if (!res.ok) {
+   101→        const data = await res.json().catch(() => ({}));
+   102→        setApiError(data.error || "Gagal memuat produk");
+   103→        setProducts([]);
+   104→        return;
+   105→      }
+   106→      const data = await res.json();
+   107→      setProducts(data.products || []);
+   108→    } catch {
+   109→      setApiError("Tidak bisa terhubung ke server");
+   110→      setProducts([]);
+   111→    } finally {
+   112→      setLoading(false);
+   113→    }
+   114→  }
+   115→
+   116→  React.useEffect(() => {
+   117→    if (authenticated) fetchProducts();
+   118→    // eslint-disable-next-line react-hooks/exhaustive-deps
+   119→  }, [authenticated]);
+   120→
+   121→  /**
+   122→   * Auto-fill product details from Shopee URL
+   123→   */
+   124→  async function handleAutoFill() {
+   125→    if (!formUrl.trim()) {
+   126→      setScrapeError("Masukkan URL Shopee dulu");
+   127→      return;
+   128→    }
+   129→
+   130→    if (!formUrl.includes("shopee")) {
+   131→      setScrapeError("URL harus dari Shopee (shopee.co.id atau shope.ee)");
+   132→      return;
+   133→    }
+   134→
+   135→    setScraping(true);
+   136→    setScrapeError("");
+   137→    setScrapeSuccess(false);
+   138→
+   139→    try {
+   140→      const res = await fetch("/api/scrape-shopee", {
+   141→        method: "POST",
+   142→        headers: authHeaders,
+   143→        body: JSON.stringify({ url: formUrl.trim() }),
+   144→      });
+   145→
+   146→      const data = await res.json();
+   147→
+   148→      if (!res.ok) {
+   149→        setScrapeError(data.error || "Gagal mengambil data produk");
+   150→        return;
+   151→      }
+   152→
+   153→      const p = data.product;
+   154→      if (p.title) setFormTitle(p.title);
+   155→      if (p.image) setFormImage(p.image);
+   156→      if (p.price) setFormPrice(String(p.price));
+   157→      if (p.originalPrice) setFormOriginalPrice(String(p.originalPrice));
+   158→      if (p.discountPercent) {
+   159→        // discount is auto-calculated on save, but show it
+   160→      }
+   161→      if (p.rating) setFormRating(String(p.rating));
+   162→      if (p.reviewCount) setFormReviewCount(String(p.reviewCount));
+   163→      if (p.soldCount) setFormSoldCount(String(p.soldCount));
+   164→      if (p.location) setFormLocation(p.location);
+   165→      if (p.category && CATEGORIES.includes(p.category)) setFormCategory(p.category);
+   166→
+   167→      setScrapeSuccess(true);
+   168→      setTimeout(() => setScrapeSuccess(false), 3000);
+   169→    } catch {
+   170→      setScrapeError("Tidak bisa terhubung ke server. Coba lagi.");
+   171→    } finally {
+   172→      setScraping(false);
+   173→    }
+   174→  }
+   175→
+   176→  async function handleSubmit(e: React.FormEvent) {
+   177→    e.preventDefault();
+   178→    setFormSubmitting(true);
+   179→    try {
+   180→      const res = await fetch("/api/admin/products", {
+   181→        method: "POST",
+   182→        headers: authHeaders,
+   183→        body: JSON.stringify({
+   184→          title: formTitle,
+   185→          url: formUrl,
+   186→          image: formImage,
+   187→          price: Number(formPrice),
+   188→          originalPrice: formOriginalPrice ? Number(formOriginalPrice) : null,
+   189→          rating: parseFloat(formRating) || 4.5,
+   190→          reviewCount: Number(formReviewCount) || 0,
+   191→          soldCount: Number(formSoldCount) || 0,
+   192→          location: formLocation || null,
+   193→          category: formCategory,
+   194→          isViral: formIsViral,
+   195→          affiliateUrl: formAffiliateUrl || null,
+   196→          notes: formNotes || null,
+   197→        }),
+   198→      });
+   199→      if (!res.ok) throw new Error("Failed");
+   200→      resetForm();
+   201→      await fetchProducts();
+   202→    } catch {
+   203→      alert("Gagal menambah produk");
+   204→    } finally {
+   205→      setFormSubmitting(false);
+   206→    }
+   207→  }
+   208→
+   209→  function resetForm() {
+   210→    setFormTitle(""); setFormUrl(""); setFormImage(""); setFormPrice("");
+   211→    setFormOriginalPrice(""); setFormRating("4.8"); setFormReviewCount("");
+   212→    setFormSoldCount(""); setFormLocation(""); setFormCategory("Fashion");
+   213→    setFormIsViral(false); setFormAffiliateUrl(""); setFormNotes(""); setShowForm(false);
+   214→    setScrapeError(""); setScrapeSuccess(false);
+   215→  }
+   216→
+   217→  async function togglePin(id: string, current: boolean) {
+   218→    await fetch("/api/admin/products", {
+   219→      method: "PATCH",
+   220→      headers: authHeaders,
+   221→      body: JSON.stringify({ id, isPinned: !current }),
+   222→    });
+   223→    fetchProducts();
+   224→  }
+   225→
+   226→  async function toggleHide(id: string, current: boolean) {
+   227→    await fetch("/api/admin/products", {
+   228→      method: "PATCH",
+   229→      headers: authHeaders,
+   230→      body: JSON.stringify({ id, isHidden: !current }),
+   231→    });
+   232→    fetchProducts();
+   233→  }
+   234→
+   235→  async function toggleViral(id: string, current: boolean) {
+   236→    await fetch("/api/admin/products", {
+   237→      method: "PATCH",
+   238→      headers: authHeaders,
+   239→      body: JSON.stringify({ id, isViral: !current }),
+   240→    });
+   241→    fetchProducts();
+   242→  }
+   243→
+   244→  async function deleteProduct(id: string) {
+   245→    if (!confirm("Yakin hapus produk ini?")) return;
+   246→    await fetch("/api/admin/products", {
+   247→      method: "DELETE",
+   248→      headers: authHeaders,
+   249→      body: JSON.stringify({ id }),
+   250→    });
+   251→    fetchProducts();
+   252→  }
+   253→
+   254→  function formatRp(n: number) {
+   255→    return "Rp " + n.toLocaleString("id-ID");
+   256→  }
+   257→
+   258→  function copyShortlink(id: string) {
+   259→    const shortlink = `${window.location.origin}/beli/${id}`;
+   260→    navigator.clipboard.writeText(shortlink);
+   261→  }
+   262→
+   263→  // ====== LOGIN SCREEN ======
+   264→  if (!authenticated) {
+   265→    return (
+   266→      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-zinc-950 dark:to-zinc-900 p-4">
+   267→        <div className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800 p-6">
+   268→          <div className="flex items-center gap-3 mb-6">
+   269→            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+   270→              <ShoppingBag className="w-5 h-5" />
+   271→            </div>
+   272→            <div>
+   273→              <h1 className="text-lg font-bold">JB Admin</h1>
+   274→              <p className="text-xs text-zinc-500">Kelola produk Shopee</p>
+   275→            </div>
+   276→          </div>
+   277→          <form
+   278→            onSubmit={(e) => {
+   279→              e.preventDefault();
+   280→              handleLogin();
+   281→            }}
+   282→            className="space-y-4"
+   283→          >
+   284→            <div>
+   285→              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1 block">
+   286→                Password Admin
+   287→              </label>
+   288→              <Input
+   289→                type="password"
+   290→                placeholder="Masukkan password..."
+   291→                value={secret}
+   292→                onChange={(e) => setSecret(e.target.value)}
+   293→                className="h-11"
+   294→              />
+   295→              <p className="text-[11px] text-zinc-400 mt-1">
+   296→                Default: {ADMIN_SECRET_DEFAULT}
+   297→              </p>
+   298→            </div>
+   299→            <Button type="submit" className="w-full h-11 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold">
+   300→              Masuk
+   301→            </Button>
+   302→          </form>
+   303→        </div>
+   304→      </div>
+   305→    );
+   306→  }
+   307→
+   308→  // ====== MAIN ADMIN SCREEN ======
+   309→  const pinned = products.filter((p) => p.isPinned && !p.isHidden);
+   310→  const regular = products.filter((p) => !p.isPinned && !p.isHidden);
+   311→  const hidden = products.filter((p) => p.isHidden);
+   312→
+   313→  return (
+   314→    <div className="min-h-screen bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-zinc-950 dark:to-zinc-900">
+   315→      {/* Header */}
+   316→      <header className="sticky top-0 z-30 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
+   317→        <div className="container mx-auto px-4 max-w-5xl flex items-center justify-between h-14">
+   318→          <div className="flex items-center gap-2">
+   319→            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+   320→              <ShoppingBag className="w-4 h-4" />
+   321→            </div>
+   322→            <h1 className="text-base font-bold">JB Admin</h1>
+   323→            <Badge className="bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300 text-[10px]">
+   324→              {products.length} produk
+   325→            </Badge>
+   326→          </div>
+   327→          <div className="flex items-center gap-2">
+   328→            <Button
+   329→              size="sm"
+   330→              onClick={() => setShowForm(!showForm)}
+   331→              className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white"
+   332→            >
+   333→              <Plus className="w-4 h-4 mr-1" />
+   334→              Tambah
+   335→            </Button>
+   336→            <Button
+   337→              variant="ghost"
+   338→              size="sm"
+   339→              onClick={() => setAuthenticated(false)}
+   340→              className="text-zinc-500"
+   341→            >
+   342→              <LogOut className="w-4 h-4" />
+   343→            </Button>
+   344→          </div>
+   345→        </div>
+   346→      </header>
+   347→
+   348→      <main className="container mx-auto px-4 max-w-5xl py-6 space-y-6">
+   349→        {/* API Error */}
+   350→        {apiError && (
+   351→          <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 p-3 text-sm text-red-700 dark:text-red-300">
+   352→            {apiError}
+   353→          </div>
+   354→        )}
+   355→
+   356→        {/* Add Product Form */}
+   357→        {showForm && (
+   358→          <form
+   359→            onSubmit={handleSubmit}
+   360→            className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 space-y-4 shadow-lg"
+   361→          >
+   362→            <h2 className="text-base font-semibold flex items-center gap-2">
+   363→              <Plus className="w-4 h-4 text-fuchsia-600" />
+   364→              Tambah Produk Shopee
+   365→            </h2>
+   366→
+   367→            {/* ====== STEP 1: Paste URL + Auto-fill ====== */}
+   368→            <div className="rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200/60 dark:border-violet-800/30 p-4 space-y-3">
+   369→              <div className="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300">
+   370→                <Link2 className="w-4 h-4" />
+   371→                Langkah 1: Paste Link Shopee
+   372→              </div>
+   373→              <div className="flex gap-2">
+   374→                <Input
+   375→                  placeholder="https://shopee.co.id/... atau https://shope.ee/..."
+   376→                  value={formUrl}
+   377→                  onChange={(e) => setFormUrl(e.target.value)}
+   378→                  className="flex-1"
+   379→                />
+   380→                <Button
+   381→                  type="button"
+   382→                  onClick={handleAutoFill}
+   383→                  disabled={scraping || !formUrl.trim()}
+   384→                  className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white shrink-0"
+   385→                >
+   386→                  {scraping ? (
+   387→                    <>
+   388→                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+   389→                      Mengambil...
+   390→                    </>
+   391→                  ) : (
+   392→                    <>
+   393→                      <Wand2 className="w-4 h-4 mr-1.5" />
+   394→                      Auto Fill
+   395→                    </>
+   396→                  )}
+   397→                </Button>
+   398→              </div>
+   399→              {scrapeError && (
+   400→                <p className="text-xs text-red-600 dark:text-red-400">{scrapeError}</p>
+   401→              )}
+   402→              {scrapeSuccess && (
+   403→                <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+   404→                  <CheckCircle2 className="w-3.5 h-3.5" />
+   405→                  Data produk berhasil diisi otomatis! Cek & sesuaikan kalau perlu.
+   406→                </p>
+   407→              )}
+   408→              <p className="text-[11px] text-violet-500 dark:text-violet-400">
+   409→                Klik &quot;Auto Fill&quot; setelah paste link — judul, foto, harga, dll otomatis terisi.
+   410→              </p>
+   411→            </div>
+   412→
+   413→            {/* ====== STEP 2: Product Details ====== */}
+   414→            <div className="space-y-3">
+   415→              <div className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+   416→                Langkah 2: Detail Produk
+   417→              </div>
+   418→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   419→                <div className="sm:col-span-2">
+   420→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Judul Produk *</label>
+   421→                  <Input placeholder="Earbuds TWS Pro Noise Cancelling..." value={formTitle} onChange={(e) => setFormTitle(e.target.value)} required />
+   422→                </div>
+   423→                <div className="sm:col-span-2">
+   424→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">URL Foto *</label>
+   425→                  <Input placeholder="https://..." value={formImage} onChange={(e) => setFormImage(e.target.value)} required />
+   426→                  {formImage && (
+   427→                    <div className="mt-1.5 w-16 h-16 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+   428→                      <img src={formImage} alt="Preview" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+   429→                    </div>
+   430→                  )}
+   431→                </div>
+   432→                <div>
+   433→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Harga (Rp) *</label>
+   434→                  <Input type="number" placeholder="89000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
+   435→                </div>
+   436→                <div>
+   437→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Harga Asli (Rp)</label>
+   438→                  <Input type="number" placeholder="250000" value={formOriginalPrice} onChange={(e) => setFormOriginalPrice(e.target.value)} />
+   439→                </div>
+   440→                <div>
+   441→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Rating</label>
+   442→                  <Input type="number" step="0.1" min="0" max="5" value={formRating} onChange={(e) => setFormRating(e.target.value)} />
+   443→                </div>
+   444→                <div>
+   445→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Jumlah Review</label>
+   446→                  <Input type="number" placeholder="28500" value={formReviewCount} onChange={(e) => setFormReviewCount(e.target.value)} />
+   447→                </div>
+   448→                <div>
+   449→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Jumlah Terjual</label>
+   450→                  <Input type="number" placeholder="75000" value={formSoldCount} onChange={(e) => setFormSoldCount(e.target.value)} />
+   451→                </div>
+   452→                <div>
+   453→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Lokasi</label>
+   454→                  <Input placeholder="Jakarta Barat" value={formLocation} onChange={(e) => setFormLocation(e.target.value)} />
+   455→                </div>
+   456→                <div>
+   457→                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Kategori</label>
+   458→                  <select
+   459→                    value={formCategory}
+   460→                    onChange={(e) => setFormCategory(e.target.value)}
+   461→                    className="w-full h-10 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-sm"
+   462→                  >
+   463→                    {CATEGORIES.map((c) => (
+   464→                      <option key={c} value={c}>{c}</option>
+   465→                    ))}
+   466→                  </select>
+   467→                </div>
+   468→                <div className="flex items-end gap-4">
+   469→                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+   470→                    <input
+   471→                      type="checkbox"
+   472→                      checked={formIsViral}
+   473→                      onChange={(e) => setFormIsViral(e.target.checked)}
+   474→                      className="w-4 h-4 rounded accent-fuchsia-600"
+   475→                    />
+   476→                    <Flame className="w-4 h-4 text-orange-500" />
+   477→                    Viral
+   478→                  </label>
+   479→                </div>
+   480→              </div>
+   481→            </div>
+   482→
+   483→            {/* ====== STEP 3: Affiliate Link ====== */}
+   484→            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/30 p-4 space-y-3">
+   485→              <div className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+   486→                Langkah 3: Link Affiliate (Opsional)
+   487→              </div>
+   488→              <div>
+   489→                <Input
+   490→                  placeholder="https://shope.ee/abcde — diisi setelah akun affiliate approved"
+   491→                  value={formAffiliateUrl}
+   492→                  onChange={(e) => setFormAffiliateUrl(e.target.value)}
+   493→                />
+   494→                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+   495→                  Kosongkan dulu kalau belum punya. Nanti bisa update di daftar produk — tanpa ubah kode atau redeploy!
+   496→                </p>
+   497→              </div>
+   498→            </div>
+   499→
+   500→            <div className="sm:col-span-2">
+   501→              <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">Catatan</label>
+   502→              <Input placeholder="Info tambahan..." value={formNotes} onChange={(e) => setFormNotes(e.target.value)} />
+   503→            </div>
+   504→
+   505→            <div className="flex gap-2 pt-1">
+   506→              <Button
+   507→                type="submit"
+   508→                disabled={formSubmitting}
+   509→                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white"
+   510→              >
+   511→                {formSubmitting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />}
+   512→                Simpan
+   513→              </Button>
+   514→              <Button type="button" variant="outline" onClick={resetForm}>
+   515→                Batal
+   516→              </Button>
+   517→            </div>
+   518→          </form>
+   519→        )}
+   520→
+   521→        {/* Loading */}
+   522→        {loading && (
+   523→          <div className="flex items-center justify-center py-12">
+   524→            <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+   525→          </div>
+   526→        )}
+   527→
+   528→        {/* Product List */}
+   529→        {!loading && products.length === 0 && (
+   530→          <div className="text-center py-16">
+   531→            <ImageIcon className="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-600 mb-3" />
+   532→            <p className="text-zinc-500">Belum ada produk. Klik &quot;Tambah&quot; untuk mulai.</p>
+   533→          </div>
+   534→        )}
+   535→
+   536→        {/* Pinned Section */}
+   537→        {pinned.length > 0 && (
+   538→          <section>
+   539→            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3 flex items-center gap-1.5">
+   540→              <Pin className="w-3.5 h-3.5 text-violet-500" />
+   541→              Di-pin ({pinned.length})
+   542→            </h3>
+   543→            <div className="space-y-2">
+   544→              {pinned.map((p) => (
+   545→                <ProductRow key={p.id} p={p} onTogglePin={togglePin} onToggleHide={toggleHide} onToggleViral={toggleViral} onDelete={deleteProduct} formatRp={formatRp} onCopyShortlink={copyShortlink} />
+   546→              ))}
+   547→            </div>
+   548→          </section>
+   549→        )}
+   550→
+   551→        {/* Regular Section */}
+   552→        {regular.length > 0 && (
+   553→          <section>
+   554→            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3">
+   555→              Produk Aktif ({regular.length})
+   556→            </h3>
+   557→            <div className="space-y-2">
+   558→              {regular.map((p) => (
+   559→                <ProductRow key={p.id} p={p} onTogglePin={togglePin} onToggleHide={toggleHide} onToggleViral={toggleViral} onDelete={deleteProduct} formatRp={formatRp} onCopyShortlink={copyShortlink} />
+   560→              ))}
+   561→            </div>
+   562→          </section>
+   563→        )}
+   564→
+   565→        {/* Hidden Section */}
+   566→        {hidden.length > 0 && (
+   567→          <section>
+   568→            <h3 className="text-sm font-semibold text-zinc-400 dark:text-zinc-500 mb-3 flex items-center gap-1.5">
+   569→              <EyeOff className="w-3.5 h-3.5" />
+   570→              Disembunyikan ({hidden.length})
+   571→            </h3>
+   572→            <div className="space-y-2 opacity-60">
+   573→              {hidden.map((p) => (
+   574→                <ProductRow key={p.id} p={p} onTogglePin={togglePin} onToggleHide={toggleHide} onToggleViral={toggleViral} onDelete={deleteProduct} formatRp={formatRp} onCopyShortlink={copyShortlink} />
+   575→              ))}
+   576→            </div>
+   577→          </section>
+   578→        )}
+   579→      </main>
+   580→    </div>
+   581→  );
+   582→}
+   583→
+   584→function ProductRow({
+   585→  p,
+   586→  onTogglePin,
+   587→  onToggleHide,
+   588→  onToggleViral,
+   589→  onDelete,
+   590→  formatRp,
+   591→  onCopyShortlink,
+   592→}: {
+   593→  p: ShopeeProduct;
+   594→  onTogglePin: (id: string, v: boolean) => void;
+   595→  onToggleHide: (id: string, v: boolean) => void;
+   596→  onToggleViral: (id: string, v: boolean) => void;
+   597→  onDelete: (id: string) => void;
+   598→  formatRp: (n: number) => string;
+   599→  onCopyShortlink: (id: string) => void;
+   600→}) {
+   601→  const [copied, setCopied] = React.useState(false);
+   602→
+   603→  function handleCopy() {
+   604→    onCopyShortlink(`shopee-${p.id}`);
+   605→    setCopied(true);
+   606→    setTimeout(() => setCopied(false), 2000);
+   607→  }
+   608→
+   609→  return (
+   610→    <div className={cn(
+   611→      "flex items-center gap-3 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 transition",
+   612→      p.isHidden && "opacity-50"
+   613→    )}>
+   614→      {/* Thumbnail */}
+   615→      <div className="w-14 h-14 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex-shrink-0">
+   616→        <img src={p.image} alt={p.title} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' fill='%23ddd'%3E%3Crect width='56' height='56'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' font-size='12' fill='%23999'%3E?%3C/text%3E%3C/svg%3E"; }} />
+   617→      </div>
+   618→
+   619→      {/* Info */}
+   620→      <div className="flex-1 min-w-0">
+   621→        <div className="flex items-center gap-1.5">
+   622→          <p className="text-sm font-medium truncate">{p.title}</p>
+   623→          {p.isViral && <Flame className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />}
+   624→        </div>
+   625→        <div className="flex items-center gap-2 text-xs text-zinc-500 mt-0.5 flex-wrap">
+   626→          <span className="font-semibold text-zinc-900 dark:text-zinc-100">{formatRp(p.price)}</span>
+   627→          {p.originalPrice && p.originalPrice > p.price && (
+   628→            <>
+   629→              <span className="line-through">{formatRp(p.originalPrice)}</span>
+   630→              <Badge className="bg-red-100 text-red-700 text-[9px] px-1 py-0 h-4">-{p.discountPercent}%</Badge>
+   631→            </>
+   632→          )}
+   633→          <span>·</span>
+   634→          <Badge className="bg-orange-100 text-orange-700 text-[9px] px-1 py-0 h-4">Shopee</Badge>
+   635→          <span>·</span>
+   636→          <span>{p.category}</span>
+   637→          {p.affiliateUrl && (
+   638→            <>
+   639→              <span>·</span>
+   640→              <Badge className="bg-emerald-100 text-emerald-700 text-[9px] px-1 py-0 h-4">Affiliate</Badge>
+   641→            </>
+   642→          )}
+   643→        </div>
+   644→        {/* Shortlink display */}
+   645→        <div className="flex items-center gap-1 mt-1">
+   646→          <Link2 className="w-3 h-3 text-violet-500" />
+   647→          <span className="text-[10px] text-violet-600 dark:text-violet-400 font-mono">
+   648→            /beli/shopee-{p.id.slice(0, 8)}...
+   649→          </span>
+   650→        </div>
+   651→        {p.notes && (
+   652→          <p className="text-[11px] text-zinc-400 mt-0.5 truncate">{p.notes}</p>
+   653→        )}
+   654→      </div>
+   655→
+   656→      {/* Actions */}
+   657→      <div className="flex items-center gap-1 flex-shrink-0">
+   658→        <Button
+   659→          variant="ghost"
+   660→          size="icon"
+   661→          className={cn("h-8 w-8", copied ? "text-emerald-500" : "text-violet-400 hover:text-violet-600")}
+   662→          onClick={handleCopy}
+   663→          title="Copy shortlink"
+   664→        >
+   665→          {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+   666→        </Button>
+   667→        <Button
+   668→          variant="ghost"
+   669→          size="icon"
+   670→          className={cn("h-8 w-8", p.isPinned ? "text-violet-600" : "text-zinc-400")}
+   671→          onClick={() => onTogglePin(p.id, p.isPinned)}
+   672→          title={p.isPinned ? "Unpin" : "Pin"}
+   673→        >
+   674→          {p.isPinned ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
+   675→        </Button>
+   676→        <Button
+   677→          variant="ghost"
+   678→          size="icon"
+   679→          className={cn("h-8 w-8", p.isViral ? "text-orange-500" : "text-zinc-400")}
+   680→          onClick={() => onToggleViral(p.id, p.isViral)}
+   681→          title={p.isViral ? "Unmark viral" : "Mark viral"}
+   682→        >
+   683→          <Flame className="w-4 h-4" />
+   684→        </Button>
+   685→        <Button
+   686→          variant="ghost"
+   687→          size="icon"
+   688→          className={cn("h-8 w-8", p.isHidden ? "text-zinc-500" : "text-zinc-400")}
+   689→          onClick={() => onToggleHide(p.id, p.isHidden)}
+   690→          title={p.isHidden ? "Tampilkan" : "Sembunyikan"}
+   691→        >
+   692→          {p.isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+   693→        </Button>
+   694→        <a
+   695→          href={p.url}
+   696→          target="_blank"
+   697→          rel="noopener noreferrer"
+   698→          className="h-8 w-8 inline-flex items-center justify-center text-zinc-400 hover:text-blue-500"
+   699→          title="Buka di Shopee"
+   700→        >
+   701→          <ExternalLink className="w-4 h-4" />
+   702→        </a>
+   703→        <Button
+   704→          variant="ghost"
+   705→          size="icon"
+   706→          className="h-8 w-8 text-zinc-400 hover:text-red-500"
+   707→          onClick={() => onDelete(p.id)}
+   708→          title="Hapus"
+   709→        >
+   710→          <Trash2 className="w-4 h-4" />
+   711→        </Button>
+   712→      </div>
+   713→    </div>
+   714→  );
+   715→}
+   716→

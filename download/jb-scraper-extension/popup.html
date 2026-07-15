@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 420px;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 14px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .header h1 {
+      font-size: 14px;
+      color: #ee4d2d;
+      margin-bottom: 2px;
+    }
+    .header small { font-size: 10px; color: #666; }
+
+    .page-status {
+      font-size: 11px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .page-status.ok { background: #1b5e20; color: #a5d6a7; }
+    .page-status.no { background: #7f1d1d; color: #fca5a5; }
+    .page-status.info { background: #1a237e; color: #90caf9; }
+
+    .btn {
+      width: 100%;
+      padding: 11px;
+      margin-bottom: 6px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-orange { background: #ee4d2d; color: white; }
+    .btn-blue { background: #1565c0; color: white; }
+    .btn-green { background: #2e7d32; color: white; }
+    .btn-purple { background: #6a1b9a; color: white; }
+    .btn-teal { background: #00838f; color: white; }
+    .btn-green-tkpd { background: #1a7f37; color: white; }
+    .btn-dark { background: #16213e; color: #eee; border: 1px solid #333; }
+
+    .tip {
+      font-size: 10px;
+      color: #888;
+      text-align: center;
+      margin: 6px 0;
+      line-height: 1.4;
+    }
+
+    .divider { height: 1px; background: #2a2a4a; margin: 8px 0; }
+
+    .collected {
+      margin-top: 6px;
+      padding: 8px;
+      background: #0f0f23;
+      border-radius: 6px;
+      border: 1px solid #2a2a4a;
+    }
+    .collected-title {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .collected-count {
+      background: #ee4d2d;
+      color: white;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .collected-list {
+      font-size: 10px;
+      color: #aaa;
+      max-height: 80px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+    .collected-list div {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .category-row {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .category-row label {
+      font-size: 11px;
+      color: #aaa;
+      white-space: nowrap;
+      line-height: 28px;
+    }
+    .category-row select {
+      flex: 1;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .filter-row label {
+      font-size: 10px;
+      color: #888;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .filter-row input {
+      width: 100%;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+    .filter-row input::placeholder { color: #555; }
+
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #333;
+    }
+    .tab-bar button {
+      flex: 1;
+      padding: 8px 4px;
+      background: #16213e;
+      color: #888;
+      border: none;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .tab-bar button.active {
+      background: #ee4d2d;
+      color: white;
+    }
+    .tab-bar button:hover:not(.active) {
+      background: #1e2a4a;
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .link-input-group {
+      margin-bottom: 6px;
+    }
+    .link-input-group textarea {
+      width: 100%;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 11px;
+      resize: vertical;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      line-height: 1.5;
+    }
+    .link-input-group textarea::placeholder { color: #555; }
+    .link-input-group textarea:focus { outline: none; border-color: #00838f; }
+
+    .affiliate-input-group {
+      margin-bottom: 6px;
+    }
+    .affiliate-input-group label {
+      font-size: 11px;
+      color: #00bcd4;
+      display: block;
+      margin-bottom: 3px;
+      font-weight: 600;
+    }
+    .affiliate-input-group input {
+      width: 100%;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #00707a;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 11px;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+    }
+    .affiliate-input-group input::placeholder { color: #555; }
+    .affiliate-input-group input:focus { outline: none; border-color: #00bcd4; }
+    .affiliate-input-group small {
+      font-size: 9px;
+      color: #666;
+      display: block;
+      margin-top: 2px;
+    }
+
+    .marketplace-badge {
+      display: inline-block;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+      margin-left: 3px;
+    }
+    .marketplace-badge.shopee { background: #ee4d2d; color: white; }
+    .marketplace-badge.tokopedia { background: #1a7f37; color: white; }
+
+    .image-input-group {
+      margin-bottom: 6px;
+      padding: 8px;
+      background: #0f1a0f;
+      border-radius: 6px;
+      border: 1px solid #1a5e1a;
+    }
+    .image-input-group label {
+      font-size: 11px;
+      color: #81c784;
+      display: block;
+      margin-bottom: 3px;
+      font-weight: 600;
+    }
+    .image-input-group input {
+      width: 100%;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #2e7d32;
+      border-radius: 6px;
+      padding: 7px;
+      font-size: 10px;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+    }
+    .image-input-group input::placeholder { color: #555; }
+    .image-input-group input:focus { outline: none; border-color: #4caf50; }
+    .image-input-group small {
+      font-size: 9px;
+      color: #66bb6a;
+      display: block;
+      margin-top: 3px;
+      line-height: 1.4;
+    }
+    .image-input-group .img-preview {
+      margin-top: 4px;
+      max-width: 100%;
+      max-height: 60px;
+      border-radius: 4px;
+      display: none;
+    }
+
+    /* Auto-save indicator */
+    #savedIndicator {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: #1b5e20;
+      color: #a5d6a7;
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* Draft badge */
+    #draftBadge {
+      display: none;
+      font-size: 9px;
+      background: #1565c0;
+      color: #90caf9;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>JB Scraper <span style="font-size:10px;color:#4caf50">v11.0</span><span id="draftBadge">📋 Draft</span></h1>
+    <small>Shopee + Tokopedia + Accesstrade</small>
+    <div id="imageServerStatus" style="font-size:9px;margin-top:3px;color:#666;">🖼️ Image Server: <span id="imgServerLabel">mengecek...</span></div>
+  </div>
+
+  <div id="savedIndicator">💾 Tersimpan!</div>
+
+  <div id="pageStatus" class="page-status info">Buka Shopee/Tokopedia atau paste link</div>
+
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="scrape">🛒 Shopee</button>
+    <button class="tab-btn" data-tab="link">🔗 Paste Link</button>
+    <button class="tab-btn" data-tab="tkpd">🟢 Tokopedia</button>
+    <button class="tab-btn" data-tab="convert">💰 Convert AT</button>
+  </div>
+
+  <!-- ===== TAB 1: SCRAPE SHOPEE ===== -->
+  <div id="tab-scrape" class="tab-content active">
+    <div class="category-row">
+      <label>Kategori:</label>
+      <select id="categorySelect">
+        <option value="Fashion">Fashion</option>
+        <option value="Beauty">Beauty</option>
+        <option value="Home & Living">Home & Living</option>
+        <option value="Electronics">Electronics</option>
+        <option value="Sports">Sports</option>
+        <option value="Food & Beverage">Food & Beverage</option>
+        <option value="Health">Health</option>
+        <option value="Kids & Baby">Kids & Baby</option>
+        <option value="Automotive">Automotive</option>
+        <option value="Books & Stationery">Books & Stationery</option>
+      </select>
+    </div>
+
+    <div class="affiliate-input-group">
+      <label>🔗 Link Affiliate (opsional):</label>
+      <input type="text" id="affiliateUrlInput" placeholder="https://s.shopee.co.id/xxxxx atau https://atid.me/xxxxx">
+      <small>Paste link affiliate dari Shopee Affiliate, otomatis masuk ke CSV!</small>
+    </div>
+
+    <div class="image-input-group">
+      <label>🖼️ Image URL (opsional):</label>
+      <input type="text" id="shopeeImageUrl" placeholder="Klik kanan gambar → Copy image address">
+      <img class="img-preview" id="shopeeImgPreview">
+      <small>💡 Klik zoom gambar produk, klik kanan → "Copy image address", paste di sini</small>
+    </div>
+
+    <button id="scrapePageBtn" class="btn btn-orange" disabled>
+      📦 Ambil Semua Produk di Halaman Ini
+    </button>
+
+    <button id="scrapeDetailBtn" class="btn btn-blue" disabled>
+      🔍 Ambil 1 Produk (Halaman Detail)
+    </button>
+
+    <div class="divider"></div>
+
+    <p class="tip">💡 Buka beberapa halaman Shopee, klik "Ambil" di tiap halaman,<br>data nyimpel otomatis. Lalu download file CSV!</p>
+
+    <div class="collected">
+      <div class="collected-title">
+        <span>Produk dikumpul:</span>
+        <span class="collected-count" id="countBadge">0</span>
+      </div>
+      <div class="collected-list" id="collectedList">
+        <div style="color:#666">Belum ada produk</div>
+      </div>
+    </div>
+
+    <button id="downloadCsvBtn" class="btn btn-green" disabled>
+      💾 Download File CSV (Format JB)
+    </button>
+
+    <button id="clearBtn" class="btn btn-dark">
+      🗑️ Hapus Semua
+    </button>
+  </div>
+
+  <!-- ===== TAB 2: PASTE LINK ===== -->
+  <div id="tab-link" class="tab-content">
+    <p class="tip" style="color:#90caf9;">🔗 Paste link produk Shopee/Tokopedia di sini,<br>data produk otomatis di-ambil!</p>
+
+    <div class="link-input-group">
+      <textarea id="linkInput" rows="4" placeholder="Paste link di sini...&#10;&#10;Shopee:&#10;https://s.shopee.co.id/9KgCNdOMjY&#10;https://shopee.co.id/product/1291/2883&#10;&#10;Tokopedia:&#10;https://www.tokopedia.com/shop/product&#10;https://ta.tokopedia.com/promo/..."></textarea>
+    </div>
+
+    <div class="affiliate-input-group">
+      <label>🔗 Link Affiliate Tokopedia (dari AT):</label>
+      <input type="text" id="tkpdAffiliateInput" placeholder="https://ta.tokopedia.com/... atau https://tokopedia.link/...">
+      <small>Paste affiliate link dari Accesstrade, otomatis masuk ke CSV!</small>
+    </div>
+
+    <div class="category-row">
+      <label>Kategori:</label>
+      <select id="linkCategorySelect">
+        <option value="Fashion">Fashion</option>
+        <option value="Beauty">Beauty</option>
+        <option value="Home & Living">Home & Living</option>
+        <option value="Electronics">Electronics</option>
+        <option value="Sports">Sports</option>
+        <option value="Food & Beverage">Food & Beverage</option>
+        <option value="Health">Health</option>
+        <option value="Kids & Baby">Kids & Baby</option>
+        <option value="Automotive">Automotive</option>
+        <option value="Books & Stationery">Books & Stationery</option>
+      </select>
+    </div>
+
+    <button id="fetchLinkBtn" class="btn btn-teal">
+      🔗 Ambil Data dari Link
+    </button>
+
+    <div class="divider"></div>
+
+    <p class="tip">💡 Support: Shopee (s.shopee.co.id, shopee.co.id) &amp;<br>Tokopedia (tokopedia.com, ta.tokopedia.com, tokopedia.link)</p>
+
+    <div id="linkStatus" class="page-status info" style="display:none;"></div>
+
+    <div class="collected" style="margin-top:6px;">
+      <div class="collected-title">
+        <span>Produk dikumpul:</span>
+        <span class="collected-count" id="linkCountBadge">0</span>
+      </div>
+      <div class="collected-list" id="linkCollectedList">
+        <div style="color:#666">Belum ada produk</div>
+      </div>
+    </div>
+
+    <button id="linkDownloadBtn" class="btn btn-green" disabled>
+      💾 Download File CSV (Format JB)
+    </button>
+
+    <button id="linkClearBtn" class="btn btn-dark">
+      🗑️ Hapus Semua
+    </button>
+  </div>
+
+  <!-- ===== TAB 3: TOKOPEDIA ===== -->
+  <div id="tab-tkpd" class="tab-content">
+    <p class="tip" style="color:#a5d6a7;">🟢 Scrape produk langsung dari halaman Tokopedia,<br>atau paste link affiliate dari Accesstrade!</p>
+
+    <div class="category-row">
+      <label>Kategori:</label>
+      <select id="tkpdCategorySelect">
+        <option value="Fashion">Fashion</option>
+        <option value="Beauty">Beauty</option>
+        <option value="Home & Living">Home & Living</option>
+        <option value="Electronics">Electronics</option>
+        <option value="Sports">Sports</option>
+        <option value="Food & Beverage">Food & Beverage</option>
+        <option value="Health">Health</option>
+        <option value="Kids & Baby">Kids & Baby</option>
+        <option value="Automotive">Automotive</option>
+        <option value="Books & Stationery">Books & Stationery</option>
+      </select>
+    </div>
+
+    <div class="affiliate-input-group">
+      <label>🔗 Link Affiliate (dari AT — opsional):</label>
+      <input type="text" id="tkpdTabAffiliateInput" placeholder="https://ta.tokopedia.com/... atau https://tokopedia.link/...">
+      <small>Click "GET LINK" di Accesstrade, paste di sini</small>
+    </div>
+
+    <div class="image-input-group">
+      <label>🖼️ Image URL (opsional):</label>
+      <input type="text" id="tkpdImageUrl" placeholder="Klik zoom gambar → klik kanan → Copy image address">
+      <img class="img-preview" id="tkpdImgPreview">
+      <small>💡 Klik gambar produk → zoom → klik kanan "Copy image address", paste di sini</small>
+    </div>
+
+    <button id="scrapeTkpdPageBtn" class="btn btn-green-tkpd" disabled>
+      📦 Ambil Produk dari Halaman Tokopedia
+    </button>
+
+    <button id="scrapeTkpdDetailBtn" class="btn btn-green-tkpd" disabled>
+      🔍 Ambil 1 Produk (Halaman Detail Tokopedia)
+    </button>
+
+    <div class="divider"></div>
+
+    <p class="tip">💡 Buka halaman produk Tokopedia, klik "Ambil"!<br>Atau paste link affiliate dari AT di atas.</p>
+
+    <div class="collected">
+      <div class="collected-title">
+        <span>Produk dikumpul:</span>
+        <span class="collected-count" id="tkpdCountBadge">0</span>
+      </div>
+      <div class="collected-list" id="tkpdCollectedList">
+        <div style="color:#666">Belum ada produk</div>
+      </div>
+    </div>
+
+    <button id="tkpdDownloadBtn" class="btn btn-green" disabled>
+      💾 Download File CSV (Format JB)
+    </button>
+
+    <button id="tkpdClearBtn" class="btn btn-dark">
+      🗑️ Hapus Semua
+    </button>
+  </div>
+
+  <!-- ===== TAB 4: CONVERT ACCESSTRADE ===== -->
+  <div id="tab-convert" class="tab-content">
+    <p class="tip" style="color:#a5d6a7;">💰 Download CSV dari Accesstrade Product Feed,<br>terus convert ke format JB di sini!</p>
+
+    <button id="selectFileBtn" class="btn btn-purple">
+      📂 Pilih File CSV Accesstrade
+    </button>
+    <input type="file" id="fileInput" accept=".csv,.txt" style="display:none;">
+
+    <div class="divider"></div>
+
+    <p class="tip">Filter produk (opsional):</p>
+
+    <div class="filter-row">
+      <div style="flex:1">
+        <label>Harga minimum (Rp)</label>
+        <input type="number" id="minPrice" placeholder="5000" value="5000">
+      </div>
+      <div style="flex:1">
+        <label>Harga maksimum (Rp)</label>
+        <input type="number" id="maxPrice" placeholder="10000000" value="">
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <div style="flex:1">
+        <label>Maks produk</label>
+        <input type="number" id="maxProducts" placeholder="200" value="200">
+      </div>
+      <div style="flex:1">
+        <label>Kategori filter</label>
+        <input type="text" id="catFilter" placeholder="Semua" value="">
+      </div>
+    </div>
+
+    <div id="convertStatus" class="page-status info" style="display:none;"></div>
+
+    <button id="convertBtn" class="btn btn-green" disabled>
+      💾 Convert & Download CSV (Format JB)
+    </button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

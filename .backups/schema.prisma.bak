@@ -1,0 +1,99 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Production (Vercel) uses Neon PostgreSQL. Sandbox local dev also uses Neon
+  // (shared with production). To switch back to local SQLite for offline dev,
+  // change provider to "sqlite" and set DATABASE_URL=file:./db/custom.db
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  emoji        String
+  keywords     String   // comma-separated keywords for query
+  amazonNode   String?  // Amazon bestsellers node ID
+  aliexpressCat String? // AliExpress category slug
+  shopeeCat    String?  // Shopee keyword/category slug
+  tokopediaCat String?  // Tokopedia category slug
+  lazadaCat    String?  // Lazada category slug
+  accesstradeCat String?  // Accesstrade category1 names (comma-separated, e.g. "Mobile & Gadgets,Computers & Accessories")
+  order        Int      @default(0)
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AffiliateTag {
+  id          String   @id @default(cuid())
+  marketplace String   @unique  // shopee, tokopedia, lazada, aliexpress
+  tag         String   // affiliate tag / ID
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ShopeeProduct {
+  id              String   @id @default(cuid())
+  title           String
+  url             String   // URL asli produk Shopee
+  image           String   // URL foto produk
+  price           Int      // harga dalam Rupiah
+  originalPrice   Int?     // harga sebelum diskon
+  discountPercent Int?     // persen diskon
+  rating          Float    @default(4.5)
+  reviewCount     Int      @default(0)
+  soldCount       Int      @default(0)
+  location        String?  // lokasi seller
+  category        String   @default("Fashion")
+  isViral         Boolean  @default(false)
+  isPinned        Boolean  @default(false)  // pin di atas
+  isHidden        Boolean  @default(false)  // sembunyikan dari homepage
+  affiliateUrl    String?  // link affiliate Shopee (shope.ee/xxx)
+  notes           String?  // catatan admin
+  marketplace     String   @default("shopee")
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model PromoBanner {
+  id          String   @id @default(cuid())
+  title       String                   // judul banner (cth: "Flash Sale Akhir Tahun")
+  subtitle    String?                  // sub judul (cth: "Diskon sampai 70%")
+  image       String                   // URL gambar banner
+  linkUrl     String?                  // link tujuan saat diklik
+  linkLabel   String?                  // text tombol (cth: "Belanja Sekarang")
+  bgColor     String   @default("#7c3aed") // warna background
+  order       Int      @default(0)     // urutan tampil
+  isActive    Boolean  @default(true)  // tampilkan / sembunyikan
+  startDate   DateTime?               // mulai tayang
+  endDate     DateTime?               // berakhir tayang
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Banner Affiliate - untuk AccessTrade, Shopee Affiliate, dll
+model AffiliateAd {
+  id            String   @id @default(cuid())
+  name          String                   // nama identifikasi (cth: "AccessTrade 300x250")
+  platform      String   @default("accesstrade") // accesstrade, shopee, tokopedia, tiktok, lainnya
+  href          String                   // link affiliate (target URL)
+  imgSrc        String                   // URL gambar banner
+  trackingPixel String?                  // tracking pixel URL (1x1 invisible)
+  width         Int      @default(300)  // lebar banner
+  height        Int      @default(250)  // tinggi banner
+  position      String   @default("sidebar") // sidebar, header, footer, in-content
+  order         Int      @default(0)    // urutan tampil
+  isActive      Boolean  @default(true) // aktif/nonaktif
+  startDate     DateTime?                // mulai tayang
+  endDate       DateTime?                // berakhir tayang
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
