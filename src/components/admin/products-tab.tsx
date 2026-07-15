@@ -397,12 +397,13 @@ export function ProductsTab() {
   }
 
   function toggleSelectAll() {
-    const products = productsData ?? [];
+    // PENTING: pakai `products` (yang sudah di-filter), BUKAN `productsData` (semua dari DB)
+    // Kalau pakai productsData, "Pilih Semua" akan select 660 produk padahal yang tampil cuma 17
     if (selectedIds.size === products.length && products.length > 0) {
-      // Deselect all
+      // Deselect all (yang tampil di layar)
       setSelectedIds(new Set());
     } else {
-      // Select all
+      // Select all (yang tampil di layar, hasil filter)
       setSelectedIds(new Set(products.map((p: any) => p.id)));
     }
   }
