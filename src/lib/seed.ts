@@ -169,40 +169,14 @@ export async function ensureCategoriesSeeded(): Promise<void> {
         });
         console.log(`[seed] Seeded ${DEFAULT_CATEGORIES.length} default categories`);
       } else {
-        // Update existing categories yang belum punya accesstradeCat
+        // v3.2: JANGAN auto-create kategori default yang sudah di-rename/hapus.
+        // Sebelumnya, kalau user rename "Fashion" → "Fashion Anak", seed function
+        // akan re-create "Fashion" karena tidak ketemu di DB. Ini bikin kategori
+        // default selalu muncul lagi.
+        // 
+        // Sekarang: hanya update accesstradeCat untuk kategori yang sudah ada.
+        // Tidak create kategori baru.
         const existing = await db.category.findMany();
-        const existingNames = new Set(existing.map(c => c.name));
-
-        // Add kategori baru yang belum ada di DB (cth: Travel, Keuangan, Layanan Online)
-        let addedCount = 0;
-        for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
-          const c = DEFAULT_CATEGORIES[i];
-          if (!existingNames.has(c.name)) {
-            try {
-              await db.category.create({
-                data: {
-                  name: c.name,
-                  emoji: c.emoji,
-                  keywords: c.keywords,
-                  amazonNode: c.amazonNode ?? null,
-                  aliexpressCat: c.aliexpressCat ?? null,
-                  shopeeCat: c.shopeeCat ?? null,
-                  tokopediaCat: c.tokopediaCat ?? null,
-                  lazadaCat: c.lazadaCat ?? null,
-                  accesstradeCat: c.accesstradeCat ?? null,
-                  order: i,
-                  enabled: true,
-                },
-              });
-              addedCount++;
-            } catch (err) {
-              // Skip kalau sudah ada (race condition)
-            }
-          }
-        }
-        if (addedCount > 0) {
-          console.log(`[seed] Added ${addedCount} new default categories`);
-        }
 
         // Update existing yang belum punya accesstradeCat
         for (const cat of existing) {
