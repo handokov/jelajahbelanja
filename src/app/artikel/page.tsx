@@ -4,7 +4,7 @@ import { blogArticles } from "@/lib/blog-data";
 import { db } from "@/lib/db";
 import { Clock, ArrowRight, BookOpen, Tag } from "lucide-react";
 
-export const revalidate = 0; // Always fresh — jangan cache halaman artikel
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Blog & Artikel — Tips Belanja Produk Anak, Review & Panduan",

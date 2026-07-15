@@ -5,7 +5,7 @@ import { blogArticles, getArticleBySlug, getAllArticleSlugs } from "@/lib/blog-d
 import { db } from "@/lib/db";
 import { Clock, ArrowLeft, Tag } from "lucide-react";
 
-export const revalidate = 0; // Always fresh
+export const dynamic = "force-dynamic";
 const CATEGORY_COLORS: Record<string, string> = {
   "Tips Belanja": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
   "Review Produk": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
