@@ -80,6 +80,7 @@ export function ProductsTab() {
   const [filterCategory, setFilterCategory] = React.useState("");
   const [filterMarketplace, setFilterMarketplace] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [filterHidden, setFilterHidden] = React.useState<"all" | "visible" | "hidden">("all");
 
   // ─── Queries ───
   const { data: categoriesData } = useQuery({
@@ -478,6 +479,8 @@ export function ProductsTab() {
     if (filterCategory && p.category !== filterCategory) return false;
     if (filterMarketplace && p.marketplace?.toLowerCase() !== filterMarketplace.toLowerCase()) return false;
     if (searchQuery && !p.title?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (filterHidden === "visible" && p.isHidden) return false;
+    if (filterHidden === "hidden" && !p.isHidden) return false;
     return true;
   });
 
@@ -684,12 +687,39 @@ export function ProductsTab() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="h-8 rounded-md border border-input bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-2 text-xs flex-1 min-w-[150px]"
           />
-          {(filterCategory || filterMarketplace || searchQuery) && (
+          {/* Filter: All / Visible / Hidden */}
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant={filterHidden === "all" ? "default" : "outline"}
+              className="h-8 text-xs px-2"
+              onClick={() => setFilterHidden("all")}
+            >
+              Semua ({allProducts.length})
+            </Button>
+            <Button
+              size="sm"
+              variant={filterHidden === "visible" ? "default" : "outline"}
+              className="h-8 text-xs px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+              onClick={() => setFilterHidden("visible")}
+            >
+              👁 Tampil ({allProducts.filter((p: any) => !p.isHidden).length})
+            </Button>
+            <Button
+              size="sm"
+              variant={filterHidden === "hidden" ? "default" : "outline"}
+              className="h-8 text-xs px-2 border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400"
+              onClick={() => setFilterHidden("hidden")}
+            >
+              🚫 Hidden ({allProducts.filter((p: any) => p.isHidden).length})
+            </Button>
+          </div>
+          {(filterCategory || filterMarketplace || searchQuery || filterHidden !== "all") && (
             <Button
               size="sm"
               variant="ghost"
               className="h-8 text-xs text-zinc-500"
-              onClick={() => { setFilterCategory(""); setFilterMarketplace(""); setSearchQuery(""); }}
+              onClick={() => { setFilterCategory(""); setFilterMarketplace(""); setSearchQuery(""); setFilterHidden("all"); }}
             >
               ✕ Reset
             </Button>
@@ -788,6 +818,52 @@ export function ProductsTab() {
                 <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshProgress ? "animate-spin" : ""}`} />
                 Refresh {selectedIds.size} Produk
               </Button>
+              {/* Bulk Hide */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400"
+                onClick={async () => {
+                  for (const id of Array.from(selectedIds)) {
+                    await fetch("/api/shopee-products", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({ id, isHidden: true }),
+                    });
+                  }
+                  queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+                  queryClient.invalidateQueries({ queryKey: ["products"] });
+                  setSelectedIds(new Set());
+                  toast({ title: `${selectedIds.size} produk di-hide` });
+                }}
+              >
+                <EyeOff className="w-3.5 h-3.5 mr-1" />
+                Hide {selectedIds.size} Produk
+              </Button>
+              {/* Bulk Unhide */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+                onClick={async () => {
+                  for (const id of Array.from(selectedIds)) {
+                    await fetch("/api/shopee-products", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({ id, isHidden: false }),
+                    });
+                  }
+                  queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+                  queryClient.invalidateQueries({ queryKey: ["products"] });
+                  setSelectedIds(new Set());
+                  toast({ title: `${selectedIds.size} produk di-unhide` });
+                }}
+              >
+                <Eye className="w-3.5 h-3.5 mr-1" />
+                Unhide {selectedIds.size} Produk
+              </Button>
               <Button
                 size="sm"
                 variant="destructive"
@@ -884,9 +960,28 @@ export function ProductsTab() {
 
                 {/* Actions */}
                 <div className="flex flex-col gap-1">
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEditProduct(p)}><Pencil className="w-3 h-3" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEditProduct(p)} title="Edit"><Pencil className="w-3 h-3" /></Button>
                   <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-500" onClick={() => refreshProductMutation.mutate(p.id)} disabled={refreshProductMutation.isPending} title="Refresh dari Shopee"><RefreshCw className={`w-3 h-3 ${refreshProductMutation.isPending ? "animate-spin" : ""}`} /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDeleteProductTarget(p)}><Trash2 className="w-3 h-3" /></Button>
+                  {/* Hide/Unhide button */}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className={`h-7 w-7 ${p.isHidden ? "text-emerald-500" : "text-orange-500"}`}
+                    onClick={async () => {
+                      await fetch("/api/shopee-products", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ id: p.id, isHidden: !p.isHidden }),
+                      });
+                      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+                      queryClient.invalidateQueries({ queryKey: ["products"] });
+                    }}
+                    title={p.isHidden ? "Unhide (tampilkan)" : "Hide (sembunyikan)"}
+                  >
+                    {p.isHidden ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDeleteProductTarget(p)} title="Hapus"><Trash2 className="w-3 h-3" /></Button>
                 </div>
               </div>
             ))}
