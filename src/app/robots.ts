@@ -15,12 +15,6 @@ export default function robots(): MetadataRoute.Robots {
           "/beli/",
         ],
       },
-      // Block jelajahbelanja.vercel.app dari di-index
-      {
-        userAgent: "*",
-        disallow: "/",
-        host: "https://jelajahbelanja.vercel.app",
-      },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
     host: SITE_URL,
