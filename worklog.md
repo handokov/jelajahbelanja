@@ -452,3 +452,154 @@ Stage Summary:
 - SEO keywords: 20 long-tail keyword produk anak untuk target Google.
 - Hero, footer, tentang page, JSON-LD semua konsisten fokus anak.
 - Next: generate blog artikel fokus produk anak + tambah produk di sub-kategori kurang.
+
+---
+Task ID: 2
+Agent: frontend-styling-expert
+Task: Build blog-tab.tsx admin component
+
+Work Log:
+- Read /home/z/my-project/worklog.md (12 prior task records) to understand project history and pivots
+- Studied /home/z/my-project/src/components/admin/categories-tab.tsx for established admin pattern (useQuery/useMutation/useToast/AlertDialog/rounded-2xl border card)
+- Studied shadcn Dialog, Button, Switch, Badge, Textarea, AlertDialog component APIs
+- Verified all 8 blog API endpoints (admin/blog GET/POST, admin/blog/[id] GET/PUT/DELETE, blog-generate POST/GET, blog-trending GET/POST) to confirm request/response shapes
+- Confirmed tailwindcss/typography plugin is registered in tailwind.config.ts (for `prose prose-sm dark:prose-invert` content preview) and `custom-scrollbar` class exists in globals.css
+- Created /home/z/my-project/src/components/admin/blog-tab.tsx (~620 lines) with:
+  - Strict TypeScript types: BlogArticle, BlogStats, BlogListResponse, TrendingSuggestion, TrendingResponse, BlogForm
+  - Helper functions: slugify(), formatShortDate() ("15 Jan 2025"), formatRelativeDate() (baru saja / X menit lalu / X jam lalu / X hari lalu / fallback to short date)
+  - 4 stat cards grid (Total/Published/Draft/AI with fuchsia/green/amber/violet colors + Lucide icons FileText/CheckCircle/FileEdit/Sparkles) via reusable StatCard sub-component
+  - Toolbar: debounced search input (350ms) + status filter (Semua/Published/Draft) + source filter (Semua/AI/Manual) + category dropdown (sourced from API categories list, falls back to DEFAULT_CATEGORIES) + Reset button + article count summary
+  - 3 action buttons: "Trending AI" (outline, Sparkles icon → opens Trending dialog), "Generate Acak" (outline, Wand2 icon → POST /api/blog-generate empty body with Loader2 spinner), "Tambah Artikel" (fuchsia primary, Plus icon → opens Editor dialog in create mode)
+  - Article list (max-h-[600px] overflow-y-auto custom-scrollbar) with each row showing: title (font-semibold line-clamp-2), excerpt (line-clamp-1), badges (category/published-draft/AI-manual/read-time), relative date, action buttons (Edit/View live as <a target=_blank>/Toggle publish Eye-EyeOff/Delete red)
+  - Empty state, loading state (Loader2 spinner), error state (AlertCircle)
+  - Editor Dialog (max-w-4xl max-h-[90vh] overflow-y-auto) with 2-col grid form: Title, Slug (with live URL preview /artikel/{slug}), Category (Input + datalist for autocomplete + custom value), Author, Excerpt, Meta Description (with char counter /160, amber when >160), Tags, Read Time, Content (Textarea min-h-[400px] font-mono text-xs), Preview toggle (renders HTML via dangerouslySetInnerHTML in `prose prose-sm dark:prose-invert max-w-none`), isPublished Switch
+  - Editor supports both CREATE (POST) and EDIT (PUT) modes — tracks editingArticle state; on Edit click pre-fills from list data (content included per API), falls back to GET /api/admin/blog/[id] only if content missing
+  - Trending Dialog (max-w-3xl max-h-[85vh]) with useQuery enabled only when dialog opens: loading spinner (~15 detik message), error state with retry button, list of 5 suggestions each as a card with title/category badge/search volume badge (Tinggi=green/Sedang=amber/Rendah=zinc)/reason/keyword/Generate button
+  - Delete AlertDialog with red action button
+  - All API calls use relative paths with credentials:"include" (cookie auth)
+  - On create/update/delete/toggle/generate success → invalidate query key ["admin-blog"] + toast notification
+  - Loading states everywhere: button spinners (Loader2 animate-spin), disabled states during async ops
+  - Brand colors: fuchsia accent for primary CTAs, NO indigo/blue (project rule)
+  - Responsive: grid-cols-2 md:grid-cols-4 stats, flex-col md:flex-row toolbar, full-width form fields stack on mobile
+- Ran `bun run lint` and `npx tsc --noEmit`:
+  - blog-tab.tsx: 0 errors, 0 warnings ✓
+  - 13 pre-existing lint errors in OTHER files (download/admin-page.tsx, scripts/*.js, outfit-style-board.tsx, products-tab.tsx) — not introduced by this task
+  - All TS errors pre-existing in other files (refresh-products/route.ts, CategoryPageClient.tsx, products-tab.tsx, affiliate.ts, etc.) — none in blog-tab.tsx
+
+Stage Summary:
+- File created: /home/z/my-project/src/components/admin/blog-tab.tsx (exports named BlogTab + default BlogTab)
+- All 8 API endpoints wired up with proper types and error handling
+- 6 useQuery/useMutation hooks: list query (debounced + 4 filters), trending query (lazy on dialog open), create/update/togglePublish/delete/generate mutations
+- Component NOT yet wired into /jb-mgr-admin/page.tsx — a follow-up agent or main agent needs to add `<BlogTab />` import + tab entry alongside CategoriesTab. The component is ready to drop in.
+- Lint + TypeScript both clean for this file
+
+---
+Task ID: blog-admin-manager
+Agent: main
+Task: Build Blog Manager tab in admin panel — user wants to view/edit/add blog articles from admin UI (currently only AI cron auto-generates, no manual management UI)
+
+Work Log:
+- Created 2 API routes for blog admin management:
+  - `/api/admin/blog/route.ts` — GET (list with search/filter/pagination/stats) + POST (create manual article)
+  - `/api/admin/blog/[id]/route.ts` — GET (single) + PUT (update partial) + DELETE (with revalidatePath)
+  - All routes protected by checkAuth() (admin cookie session)
+  - revalidatePath on /artikel, /artikel/[slug], / homepage after mutations
+- Created `/src/components/admin/blog-tab.tsx` (delegated to frontend-styling-expert subagent, Task ID 2)
+  - Stats bar (4 cards: Total/Published/Draft/AI with color-coded icons)
+  - Toolbar: debounced search 350ms, 3 filter dropdowns (Status/Source/Category), 3 action buttons (Trending AI / Generate Acak / Tambah Artikel)
+  - Article list (max-h-600px scrollable): title, excerpt, category/status/source badges, relative date, 4 action buttons per row (Edit / View live / Toggle publish / Delete)
+  - Editor Dialog (max-w-4xl): all fields (title, slug with URL preview, category combobox, excerpt, metaDescription with /160 counter, author, tags, readTime, content HTML textarea + Preview toggle via dangerouslySetInnerHTML, isPublished switch)
+  - Editor supports CREATE (POST) and EDIT (PUT) modes
+  - Trending Dialog: lazy useQuery fetches /api/blog-trending when open, shows 5 AI suggestions with category/searchVolume badges + Generate button per item
+  - Delete AlertDialog confirmation
+  - Helpers: slugify(), formatShortDate(), formatRelativeDate()
+  - 0 lint errors, 0 TS errors (verified)
+- Integrated BlogTab into `/src/app/jb-mgr-admin/page.tsx`:
+  - Changed TabsList grid-cols-8 → grid-cols-9
+  - Added Newspaper icon import + BlogTab import
+  - Added TabsTrigger "blog" + TabsContent with <BlogTab /> before security tab
+- Verification via agent-browser (local SQLite + dummy data):
+  - Login to /jb-mgr-login with ADMIN_SECRET → redirect to /jb-mgr-admin ✅
+  - Tab "Blog" appears in tablist ✅
+  - Click Blog tab → 4 articles render with stats, search, filters, 3 action buttons ✅
+  - Click "Tambah Artikel" → editor dialog opens with all fields (title, slug, category, excerpt, meta/160, author, tags, readTime, content+preview, publish switch) ✅
+  - Fill form + click "Buat Artikel" → article created, appears at top of list (total 5) ✅
+  - Click Edit → dialog opens in edit mode, fields pre-filled, button "Simpan Perubahan" ✅
+  - Edit title + save → title updated in list ✅
+  - Click Hapus → confirmation dialog "Hapus Artikel" → click Hapus → article deleted (total 5→4) ✅
+  - Click "Trending AI" → dialog opens (error state with retry button, expected since GROQ_API_KEY=dummy in local) ✅
+  - Filter dropdowns (Status/Source/Category) open with correct options ✅
+- API curl tests all passed: login, list, create, update, delete, stats
+- Restored prisma/schema.prisma provider to "postgresql" (was temporarily switched to sqlite for local verification) — production-safe, will not break Vercel deploy
+- .env: added ADMIN_SECRET=Shogun2000$ for local dev (production already has it in Vercel env vars)
+
+Stage Summary:
+- Blog Manager fully functional in admin panel at /jb-mgr-admin → tab "Blog"
+- User can now: view all articles, search, filter (status/source/category), create manual article, edit any field, toggle publish, delete with confirmation, generate AI random article, view AI trending suggestions + generate from them
+- All 4 existing AI-generated articles (in Neon production DB) will appear automatically when deployed to Vercel
+- revalidatePath ensures /artikel and homepage refresh instantly after create/update/delete
+- Files created: src/app/api/admin/blog/route.ts, src/app/api/admin/blog/[id]/route.ts, src/components/admin/blog-tab.tsx
+- Files modified: src/app/jb-mgr-admin/page.tsx (added Blog tab), .env (added ADMIN_SECRET), prisma/schema.prisma (restored to postgresql after temp sqlite switch)
+- 0 lint/TS errors in new files
+
+---
+Task ID: blog-cover-image
+Agent: main
+Task: User request — tambah fitur masukkan photo dari URL di blog admin, biar seperti blog berita (cover image)
+
+Work Log:
+- Added `coverImage String?` field to BlogArticle model in prisma/schema.prisma
+- Temporarily switched schema provider postgresql→sqlite for local verification, db push (added column), then restored to postgresql (production-safe)
+- Updated `/api/admin/blog/route.ts`:
+  - GET: added `coverImage: true` to select clause (now returned in list)
+  - POST: destructured `coverImage` from body, saved to DB (string trimmed, empty→null)
+- Updated `/api/admin/blog/[id]/route.ts`:
+  - PUT: added `coverImage` handling (typeof string check, trim, empty→null)
+- Updated `/src/lib/blog-data.ts`:
+  - Added optional `coverImage?: string | null` to BlogArticle interface (for static + DB consistency)
+- Updated `/src/components/admin/blog-tab.tsx`:
+  - Added `ImagePlus` + `Link as LinkIcon` to lucide imports
+  - Added `coverImage: string` to BlogForm interface + BlogArticle interface
+  - Added `coverImage: ""` to EMPTY_FORM
+  - Added `coverImage: article.coverImage || ""` in handleEditArticle form setter
+  - Added new "Cover Image (URL)" input field in editor dialog (between Excerpt and Meta Description):
+    - URL input with `type="url"`, font-mono
+    - Helper text: "Tempel URL gambar dari Shopee, Tokopedia, Cloudinary, atau situs apapun"
+    - Live preview thumbnail (aspect-video, object-cover) with onError fallback showing "URL gambar tidak valid / gagal dimuat"
+    - "Preview" badge overlay on thumbnail
+    - Red X button to clear cover URL
+- Updated `/src/app/artikel/[slug]/page.tsx` (article detail page):
+  - Added coverImage to generateMetadata openGraph.images (for social media sharing thumbnails)
+  - Added coverImage to JSON-LD Article schema (image field)
+  - Added coverImage to article object mapping from DB
+  - Rendered `<figure>` + `<img>` cover image ABOVE article content (full-width, rounded-2xl, aspect-video, shadow-sm) — news blog style
+- Updated `/src/app/artikel/page.tsx` (article list page):
+  - Added `coverImage: true` to db query select
+  - Restructured article card from `p-5/p-6` block to `flex flex-col md:flex-row`:
+    - Left/top: cover image thumbnail (md:w-48, aspect-video on mobile / aspect-square on desktop)
+    - Right/bottom: content (category badge, title, excerpt, read more)
+    - Hover effect: `group-hover:scale-105` zoom on thumbnail
+    - Cards WITHOUT cover image render as before (no thumbnail, full-width content)
+- Removed unused eslint-disable comments (lint clean: 0 errors, 0 warnings in edited files)
+
+Verification via agent-browser (local SQLite + dummy cover URLs from Unsplash):
+- Login admin → Blog tab → click Edit on article with cover → field "Cover Image (URL)" terisi URL + preview thumbnail muncul dengan badge "Preview" ✅
+- Open article detail page `/artikel/[slug]` → cover image rendered di atas content dengan `<figure>` tag, full-width ✅
+- Open list page `/artikel` → 3 thumbnails cover image muncul di card (untuk artikel yang punya cover) ✅
+- Click "Tambah Artikel" → fill title + cover URL + content → preview thumbnail muncul实时 → click "Buat Artikel" → toast "Artikel dibuat" + URL → article appears in list ✅
+- New article with cover saved to DB correctly (verified via API: coverImage field populated) ✅
+- New article detail page renders cover image with `<figure>` ✅
+- Restored schema to postgresql (production-safe for Vercel) — UI still renders, list empty locally because local .env uses SQLite URL (expected, Neon production DB will work on Vercel)
+
+Stage Summary:
+- Blog admin sekarang support cover image from URL — seperti blog berita
+- User bisa tempel URL gambar dari mana saja (Shopee, Tokopedia, Cloudinary, Unsplash, dll)
+- Cover image tampil di 3 tempat:
+  1. Editor preview (saat input URL, langsung muncul thumbnail)
+  2. List artikel `/artikel` (thumbnail kecil di kiri card, hover zoom)
+  3. Detail artikel `/artikel/[slug]` (full-width di atas content, style berita)
+- Bonus: cover image juga masuk ke OpenGraph meta (untuk share WhatsApp/Twitter/Facebook) + JSON-LD Article schema (untuk Google rich snippets)
+- AI-generated articles (via Groq cron) TIDAK otomatis dapat cover — user bisa edit manual untuk add cover kapanpun
+- Files modified: prisma/schema.prisma, src/app/api/admin/blog/route.ts, src/app/api/admin/blog/[id]/route.ts, src/lib/blog-data.ts, src/components/admin/blog-tab.tsx, src/app/artikel/[slug]/page.tsx, src/app/artikel/page.tsx
+- 0 lint errors, 0 TS errors in edited files
+- Production-safe: schema postgresql, no breaking changes to existing articles (coverImage nullable)

@@ -9,6 +9,7 @@
 export interface BlogArticle {
   slug: string;
   title: string;
+  coverImage?: string | null;
   excerpt: string;
   category: string;
   readTime: string;

@@ -52,3 +52,8 @@ prompt
 server.log
 # Skills directory
 /skills/.env.telegram
+
+# Local SQLite DB (sandbox only)
+db/
+# Agent browser artifacts
+tool-results/

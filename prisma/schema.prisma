@@ -127,6 +127,7 @@ model BlogArticle {
   id              String   @id @default(cuid())
   slug            String   @unique        // URL slug, cth: "10-produk-fashion-viral-tiktok-2025"
   title           String                  // judul artikel
+  coverImage      String?                 // URL gambar cover (dari Shopee/Tokopedia/Cloudinary/external)
   excerpt         String                  // ringkasan (untuk preview)
   category        String   @default("Tips Belanja") // kategori
   readTime        String   @default("5 menit")     // estimasi baca
