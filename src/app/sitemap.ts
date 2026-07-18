@@ -7,7 +7,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.jelajahbelanja
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
 
-  // Static pages — semua halaman non-produk
+  // Static pages
   const staticPages: MetadataRoute.Sitemap = [
     { url: SITE_URL, lastModified: now, changeFrequency: "hourly", priority: 1.0 },
     { url: `${SITE_URL}/artikel`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
@@ -18,7 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/disclaimer`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
   ];
 
-  // Category pages — /kategori/{id}
+  // Category pages — pakai slug dari nama kategori (bukan ID)
   let categoryPages: MetadataRoute.Sitemap = [];
   try {
     const cats = await db.category.findMany({
@@ -36,18 +36,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] Failed to fetch categories:", err);
   }
 
-  // Dynamic product pages
+  // Product pages — hanya yang enabled + not hidden
   let productPages: MetadataRoute.Sitemap = [];
   try {
     const products = await db.shopeeProduct.findMany({
       where: { enabled: true, isHidden: { not: true } },
-      select: {
-        id: true,
-        title: true,
-        updatedAt: true,
-        isPinned: true,
-        isViral: true,
-      },
+      select: { id: true, title: true, updatedAt: true, isPinned: true, isViral: true },
       orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     });
 
@@ -61,19 +55,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] Failed to fetch products:", err);
   }
 
-  // Blog articles
+  // Blog articles — dari DB (AI generated), bukan hardcode
   let blogPages: MetadataRoute.Sitemap = [];
   try {
-    // Cek apakah ada artikel di filesystem
-    const blogSlugs = ["cara-aman-belanja-online-shopee", "produk-viral-tiktok-worth-it", "rahasia-diskon-shopee"];
-    blogPages = blogSlugs.map((slug) => ({
-      url: `${SITE_URL}/artikel/${slug}`,
-      lastModified: now,
-      changeFrequency: "monthly" as const,
-      priority: 0.5,
+    const articles = await db.blogArticle.findMany({
+      where: { isPublished: true },
+      select: { slug: true, updatedAt: true },
+      orderBy: { publishedAt: "desc" },
+    });
+    blogPages = articles.map(a => ({
+      url: `${SITE_URL}/artikel/${a.slug}`,
+      lastModified: a.updatedAt,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
     }));
   } catch (err) {
-    console.error("[sitemap] Failed to fetch blog:", err);
+    console.error("[sitemap] Failed to fetch blog articles:", err);
   }
 
   return [...staticPages, ...categoryPages, ...productPages, ...blogPages];
