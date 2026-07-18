@@ -603,3 +603,56 @@ Stage Summary:
 - Files modified: prisma/schema.prisma, src/app/api/admin/blog/route.ts, src/app/api/admin/blog/[id]/route.ts, src/lib/blog-data.ts, src/components/admin/blog-tab.tsx, src/app/artikel/[slug]/page.tsx, src/app/artikel/page.tsx
 - 0 lint errors, 0 TS errors in edited files
 - Production-safe: schema postgresql, no breaking changes to existing articles (coverImage nullable)
+
+---
+Task ID: blog-cover-product-picker
+Agent: main
+Task: User request — photo blog bisa masukkan dari URL produk JB (misal blog tumbler, ambil foto produk tumbler yang ada di JB)
+
+Work Log:
+- Created `/api/admin/blog-cover-products/route.ts`:
+  - GET, cookie auth (checkAuth from lib/admin-auth)
+  - Return field minimal: id, title, image, price, originalPrice, discountPercent, category, marketplace, isPinned, isHidden
+  - Filter by category (DB level) + search by title/category (app-level toLowerCase, cross-DB compat — works di sqlite & postgresql)
+  - Return distinct categories for filter dropdown
+  - Limit 100, max 200
+- Updated `/src/components/admin/blog-tab.tsx`:
+  - Added `Package` icon import
+  - Added PickerProduct + PickerResponse interfaces
+  - Added state: productPickerOpen, productSearchInput, productSearch (debounced 300ms), productCategoryFilter
+  - Added useQuery for products (lazy — enabled: productPickerOpen, staleTime 60s)
+  - Added helper formatRupiah()
+  - Added "Pilih Produk" button next to cover image URL input (fuchsia outline, Package icon)
+  - Added Product Picker Dialog (max-w-4xl, flex-col):
+    - Header: "Pilih Foto dari Produk JB" + total count
+    - Toolbar: search input (with Search icon) + category filter dropdown
+    - Grid 2-4 cols responsive, scrollable max-h-60vh, custom-scrollbar
+    - Product card: aspect-square image + title (line-clamp-2) + price (fuchsia) + category badge + marketplace badge (uppercase)
+    - PIN badge (fuchsia) for pinned products, HIDDEN badge (zinc) for hidden products
+    - Hover effect: image zoom (scale-105) + dark overlay with "Pilih" button
+    - onError fallback: "No image" placeholder
+    - Click card → setForm coverImage + close dialog + toast "Cover image dipilih"
+    - Loading state: spinner "Memuat produk..."
+    - Empty state: "Tidak ada produk yang cocok" / "Belum ada produk di JB"
+- Fixed cross-DB search issue: `mode: "insensitive"` not supported in sqlite → moved search to app-level filter (toLowerCase includes), works di both sqlite (local) & postgresql (production)
+- Verification via agent-browser (local SQLite + 8 dummy products):
+  - Login → Blog tab → Tambah Artikel → "Pilih Produk" button visible ✅
+  - Click "Pilih Produk" → dialog opens with 8 products in grid ✅
+  - Product cards show: image, title, price (Rp), category badge, marketplace badge ✅
+  - PIN badge on pinned products, HIDDEN badge on hidden products ✅
+  - Search "tumbler" → filtered to 2 tumbler products ✅
+  - Click product → cover field auto-filled with product image URL + dialog closes + toast ✅
+  - Cover preview thumbnail renders with selected product image ✅
+- Pushed to GitHub: commit 5793146, Vercel auto-deploy confirmed (HTTP 200)
+
+Stage Summary:
+- User sekarang bisa pilih cover image blog dari produk JB dengan 1 klik
+- Cara pakai: di editor blog → field Cover Image → klik "Pilih Produk" → cari/klik produk → foto otomatis jadi cover
+- Search case-insensitive (work di production postgresql + local sqlite)
+- Filter by category untuk narrowing down (Tumbler Anak, Sekolah Anak, dll)
+- PIN & HIDDEN badge bantu user identify produk featured/hidden
+- 2 commits pushed:
+  1. 0c6581a — Blog Manager admin panel + cover image from URL
+  2. 5793146 — Product Picker untuk cover image blog
+- Production live & verified: jelajahbelanja.com/jb-mgr-login HTTP 200
+- 0 lint errors, 0 TS errors
