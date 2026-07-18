@@ -44,6 +44,7 @@ import {
   AlertCircle,
   ImagePlus,
   Link as LinkIcon,
+  Package,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -102,6 +103,26 @@ interface TrendingResponse {
   trending: TrendingSuggestion[];
   error?: string;
   raw?: string;
+}
+
+interface PickerProduct {
+  id: string;
+  title: string;
+  image: string;
+  price: number;
+  originalPrice: number | null;
+  discountPercent: number | null;
+  category: string;
+  marketplace: string;
+  isPinned: boolean;
+  isHidden: boolean;
+}
+
+interface PickerResponse {
+  success: boolean;
+  products: PickerProduct[];
+  categories: string[];
+  total: number;
 }
 
 interface BlogForm {
@@ -177,6 +198,10 @@ function formatRelativeDate(isoDate: string | null | undefined): string {
   return formatShortDate(isoDate);
 }
 
+function formatRupiah(n: number): string {
+  return "Rp" + n.toLocaleString("id-ID");
+}
+
 // ─── Component ───
 export function BlogTab() {
   const queryClient = useQueryClient();
@@ -208,6 +233,18 @@ export function BlogTab() {
   // ─── Trending state ───
   const [trendingOpen, setTrendingOpen] = React.useState(false);
   const [generatingTrendingTitle, setGeneratingTrendingTitle] = React.useState<string | null>(null);
+
+  // ─── Product Picker state (untuk pilih cover image dari produk JB) ───
+  const [productPickerOpen, setProductPickerOpen] = React.useState(false);
+  const [productSearchInput, setProductSearchInput] = React.useState("");
+  const [productSearch, setProductSearch] = React.useState("");
+  const [productCategoryFilter, setProductCategoryFilter] = React.useState("");
+
+  // Debounce product search
+  React.useEffect(() => {
+    const t = setTimeout(() => setProductSearch(productSearchInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [productSearchInput]);
 
   // ─── List Query ───
   const { data, isLoading, error } = useQuery({
@@ -254,6 +291,27 @@ export function BlogTab() {
     enabled: trendingOpen,
     staleTime: 5 * 60 * 1000,
     retry: false,
+  });
+
+  // ─── Product Picker Query (lazy, hanya saat picker open) ───
+  const { data: pickerData, isLoading: pickerLoading } = useQuery<PickerResponse>({
+    queryKey: ["blog-cover-products", productSearch, productCategoryFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (productSearch) params.set("q", productSearch);
+      if (productCategoryFilter) params.set("category", productCategoryFilter);
+      params.set("limit", "100");
+      const res = await fetch(`/api/admin/blog-cover-products?${params.toString()}`, {
+        credentials: "include",
+      });
+      const json = await res.json().catch(() => ({ success: false, products: [], categories: [] }));
+      if (!res.ok) {
+        return { success: false, products: [], categories: [], total: 0 } as PickerResponse;
+      }
+      return json as PickerResponse;
+    },
+    enabled: productPickerOpen,
+    staleTime: 60 * 1000,
   });
 
   // ─── Mutations ───
@@ -846,6 +904,17 @@ export function BlogTab() {
                   onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
                   className="font-mono text-xs flex-1"
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-fuchsia-600 hover:text-fuchsia-700 border-fuchsia-200 hover:border-fuchsia-300 dark:border-fuchsia-800 dark:hover:border-fuchsia-700 whitespace-nowrap"
+                  onClick={() => setProductPickerOpen(true)}
+                  title="Pilih foto dari produk JB"
+                >
+                  <Package className="w-3.5 h-3.5 mr-1" />
+                  Pilih Produk
+                </Button>
                 {form.coverImage && (
                   <Button
                     type="button"
@@ -860,7 +929,7 @@ export function BlogTab() {
                 )}
               </div>
               <p className="text-[10px] text-zinc-500">
-                Tempel URL gambar dari Shopee, Tokopedia, Cloudinary, atau situs apapun. Akan tampil sebagai foto utama di blog &amp; halaman artikel.
+                Tempel URL gambar dari Shopee, Tokopedia, Cloudinary, atau klik <strong>"Pilih Produk"</strong> untuk ambil foto dari produk JB.
               </p>
               {/* Preview thumbnail */}
               {form.coverImage && (
@@ -1124,6 +1193,146 @@ export function BlogTab() {
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setTrendingOpen(false)}>
               Tutup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Product Picker Dialog (pilih cover dari produk JB) ─── */}
+      <Dialog open={productPickerOpen} onOpenChange={(o) => {
+        setProductPickerOpen(o);
+        if (!o) {
+          setProductSearchInput("");
+          setProductSearch("");
+          setProductCategoryFilter("");
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-fuchsia-600" />
+              Pilih Foto dari Produk JB
+            </DialogTitle>
+            <DialogDescription>
+              Klik produk untuk pakai fotonya sebagai cover image artikel. Total {pickerData?.total ?? 0} produk.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Toolbar: search + category filter */}
+          <div className="flex flex-col sm:flex-row gap-2 pb-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+              <Input
+                placeholder="Cari produk (judul / kategori)..."
+                value={productSearchInput}
+                onChange={(e) => setProductSearchInput(e.target.value)}
+                className="pl-8 text-xs h-9"
+              />
+            </div>
+            <select
+              value={productCategoryFilter}
+              onChange={(e) => setProductCategoryFilter(e.target.value)}
+              className="text-xs h-9 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950"
+            >
+              <option value="">Semua Kategori ({pickerData?.products.length ?? 0})</option>
+              {(pickerData?.categories ?? []).map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Product grid — scrollable */}
+          <div className="flex-1 overflow-y-auto max-h-[60vh] custom-scrollbar">
+            {pickerLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2 text-zinc-500">
+                <Loader2 className="w-6 h-6 animate-spin text-fuchsia-600" />
+                <p className="text-xs">Memuat produk...</p>
+              </div>
+            ) : !pickerData?.products || pickerData.products.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2 text-zinc-500">
+                <Package className="w-8 h-8 text-zinc-300" />
+                <p className="text-xs">
+                  {productSearch || productCategoryFilter
+                    ? "Tidak ada produk yang cocok dengan filter."
+                    : "Belum ada produk di JB."}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-1">
+                {pickerData.products.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setForm({ ...form, coverImage: p.image });
+                      setProductPickerOpen(false);
+                      setProductSearchInput("");
+                      setProductSearch("");
+                      setProductCategoryFilter("");
+                      toast({
+                        title: "Cover image dipilih",
+                        description: p.title.slice(0, 60) + (p.title.length > 60 ? "..." : ""),
+                      });
+                    }}
+                    className="group flex flex-col text-left rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-fuchsia-400 hover:shadow-md transition-all"
+                  >
+                    {/* Product image */}
+                    <div className="relative aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                      <img
+                        src={p.image}
+                        alt={p.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        loading="lazy"
+                        onError={(e) => {
+                          const t = e.currentTarget as HTMLImageElement;
+                          t.style.display = "none";
+                          if (t.parentElement) {
+                            t.parentElement.innerHTML = '<div class="flex items-center justify-center w-full h-full text-zinc-400 text-[10px]">No image</div>';
+                          }
+                        }}
+                      />
+                      {/* Badges overlay */}
+                      <div className="absolute top-1 left-1 flex flex-col gap-0.5">
+                        {p.isPinned && (
+                          <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-fuchsia-600 text-white">PIN</span>
+                        )}
+                        {p.isHidden && (
+                          <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-zinc-600 text-white">HIDDEN</span>
+                        )}
+                      </div>
+                      {/* Hover hint */}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                        <span className="text-[10px] font-semibold text-white bg-fuchsia-600 px-2 py-1 rounded">
+                          Pilih
+                        </span>
+                      </div>
+                    </div>
+                    {/* Product info */}
+                    <div className="p-2 flex flex-col gap-0.5">
+                      <p className="text-[11px] font-medium line-clamp-2 leading-tight text-zinc-700 dark:text-zinc-300">
+                        {p.title}
+                      </p>
+                      <p className="text-[11px] font-bold text-fuchsia-600">
+                        {formatRupiah(p.price)}
+                      </p>
+                      <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                        <span className="text-[8px] px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                          {p.category}
+                        </span>
+                        <span className="text-[8px] px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 uppercase">
+                          {p.marketplace}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setProductPickerOpen(false)}>
+              <X className="w-3.5 h-3.5 mr-1" /> Tutup
             </Button>
           </DialogFooter>
         </DialogContent>
