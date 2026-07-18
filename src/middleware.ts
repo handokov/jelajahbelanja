@@ -157,5 +157,6 @@ export const config = {
   matcher: [
     "/jb-mgr-admin/:path*",
     "/api/:path*",
+    "/artikel/:path*",
   ],
 };
