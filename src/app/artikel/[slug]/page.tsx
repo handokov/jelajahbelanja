@@ -76,6 +76,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           description: dbArticle.metaDescription,
           type: "article",
           publishedTime: dbArticle.publishedAt.toISOString(),
+          ...(dbArticle.coverImage ? { images: [{ url: dbArticle.coverImage }] } : {}),
         },
       };
     }
@@ -105,6 +106,7 @@ export default async function ArtikelDetailPage({ params }: Props) {
         article = {
           slug: dbArticle.slug,
           title: dbArticle.title,
+          coverImage: dbArticle.coverImage,
           excerpt: dbArticle.excerpt,
           category: dbArticle.category,
           readTime: dbArticle.readTime,
@@ -136,6 +138,7 @@ export default async function ArtikelDetailPage({ params }: Props) {
     description: article.metaDescription,
     datePublished: article.publishedAt,
     dateModified: article.updatedAt,
+    ...(article.coverImage ? { image: [article.coverImage] } : {}),
     author: {
       "@type": "Organization",
       name: article.author,
@@ -206,6 +209,18 @@ export default async function ArtikelDetailPage({ params }: Props) {
 
       {/* Article Content */}
       <article className="container mx-auto px-4 max-w-3xl py-8">
+        {/* Cover Image — tampil di atas content, full-width, style berita */}
+        {article.coverImage && (
+          <figure className="-mt-4 md:-mt-8 mb-6 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 shadow-sm">
+            <img
+              src={article.coverImage}
+              alt={article.title}
+              className="w-full aspect-video object-cover"
+              loading="eager"
+            />
+          </figure>
+        )}
+
         <div
           className="prose prose-zinc dark:prose-invert max-w-none
             prose-headings:font-bold prose-headings:tracking-tight

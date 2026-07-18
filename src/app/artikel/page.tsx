@@ -40,6 +40,7 @@ export default async function ArtikelPage() {
   let dbArticles: Array<{
     slug: string;
     title: string;
+    coverImage: string | null;
     excerpt: string;
     category: string;
     readTime: string;
@@ -50,7 +51,7 @@ export default async function ArtikelPage() {
     dbArticles = await db.blogArticle.findMany({
       where: { isPublished: true },
       orderBy: { publishedAt: "desc" },
-      select: { slug: true, title: true, excerpt: true, category: true, readTime: true, publishedAt: true, tags: true },
+      select: { slug: true, title: true, coverImage: true, excerpt: true, category: true, readTime: true, publishedAt: true, tags: true },
     });
   } catch {
     // DB belum ready, skip
@@ -61,6 +62,7 @@ export default async function ArtikelPage() {
     ...dbArticles.map(a => ({
       slug: a.slug,
       title: a.title,
+      coverImage: a.coverImage,
       excerpt: a.excerpt,
       category: a.category,
       readTime: a.readTime,
@@ -70,6 +72,7 @@ export default async function ArtikelPage() {
     ...blogArticles.map(a => ({
       slug: a.slug,
       title: a.title,
+      coverImage: a.coverImage ?? null,
       excerpt: a.excerpt,
       category: a.category,
       readTime: a.readTime,
@@ -107,7 +110,19 @@ export default async function ArtikelPage() {
             href={`/artikel/${article.slug}`}
             className="group block rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden hover:shadow-lg hover:border-fuchsia-300 dark:hover:border-fuchsia-700 transition-all duration-200"
           >
-            <div className="p-5 md:p-6">
+            <div className="flex flex-col md:flex-row">
+              {/* Cover Image thumbnail — kiri (desktop) / atas (mobile) */}
+              {article.coverImage && (
+                <div className="md:w-48 md:flex-shrink-0 aspect-video md:aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                  <img
+                    src={article.coverImage}
+                    alt={article.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                </div>
+              )}
+              <div className="p-5 md:p-6 flex-1">
               {/* Category + Read Time */}
               <div className="flex items-center gap-2 mb-3">
                 <span
@@ -145,6 +160,7 @@ export default async function ArtikelPage() {
               <div className="flex items-center gap-1 text-sm font-semibold text-fuchsia-600 dark:text-fuchsia-400 group-hover:gap-2 transition-all">
                 Baca selengkapnya
                 <ArrowRight className="w-4 h-4" />
+              </div>
               </div>
             </div>
           </Link>

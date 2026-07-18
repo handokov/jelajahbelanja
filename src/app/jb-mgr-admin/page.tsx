@@ -17,6 +17,7 @@ import {
   LogOut,
   Megaphone,
   Zap,
+  Newspaper,
 } from "lucide-react";
 import { BulkUploadTab } from "@/components/bulk-upload-tab";
 import { SecurityTab } from "@/components/security-tab";
@@ -26,6 +27,7 @@ import { BannersTab } from "@/components/admin/banners-tab";
 import { CategoriesTab } from "@/components/admin/categories-tab";
 import { AffiliateTab } from "@/components/admin/affiliate-tab";
 import { AffiliateAdsTab } from "@/components/admin/affiliate-ads-tab";
+import { BlogTab } from "@/components/admin/blog-tab";
 
 export default function AdminPage() {
   return (
@@ -73,7 +75,7 @@ export default function AdminPage() {
       {/* Main */}
       <main className="container mx-auto px-4 max-w-5xl py-6">
         <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="grid w-full max-w-4xl grid-cols-8 h-11">
+          <TabsList className="grid w-full max-w-4xl grid-cols-9 h-11">
             <TabsTrigger value="products" className="text-sm">
               <Package className="w-4 h-4 mr-1.5" />
               Produk
@@ -101,6 +103,10 @@ export default function AdminPage() {
             <TabsTrigger value="affiliate" className="text-sm">
               <Link2 className="w-4 h-4 mr-1.5" />
               Link Affiliate
+            </TabsTrigger>
+            <TabsTrigger value="blog" className="text-sm">
+              <Newspaper className="w-4 h-4 mr-1.5" />
+              Blog
             </TabsTrigger>
             <TabsTrigger value="security" className="text-sm">
               <Shield className="w-4 h-4 mr-1.5" />
@@ -135,6 +141,10 @@ export default function AdminPage() {
 
           <TabsContent value="affiliate" className="space-y-4">
             <AffiliateTab />
+          </TabsContent>
+
+          <TabsContent value="blog" className="space-y-4">
+            <BlogTab />
           </TabsContent>
 
           <TabsContent value="security" className="space-y-4">
