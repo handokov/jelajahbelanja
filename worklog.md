@@ -656,3 +656,46 @@ Stage Summary:
   2. 5793146 — Product Picker untuk cover image blog
 - Production live & verified: jelajahbelanja.com/jb-mgr-login HTTP 200
 - 0 lint errors, 0 TS errors
+
+---
+Task ID: fix-blog-broken-migration
+Agent: main
+Task: User report — "Invalid prisma.blogArticle.findMany(): The column BlogArticle.coverImage does not exist in the current database. blog tidak tampil"
+
+Work Log:
+- Root cause analysis:
+  - Migration file `prisma/migrations/20260718_add_cover_image_to_blog_article/migration.sql` sudah di-push (commit 0c6581a)
+  - Tapi Vercel build TIDAK run `prisma migrate deploy` (di-skip sejak commit 3cbc975)
+  - Commit 3cbc975 skip karena: .env di repo pakai SQLite file: → prisma migrate deploy coba connect ke SQLite file yang tidak ada di Vercel → P1002 timeout
+  - Schema sudah punya coverImage column, tapi Neon DB belum ada kolomnya → prisma query error
+- Fix applied:
+  1. package.json build script: tambah `prisma migrate deploy` sebelum `next build`
+     - Sekarang: `prisma generate && prisma migrate deploy && next build && ...`
+  2. .env di repo: hapus DATABASE_URL SQLite, ganti dengan comment penjelasan
+     - Supaya Vercel build pakai Vercel Project Settings env (Neon URL), bukan .env file SQLite
+  3. Buat .env.local (gitignored) dengan SQLite URL untuk local dev
+     - Local dev tetap work dengan .env.local override .env
+- Commit 8b79d3f pushed ke GitHub
+- Vercel auto-deploy: build run `prisma migrate deploy` → connect ke Neon → run ALTER TABLE → coverImage column created
+- Verification via curl + agent-browser di PRODUCTION (jelajahbelanja.com):
+  - Blog API return 4 artikel dengan field coverImage (tidak 500 error lagi) ✅
+  - /artikel list page render 200 ✅
+  - /artikel/[slug] detail page render 200 ✅
+  - /jb-mgr-admin → Blog tab → 4 artikel muncul dengan semua tombol ✅
+  - Editor dialog: field Cover Image + tombol "Pilih Produk" muncul ✅
+  - Product Picker: load 100 produk dari Neon (foto, harga, kategori) ✅
+  - Klik produk tumbler → cover field terisi URL Cloudinary produk ✅
+  - Save → cover tersimpan ke Neon (verified via API: coverImage field populated) ✅
+  - Article detail page: cover image render dengan <figure> + <img> ✅
+  - Article list page: thumbnail cover image di card ✅
+
+Stage Summary:
+- Blog production FIXED — coverImage column ada di Neon, blog tampil normal
+- Build script sekarang auto-run migration di setiap deploy (permanent fix, future migrations akan auto-apply)
+- Local dev pakai .env.local (SQLite, gitignored), production pakai Vercel dashboard env (Neon)
+- Cover image feature fully working end-to-end di production:
+  - Admin bisa pilih foto dari produk JB (1 klik)
+  - Atau paste URL manual dari situs apapun
+  - Cover tampil di list artikel + detail page + social share (OpenGraph) + Google rich snippets (JSON-LD)
+- 1 commit pushed: 8b79d3f "fix: blog broken — run prisma migrate deploy di Vercel build"
+- Production verified: jelajahbelanja.com/artikel & /jb-mgr-admin both working
