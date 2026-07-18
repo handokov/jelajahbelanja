@@ -7,6 +7,26 @@ import { db } from "@/lib/db";
 import { Clock, ArrowLeft, Tag } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+// Daftar slug artikel lama yang sudah dihapus — return 404 supaya Google hapus dari index
+const DELETED_SLUGS = [
+  "panduan-shopee-affiliate-pemula",
+  "cara-aman-belanja-online-shopee",
+  "produk-viral-tiktok-worth-it",
+  "rahasia-diskon-shopee-promo-cashback",
+  "rekomendasi-hadiah-budget-murah",
+  "cara-daftar-affiliate-shopee-untuk-pemula",
+  "skincare-viral-yang-beneran-bagus-review-jujur",
+  "produk-home-living-estetik-di-bawah-rp100rb",
+  "10-produk-viral-tiktok-yang-worth-it-beli-2025",
+  "cara-dapat-diskon-shopee-hingga-70-yang-sering-terlewat",
+  "rahasia-gratis-ongkir-shopee-tokopedia-tanpa-minimum-belanja",
+  "tips-belanja-online-aman-untuk-pemula-2025",
+  "produk-murah-meriah-di-bawah-rp20rb-yang-worth-it",
+  "cara-pilih-produk-viral-yang-beneran-bagus-bukan-cuma-hype",
+  "10-produk-fashion-viral-tiktok-yang-worth-it-beli",
+  "10-mainan-edukatif-ai-yang-viral-di-tiktok-2026-pilihan-terbaik-untuk-anak-usia-",
+];
 const CATEGORY_COLORS: Record<string, string> = {
   "Tips Belanja": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
   "Review Produk": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
@@ -68,6 +88,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ArtikelDetailPage({ params }: Props) {
   const { slug } = await params;
+
+  // Block artikel lama yang sudah dihapus — return 404 supaya Google hapus dari index
+  if (DELETED_SLUGS.includes(slug)) {
+    notFound();
+  }
 
   // Cek static dulu
   let article = getArticleBySlug(slug);
