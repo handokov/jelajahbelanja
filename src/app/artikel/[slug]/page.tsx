@@ -226,7 +226,7 @@ export default async function ArtikelDetailPage({ params }: Props) {
             prose-headings:font-bold prose-headings:tracking-tight
             prose-h2:text-xl md:prose-h2:text-2xl prose-h2:mt-10 prose-h2:mb-4
             prose-h3:text-lg md:prose-h3:text-xl prose-h3:mt-7 prose-h3:mb-3
-            prose-p:text-zinc-700 dark:prose-p:text-zinc-300 prose-p:leading-[1.85] prose-p:mb-5
+            prose-p:text-zinc-700 dark:prose-p:text-zinc-300 prose-p:leading-[1.85] prose-p:mb-8
             prose-li:text-zinc-700 dark:prose-li:text-zinc-300 prose-li:leading-[1.7] prose-li:my-1.5
             prose-strong:text-zinc-900 dark:prose-strong:text-zinc-100
             prose-a:text-fuchsia-600 dark:prose-a:text-fuchsia-400 prose-a:no-underline hover:prose-a:underline
