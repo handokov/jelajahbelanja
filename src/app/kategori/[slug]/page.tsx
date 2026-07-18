@@ -39,10 +39,14 @@ export async function generateMetadata({ params }: Props) {
   }
 
   return {
-    title: `${category.name} - Produk Viral & Best Seller`,
-    description: `Temukan produk ${category.name} viral dan best seller dari Shopee, Tokopedia, Lazada, Blibli. Update terbaru, harga termurah, diskon terbesar.`,
+    title: `${category.name} - Produk Anak Terbaik & Best Seller | JelajahBelanja`,
+    description: `Kurasi produk ${category.name} terbaik dari Shopee & Tokopedia. Rating ≥ 4.8, harga termurah, diskon terbesar. Update terbaru setiap hari.`,
     alternates: {
-      canonical: `/kategori/${category.id}`,
+      canonical: `/kategori/${slugify(category.name)}`,
+    },
+    openGraph: {
+      title: `${category.name} - Produk Anak Terbaik | JelajahBelanja`,
+      description: `Kurasi produk ${category.name} terbaik dari Shopee & Tokopedia. Rating ≥ 4.8.`,
     },
   };
 }
