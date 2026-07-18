@@ -159,11 +159,11 @@ export async function POST(req: NextRequest) {
           messages: [
             {
               role: "system",
-              content: "Anda adalah jurnalis dan penulis blog Indonesia yang ahli dalam tips belanja online produk anak, review produk, dan gaya hidup keluarga. Tulis dalam bahasa Indonesia yang natural, santai, informatif, dan seperti ditulis manusia sungguhan. Format output sebagai HTML yang siap ditampilkan (h2, p, ul, li, strong). JANGAN pakai markdown (##, **, *). Tulis teks biasa dengan tag HTML.",
+              content: "Anda adalah jurnalis dan penulis blog Indonesia yang ahli dalam tips belanja online produk anak, review produk, dan gaya hidup keluarga. Tulis dalam bahasa Indonesia yang natural, santai, informatif, dan seperti ditulis manusia sungguhan. Format output sebagai HTML yang siap ditampilkan (h2, p, ul, li, strong). JANGAN pakai markdown (##, **, *). Tulis teks biasa dengan tag HTML. PENTING: Setelah setiap paragraf <p>...</p>, sisipkan <p>&nbsp;</p> untuk memberi jarak kosong antar paragraf (seperti layout berita). Jangan rapat-rapat.",
             },
             {
               role: "user",
-              content: `${topic.prompt}\n\nJudul artikel: ${topic.title}\n\nTulis artikel lengkap (minimal 1000 kata) dalam format HTML. Mulai dengan paragraf pembuka yang menarik dan hook yang kuat, lalu isi dengan 4-5 sub-heading (h2) yang detail, sertakan tips praktis dan data konkret, dan tutup dengan kesimpulan yang actionable. Tone: seperti ibu/ayah yang sharing pengalaman belanja produk anak.`,
+              content: `${topic.prompt}\n\nJudul artikel: ${topic.title}\n\nTulis artikel lengkap (minimal 1000 kata) dalam format HTML. Mulai dengan paragraf pembuka yang menarik dan hook yang kuat, lalu isi dengan 4-5 sub-heading (h2) yang detail, sertakan tips praktis dan data konkret, dan tutup dengan kesimpulan yang actionable. Tone: seperti ibu/ayah yang sharing pengalaman belanja produk anak.\n\nFORMAT WAJIB — setiap paragraf dipisah dengan <p>&nbsp;</p>:\n<p>Paragraf pertama...</p>\n<p>&nbsp;</p>\n<p>Paragraf kedua...</p>\n<p>&nbsp;</p>\n<h2>Sub-judul</h2>\n<p>&nbsp;</p>\n<p>Paragraf isi...</p>`,
             },
           ],
           max_tokens: 4096,
