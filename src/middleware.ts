@@ -66,6 +66,32 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // === 1b. Return 404 untuk artikel lama yang sudah dihapus ===
+  if (pathname.startsWith("/artikel/")) {
+    const slug = pathname.replace("/artikel/", "");
+    const DELETED_SLUGS = [
+      "panduan-shopee-affiliate-pemula",
+      "cara-aman-belanja-online-shopee",
+      "produk-viral-tiktok-worth-it",
+      "rahasia-diskon-shopee-promo-cashback",
+      "rekomendasi-hadiah-budget-murah",
+      "cara-daftar-affiliate-shopee-untuk-pemula",
+      "skincare-viral-yang-beneran-bagus-review-jujur",
+      "produk-home-living-estetik-di-bawah-rp100rb",
+      "10-produk-viral-tiktok-yang-worth-it-beli-2025",
+      "cara-dapat-diskon-shopee-hingga-70-yang-sering-terlewat",
+      "rahasia-gratis-ongkir-shopee-tokopedia-tanpa-minimum-belanja",
+      "tips-belanja-online-aman-untuk-pemula-2025",
+      "produk-murah-meriah-di-bawah-rp20rb-yang-worth-it",
+      "cara-pilih-produk-viral-yang-beneran-bagus-bukan-cuma-hype",
+      "10-produk-fashion-viral-tiktok-yang-worth-it-beli",
+      "10-mainan-edukatif-ai-yang-viral-di-tiktok-2026-pilihan-terbaik-untuk-anak-usia-",
+    ];
+    if (DELETED_SLUGS.includes(slug)) {
+      return NextResponse.rewrite(new URL("/404", req.url));
+    }
+  }
+
   // === 2. Protect admin API routes ===
   if (pathname.startsWith("/api/") && isAdminApiPath(pathname, method)) {
     const adminSecret = process.env.ADMIN_SECRET;
