@@ -88,7 +88,14 @@ export async function middleware(req: NextRequest) {
       "10-mainan-edukatif-ai-yang-viral-di-tiktok-2026-pilihan-terbaik-untuk-anak-usia-",
     ];
     if (DELETED_SLUGS.includes(slug)) {
-      return NextResponse.rewrite(new URL("/404", req.url));
+      // Return 404 langsung — headers untuk bypass cache
+      return new NextResponse(null, {
+        status: 404,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "X-Robots-Tag": "noindex, nofollow",
+        },
+      });
     }
   }
 
