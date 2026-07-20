@@ -36,6 +36,30 @@ export async function GET(
       `[beli] Click blocked: IP=${guard.ip} product=${dbId} reason=${guard.reason}`
     );
 
+    // ─── Log blocked click ke DB (utk analisis fraud pattern) ───
+    // Fire-and-forget — ambil info produk dulu, lalu log
+    db.shopeeProduct.findUnique({
+      where: { id: dbId },
+      select: { title: true, marketplace: true, category: true },
+    }).then((product) => {
+      if (!product) return;
+      return db.productClick.create({
+        data: {
+          productId: dbId,
+          productTitle: product.title.slice(0, 200),
+          marketplace: product.marketplace || "unknown",
+          category: product.category || "unknown",
+          ipAddress: guard.ip,
+          userAgent: request.headers.get("user-agent")?.slice(0, 500) || null,
+          referer: request.headers.get("referer")?.slice(0, 500) || null,
+          blocked: true,
+          blockReason: guard.reason || "Unknown",
+        },
+      });
+    }).catch((err) => {
+      console.error("[beli] Failed to log blocked click:", err);
+    });
+
     // Return halaman peringatan (bukan redirect ke Shopee)
     const html = `<!DOCTYPE html>
 <html lang="id">
@@ -93,7 +117,7 @@ export async function GET(
   try {
     const product = await db.shopeeProduct.findUnique({
       where: { id: dbId },
-      select: { url: true, affiliateUrl: true, title: true },
+      select: { url: true, affiliateUrl: true, title: true, marketplace: true, category: true },
     });
 
     if (!product) {
@@ -103,6 +127,23 @@ export async function GET(
 
     // Priority: affiliateUrl (shope.ee/xxx) > original URL
     const targetUrl = product.affiliateUrl || product.url;
+
+    // ─── Log klik ke DB (untuk report analytics per produk) ───
+    // Fire-and-forget — tidak block redirect
+    db.productClick.create({
+      data: {
+        productId: dbId,
+        productTitle: product.title.slice(0, 200),
+        marketplace: product.marketplace || "unknown",
+        category: product.category || "unknown",
+        ipAddress: guard.ip,
+        userAgent: request.headers.get("user-agent")?.slice(0, 500) || null,
+        referer: request.headers.get("referer")?.slice(0, 500) || null,
+        blocked: false,
+      },
+    }).catch((err) => {
+      console.error("[beli] Failed to log click:", err);
+    });
 
     return NextResponse.redirect(targetUrl);
   } catch (err) {
