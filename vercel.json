@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/blog-generate",
       "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/refresh-product-stats?limit=20",
+      "schedule": "0 19 * * 6"
     }
   ]
 }
