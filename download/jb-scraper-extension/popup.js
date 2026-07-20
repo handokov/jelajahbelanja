@@ -1,5 +1,14 @@
 /**
- * JB Scraper — v11.0 (Shopee + Tokopedia + Accesstrade + Cloudinary)
+ * JB Scraper — v11.1 / v3.3 (Shopee + Tokopedia + Accesstrade + Cloudinary)
+ *
+ * NEW v3.3 (v11.1.0):
+ * - Extract rating, soldCount, reviewCount, AND location from BOTH Shopee & Tokopedia
+ *   search result page product cards (previously hardcoded null in some paths)
+ * - New shared helper extractProductStats(card) — DOM-selector-first then regex fallback
+ * - Handles Indonesian number formats: "1.2RB" = 1200, "10RB" = 10000, "1,5RB" = 1500
+ * - Handles "100+ terjual", "Terjual 100+", "4.9 (1.234 rating)", "4.7 bintang"
+ * - Preview UI now shows 📦soldCount + 💬reviewCount alongside ⭐rating
+ * - Previously all 760 products in DB had rating=4.5 (default), reviewCount=0, soldCount=0
  *
  * NEW v11.0:
  * - AUTO-SAVE DRAFT! Semua form input otomatis tersimpan
@@ -293,6 +302,9 @@ function parseAccesstradeCSV(text) {
         price: price,
         originalPrice: originalPrice > price ? originalPrice : null,
         discountPercent: discountPercent,
+        // Accesstrade CSV doesn't include rating/review/sold/location — left null
+        // intentionally. For products scraped directly from Shopee/Tokopedia search
+        // pages, these are populated by extractProductStats() (v3.3).
         rating: null,
         reviewCount: null,
         soldCount: null,
@@ -372,7 +384,8 @@ function updateUI() {
         const badge = p.marketplace === 'tokopedia'
           ? '<span class="marketplace-badge tokopedia">TKPD</span>'
           : '<span class="marketplace-badge shopee">SP</span>';
-        return `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} ${badge} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`;
+        const stats = `${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}${p.soldCount ? ' 📦' + p.soldCount : ''}${p.reviewCount ? ' 💬' + p.reviewCount : ''}`;
+        return `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} ${badge} <span style="color:#4caf50">${stats}</span></div>`;
       }).join('');
     }
   }
@@ -393,7 +406,8 @@ function updateLinkUI() {
         const badge = p.marketplace === 'tokopedia'
           ? '<span class="marketplace-badge tokopedia">TKPD</span>'
           : '<span class="marketplace-badge shopee">SP</span>';
-        return `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} ${badge} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`;
+        const stats = `${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}${p.soldCount ? ' 📦' + p.soldCount : ''}${p.reviewCount ? ' 💬' + p.reviewCount : ''}`;
+        return `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} ${badge} <span style="color:#4caf50">${stats}</span></div>`;
       }).join('');
     }
   }
@@ -415,9 +429,10 @@ function updateTkpdUI() {
       if (tkpdProducts.length === 0) {
         tkpdCollectedList.innerHTML = '<div style="color:#666">Belum ada produk Tokopedia</div>';
       } else {
-        tkpdCollectedList.innerHTML = tkpdProducts.map((p, i) =>
-          `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} <span style="color:#4caf50">${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}</span></div>`
-        ).join('');
+        tkpdCollectedList.innerHTML = tkpdProducts.map((p, i) => {
+          const stats = `${p.rating ? '⭐' + p.rating.toFixed(1) : '⏳'}${p.soldCount ? ' 📦' + p.soldCount : ''}${p.reviewCount ? ' 💬' + p.reviewCount : ''}`;
+          return `<div>${i + 1}. ${esc(p.title.substring(0, 40))}${p.title.length > 40 ? '...' : ''} <span style="color:#4caf50">${stats}</span></div>`;
+        }).join('');
       }
     }
   }
@@ -1509,6 +1524,121 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ========== SHOPEE SCRAPERS ==========
 
+// ─────────────────────────────────────────────────────────────────────────────
+// extractProductStats — v3.3 helper
+// Extracts rating, reviewCount, soldCount, location from a Shopee / Tokopedia
+// product card DOM element. Uses element selectors first (more reliable) then
+// falls back to regex patterns on the card's textContent.
+//
+// Test cases (regex behavior verified):
+//   "4.9 (1.234 rating) 1.2RB terjual" → rating=4.9, reviewCount=1234, soldCount=1200
+//   "Terjual 100+ · 4.8"               → rating=4.8 (via DOM el), soldCount=100
+//   "4.7 bintang · 10RB terjual"       → rating=4.7, soldCount=10000
+//   "1,5RB terjual"                    → soldCount=1500 (Indonesian comma decimal)
+//
+// Never throws — returns nulls on failure.
+// ─────────────────────────────────────────────────────────────────────────────
+function extractProductStats(card) {
+  const out = { rating: null, reviewCount: null, soldCount: null, location: null };
+  if (!card) return out;
+  const text = card.textContent || '';
+
+  // ── Rating + Review count (combined "4.9 (1.234 rating)" pattern) ──
+  const ratingReviewMatch = text.match(
+    /(\d+[.,]\d+)\s*\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi)\s*\)/i
+  );
+  if (ratingReviewMatch) {
+    out.rating = parseFloat(ratingReviewMatch[1].replace(',', '.'));
+    let rn = parseFloat(ratingReviewMatch[2].replace(/\./g, '').replace(',', '.'));
+    if (ratingReviewMatch[3]) rn *= 1000;
+    out.reviewCount = Math.round(rn);
+  }
+
+  // ── Rating (DOM element selector first, then text fallback) ──
+  if (out.rating === null && card.querySelector) {
+    const ratingEl = card.querySelector(
+      '[class*="rating"], [class*="Rating"], [class*="pcv3__info__rating"], ' +
+      '[data-testid*="Rating"], [data-testid*="rating"]'
+    );
+    if (ratingEl) {
+      const rMatch = ratingEl.textContent.match(/(\d+[.,]\d+)/);
+      if (rMatch) out.rating = parseFloat(rMatch[1].replace(',', '.'));
+    }
+  }
+  if (out.rating === null) {
+    const fallbackPats = [
+      /(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang|⭐|🌟)/i,
+      /(?:rating|rate)\s*[:\-]?\s*(\d+[.,]\d+)/i,
+    ];
+    for (const p of fallbackPats) {
+      const m = text.match(p);
+      if (m) { out.rating = parseFloat(m[1].replace(',', '.')); break; }
+    }
+  }
+
+  // ── Review count (standalone, e.g. "(1.234 review)" without rating nearby) ──
+  if (out.reviewCount === null) {
+    const rm = text.match(/\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi)\s*\)/i);
+    if (rm) {
+      let rn = parseFloat(rm[1].replace(/\./g, '').replace(',', '.'));
+      if (rm[2]) rn *= 1000;
+      out.reviewCount = Math.round(rn);
+    }
+  }
+
+  // ── Sold count ──
+  // Handles: "100 terjual", "1.2RB terjual", "10RB terjual",
+  //          "Terjual 100+", "1,5RB terjual", "10.5RB terjual", "1.234 terjual"
+  //
+  // Disambiguation rule for the dot:
+  //   - When the number is followed by RB/ribu multiplier, the dot/comma is a
+  //     DECIMAL point (1.2RB = 1200, 1,5RB = 1500). Only normalize comma → dot.
+  //   - When there is no RB/ribu multiplier, the dot is a THOUSANDS separator
+  //     (Indonesian convention: "1.234 terjual" = 1234). Strip dots entirely.
+  const soldPats = [
+    { pat: /(\d+(?:[.,]\d+)?)\s*(rb|ribu)\s*terjual/i, multiplier: true },
+    { pat: /terjual\s*(\d+(?:[.,]\d+)?)\s*\+?\s*(rb|ribu)?/i, multiplier: true },
+    { pat: /([\d.,]+)\s*\+?\s*terjual/i, multiplier: false },
+  ];
+  for (const { pat, multiplier } of soldPats) {
+    const m = text.match(pat);
+    if (m) {
+      let numStr = m[1];
+      if (multiplier) {
+        // Decimal interpretation: comma → dot (e.g., "1,5" → "1.5")
+        numStr = numStr.replace(',', '.');
+      } else {
+        // Indonesian thousands: strip dots, normalize comma decimal
+        numStr = numStr.replace(/\./g, '').replace(',', '.');
+      }
+      let n = parseFloat(numStr);
+      if (m[2] && /rb|ribu/i.test(m[2])) n *= 1000;
+      if (!isNaN(n)) { out.soldCount = Math.round(n); break; }
+    }
+  }
+
+  // ── Location ──
+  // Shopee cards show location text near shop name (e.g. "Jakarta Barat",
+  // "Kab. Tengerang"). Tokopedia cards show "Dikirim dari Bandung".
+  if (card.querySelector) {
+    const locEl = card.querySelector(
+      '[class*="location"], [class*="Location"], [class*="shop-location"], ' +
+      '[class*="pcv3__info__shop"]'
+    );
+    if (locEl) {
+      const lt = (locEl.textContent || '').trim();
+      const lm = lt.match(/(Kab(?:upaten|\.)?\s*[\w\s.]+|Kota\s+[\w\s.]+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+      if (lm) out.location = lm[1].trim().substring(0, 50);
+    }
+  }
+  if (out.location === null) {
+    const lm = text.match(/(?:Dikirim dari|Lokasi)\s*[:\-]?\s*([A-Z][\w\s.]+?)(?:[\n·|,]|$)/);
+    if (lm) out.location = lm[1].trim().substring(0, 50);
+  }
+
+  return out;
+}
+
 function scrapeSearchPage(category) {
   const products = [];
   const links = document.querySelectorAll('a[href*="-i."]');
@@ -1543,26 +1673,12 @@ function scrapeSearchPage(category) {
         }
       }
 
-      const soldMatch = text.match(/([\d.]+)\s*terjual/i);
-      if (soldMatch) {
-        product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
-      } else {
-        const rbMatch = text.match(/([\d,]+)\s*rb\s*terjual/i);
-        if (rbMatch) product.soldCount = Math.round(parseFloat(rbMatch[1].replace(',', '.')) * 1000);
-      }
-
-      const ratingPatterns = [
-        /(\d+[.,]\d+)\s*(?:bintang|⭐|🌟)/i,
-        /terjual[\s\S]*?(\d+[.,]\d+)/i,
-        /(\d+[.,]\d+)\s*\((\d[\d.]*)\s*(?:rating|review|evaluasi)/i,
-      ];
-      for (const pat of ratingPatterns) {
-        const m = text.match(pat);
-        if (m) {
-          product.rating = parseFloat(m[1].replace(',', '.'));
-          break;
-        }
-      }
+      // v3.3: extract rating, reviewCount, soldCount, location via shared helper
+      const stats = extractProductStats(link);
+      if (stats.rating !== null) product.rating = stats.rating;
+      if (stats.reviewCount !== null) product.reviewCount = stats.reviewCount;
+      if (stats.soldCount !== null) product.soldCount = stats.soldCount;
+      if (stats.location !== null) product.location = stats.location;
 
       const img = link.querySelector('img');
       if (img) {
@@ -2105,23 +2221,13 @@ function scrapeTokopediaSearchPage(category) {
         }
       }
 
-      // Get rating
-      const ratingEl = card.querySelector('[class*="rating"], [class*="pcv3__info__rating"]');
-      if (ratingEl) {
-        const rMatch = ratingEl.textContent.match(/(\d+[.,]\d+)/);
-        if (rMatch) product.rating = parseFloat(rMatch[1].replace(',', '.'));
-      }
-
-      // Get sold count
-      const text = card.textContent;
-      const soldMatch = text.match(/([\d.]+)\s*(?:rb|ribu)?\s*terjual/i);
-      if (soldMatch) {
-        if (soldMatch[0].includes('rb') || soldMatch[0].includes('ribu')) {
-          product.soldCount = Math.round(parseFloat(soldMatch[1].replace(',', '.')) * 1000);
-        } else {
-          product.soldCount = parseInt(soldMatch[1].replace(/\./g, ''), 10);
-        }
-      }
+      // v3.3: extract rating, reviewCount, soldCount, location via shared helper
+      // (handles Indonesian number formats: 1.2RB=1200, 10RB=10000, 1,5RB=1500)
+      const stats = extractProductStats(card);
+      if (stats.rating !== null) product.rating = stats.rating;
+      if (stats.reviewCount !== null) product.reviewCount = stats.reviewCount;
+      if (stats.soldCount !== null) product.soldCount = stats.soldCount;
+      if (stats.location !== null) product.location = stats.location;
 
       if (product.title && (product.price || product.url)) {
         products.push(product);
