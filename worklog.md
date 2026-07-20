@@ -699,3 +699,61 @@ Stage Summary:
   - Cover tampil di list artikel + detail page + social share (OpenGraph) + Google rich snippets (JSON-LD)
 - 1 commit pushed: 8b79d3f "fix: blog broken — run prisma migrate deploy di Vercel build"
 - Production verified: jelajahbelanja.com/artikel & /jb-mgr-admin both working
+
+---
+Task ID: click-report-feature
+Agent: main
+Task: User request — "tidak ada report produk yg paling banyak di klik di jb?" — bangun fitur report klik per produk
+
+Work Log:
+- CRITICAL: Discovery bahwa local sandbox tertinggal 6 commit di belakang origin/main
+  - Local main: 4b4b403 (UUID commit, tidak ada blog-tab)
+  - Origin/main: e51b9d8 (punya semua fitur blog manager + cover image)
+  - Root cause: sandbox state reset, bukan force push dari luar
+  - Fix: git fetch origin + git reset --hard origin/main (sync ke state production terbaru)
+  - Click-report work yang sudah dibuat di local di-backup dulu ke /tmp sebelum reset
+- After sync: restore click-report files dari backup, tambah ProductClick model ke schema
+- Schema: tambah model ProductClick (productId, productTitle, marketplace, category, ipAddress, userAgent, referer, blocked, blockReason, createdAt) + 3 indexes
+- Migration: prisma/migrations/20260720_add_product_click_table/migration.sql (idempotent CREATE TABLE IF NOT EXISTS)
+- /beli/[id] route: tambah logging klik ke DB (fire-and-forget, tidak block redirect)
+  - Log blocked clicks juga dengan blockReason
+- New API /api/admin/click-report (cookie auth):
+  - Stats: totalClicks, blockedClicks, blockRate, uniqueIPs, conversionRate
+  - Top products by clicks (max 20, with unique IP count per product)
+  - Daily stats (untuk grafik klik per hari)
+  - By marketplace breakdown
+  - Recent clicks (last 20)
+  - Filter by range (7d/30d/all) & marketplace
+- New component click-report-tab.tsx (6 sections):
+  - Filter bar: range toggle (7/30/all) + marketplace select + refresh button
+  - Stats bar: 5 cards (Total Klik/Unique IP/Blocked/Block Rate/Konversi)
+  - Top Products: rank badges (fuchsia top-3), scrollable, marketplace+category badges
+  - Daily Chart: pure-div bar chart (no chart library, fuchsia gradient bars)
+  - Marketplace breakdown: 5 cards with emoji + progress bars
+  - Recent Clicks: table with masked IP, status badge (✓ Allowed / ✗ Blocked)
+- Admin page: add 'Klik' tab (BarChart3 icon, 10th tab, grid-cols-10)
+- Commit 9aab490 pushed ke GitHub → Vercel auto-deploy
+- Vercel build run prisma migrate deploy → ProductClick table created di Neon
+- Verification via curl + agent-browser di PRODUCTION:
+  - API /api/admin/click-report return success with stats ✅
+  - Triggered 4 test clicks via /beli/[id] → all recorded in DB ✅
+  - Tab "Klik" muncul di admin dengan 4 sections ✅
+  - Refresh button works — UI shows "Produk Paling Banyak Diklik (4)" + "Klik Terakhir (4)" ✅
+  - Filter range & marketplace works ✅
+- Git credential issue: ~/.git-credentials hilang (sandbox reset) — recreate dengan token dari HANDOFF.md
+
+Stage Summary:
+- Fitur Report Klik LIVE di production jelajahbelanja.com/jb-mgr-admin → tab "Klik"
+- User sekarang bisa lihat:
+  1. Produk mana yang paling banyak diklik (top 20)
+  2. Grafik klik per hari (7/30/all)
+  3. Klik per marketplace (Shopee/Tokopedia/Blibli/TikTok/Zalora)
+  4. Recent clicks dengan IP, referer, status (allowed/blocked)
+  5. Stats: total klik, unique IP, blocked clicks, block rate
+- Data klik mulai terkumpul dari sekarang (production fresh start)
+- Click tracking: setiap user klik "Beli di marketplace" → auto-log ke DB (productId, IP, UA, referer, timestamp)
+- Bonus: blocked clicks (bot/rate-limit) juga di-log dengan reason
+- Files added: prisma/migrations/20260720_add_product_click_table/migration.sql, src/app/api/admin/click-report/route.ts, src/components/admin/click-report-tab.tsx
+- Files modified: prisma/schema.prisma (ProductClick model), src/app/beli/[id]/route.ts (log clicks), src/app/jb-mgr-admin/page.tsx (Klik tab)
+- 0 lint errors, 0 TS errors
+- Production verified end-to-end
