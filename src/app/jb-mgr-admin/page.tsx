@@ -77,44 +77,44 @@ export default function AdminPage() {
       {/* Main */}
       <main className="container mx-auto px-4 max-w-5xl py-6">
         <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="grid w-full max-w-4xl grid-cols-10 h-11">
-            <TabsTrigger value="products" className="text-sm">
+          <TabsList className="flex w-full max-w-4xl h-11 overflow-x-auto overflow-y-hidden whitespace-nowrap gap-1 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
+            <TabsTrigger value="products" className="text-sm flex-shrink-0">
               <Package className="w-4 h-4 mr-1.5" />
               Produk
             </TabsTrigger>
-            <TabsTrigger value="at-sync" className="text-sm">
+            <TabsTrigger value="at-sync" className="text-sm flex-shrink-0">
               <Zap className="w-4 h-4 mr-1.5" />
               AT Sync
             </TabsTrigger>
-            <TabsTrigger value="bulk-upload" className="text-sm">
+            <TabsTrigger value="bulk-upload" className="text-sm flex-shrink-0">
               <FileSpreadsheet className="w-4 h-4 mr-1.5" />
               Upload Massal
             </TabsTrigger>
-            <TabsTrigger value="banners" className="text-sm">
+            <TabsTrigger value="banners" className="text-sm flex-shrink-0">
               <ImageLucide className="w-4 h-4 mr-1.5" />
               Banner
             </TabsTrigger>
-            <TabsTrigger value="affiliate-ads" className="text-sm">
+            <TabsTrigger value="affiliate-ads" className="text-sm flex-shrink-0">
               <Megaphone className="w-4 h-4 mr-1.5" />
               Iklan Affiliate
             </TabsTrigger>
-            <TabsTrigger value="categories" className="text-sm">
+            <TabsTrigger value="categories" className="text-sm flex-shrink-0">
               <Settings2 className="w-4 h-4 mr-1.5" />
               Kategori
             </TabsTrigger>
-            <TabsTrigger value="affiliate" className="text-sm">
+            <TabsTrigger value="affiliate" className="text-sm flex-shrink-0">
               <Link2 className="w-4 h-4 mr-1.5" />
               Link Affiliate
             </TabsTrigger>
-            <TabsTrigger value="blog" className="text-sm">
+            <TabsTrigger value="blog" className="text-sm flex-shrink-0">
               <Newspaper className="w-4 h-4 mr-1.5" />
               Blog
             </TabsTrigger>
-            <TabsTrigger value="click-report" className="text-sm">
+            <TabsTrigger value="click-report" className="text-sm flex-shrink-0">
               <BarChart3 className="w-4 h-4 mr-1.5" />
               Klik
             </TabsTrigger>
-            <TabsTrigger value="security" className="text-sm">
+            <TabsTrigger value="security" className="text-sm flex-shrink-0">
               <Shield className="w-4 h-4 mr-1.5" />
               Keamanan
             </TabsTrigger>
