@@ -981,3 +981,52 @@ Stage Summary:
 - Files: download/jb-scraper-extension-v3.3.zip, src/app/api/cron/refresh-product-stats/route.ts, vercel.json
 - 2 commits: bce4da8 (scraper + cron) + 464e69d (auth fix)
 - Production verified live
+
+---
+Task ID: upgrade-scraper-v33
+Agent: general-purpose
+Task: Upgrade JB Scraper All Marketplace v3.2.3 → v3.3.0 dengan extractProductStats helper
+
+Work Log:
+- Read previous worklog (847+ lines) — pahami konteks: prior Task 1 (scraper v3.3 untuk Shopee+Tokopedia search pages, ZIP `jb-scraper-extension-v3.3.zip` di download/) + Task 2 (cron refresh-product-stats). Task ini berbeda: upgrade scraper "All Marketplace" v3.2.3 → v3.3.0 dengan helper universal untuk 6 product-detail scrapers (Shopee/Blibli/Lazada/Bukalapak/Zalora/Sociolla). Source: `/tmp/v32-extract/scraper-fix/` (extracted dari `jb-scraper-all-v32.zip`).
+- Audited popup.js (1707 lines, 59972 bytes): found 6 `return { ... reviewCount: 0 ... }` sites via grep:
+  - Line 1198 Shopee — pattern `rating, reviewCount: 0, soldCount, location,` (have rating+soldCount+location locals)
+  - Line 1339 Blibli — same Pattern A
+  - Line 1438 Lazada — same Pattern A
+  - Line 1528 Bukalapak — pattern `rating, reviewCount: 0, soldCount: 0, location,` (have rating+location, NO soldCount local)
+  - Line 1614 Zalora — pattern `rating, reviewCount: 0, soldCount: 0, location: null,` (have only rating local)
+  - Line 1700 Sociolla — same Pattern C
+- Implemented `extractProductStats(card)` helper (~110 lines) inserted before `// === TIKTOK SHOP SCRAPER ===` (after `formatRupiah`):
+  - Rating+reviewCount combined pattern: `4.9 (1.234 rating)` → rating=4.9, reviewCount=1234 in one shot
+  - Rating DOM selector first (`[class*="rating"], [data-testid*="Rating"], [data-e2e*="rating"], .product-rating, [class*="star"]`), then text fallback (3 patterns: qualifier-based, keyword-based, standalone decimal)
+  - **NEW v3.3.0**: 3rd rating fallback pattern `/(?<!\d)(\d\.\d)(?!\d)/` catches standalone ratings like "4.8" — uses lookbehind/lookahead to avoid matching Indonesian prices "1.234" (1.2 followed by 3) or "10.5RB" (0.5 preceded by 1)
+  - ReviewCount standalone pattern: `(892 ulasan)`, `(1.234 rating)`, `(5RB review)`
+  - SoldCount with **dynamic disambiguation**: `hasMultiplier = !!(m[2] && /rb|ribu/i.test(m[2]))`. If RB/ribu follows → dot is decimal (1.5RB → 1.5 × 1000 = 1500). If not → dot is thousands sep (1.500 → 1500). Fixed bug in task spec where `multiplier: true` was hardcoded for pattern 2 (Terjual X), causing "Terjual 1.500" → 2 instead of 1500.
+  - Location extraction via `[class*="location"], [class*="shop-location"], [data-sqe="location"]` + regex match for `Kabupaten`/`Kota`/city names
+  - Never throws — returns `{rating:null, reviewCount:null, soldCount:null, location:null}` on failure
+- Updated 6 return statements: each now calls `const _stats = extractProductStats(document.body || document.documentElement);` before `return`, then uses fallback chain `rating: rating || _stats.rating || 4.5, reviewCount: _stats.reviewCount || 0, soldCount: soldCount || _stats.soldCount || 0, location: location || _stats.location`
+- Added missing local variables to fix ReferenceError risk:
+  - Bukalapak: added `let soldCount = 0;` + extraction block (previously had rating+location only, no soldCount)
+  - Zalora: added `let soldCount = 0; let location = null;` (previously had rating only)
+  - Sociolla: added `let soldCount = 0; let location = null;` (previously had rating only)
+- Bumped `manifest.json`: version `3.2.3` → `3.3.0`, description updated to `JB Scraper v3.3 — extract rating + sold + review dari semua marketplace (Shopee/Tokopedia/Blibli/Lazada/Bukalapak/Zalora/Sociolla/TikTok)`
+- Updated `README.md`: replaced v1.1 header with v3.3 header + added full v3.3.0 changelog block (NEW helper, 8 marketplace support, Indonesian number format examples, multiple fallback strategy, 12/12 test pass, missing-vars fix, manifest bump)
+- Created `/tmp/test_v33.js` test script (mirror copy in `/home/z/my-project/.zscripts/test_v33.js`) with 12 test cases (6 task-specified + 6 additional edge cases):
+  - Core cases: `4.9 (1.234 rating) 1.2RB terjual` → rating=4.9/review=1234/sold=1200; `Terjual 100+ · 4.8` → rating=4.8/sold=100; `4.7 bintang · 10RB terjual` → rating=4.7/sold=10000; `1,5RB terjual` → sold=1500; `10.5RB terjual` → sold=10500; `1.234 terjual` → sold=1234
+  - Edge cases: `5.0 (5RB rating) 2.5RB terjual` → 5/5000/2500; `Terjual 1.500 · 4.8 bintang` → 4.8/1500; `4.9 dari 5 · 100RB terjual` → 4.9/100000; `rating: 4.6 · (892 ulasan)` → 4.6/review=892; `Terjual 50+` → 50; `0RB terjual` → 0
+- Test result: **12/12 PASS (0 fail)** — verified via `node /tmp/test_v33.js`
+- Syntax check: `node --check /tmp/v32-extract/scraper-fix/popup.js` → SYNTAX OK (no errors)
+- Cleaned up `popup.js.bak` (temp backup created before Python edit)
+- Packaged as ZIP: `cd /tmp/v32-extract && zip -r /home/z/my-project/download/jb-scraper-all-v33.zip scraper-fix/` → 19,353 bytes (~19KB, within expected 17-20KB range), 9 files (popup.js + popup.html + README.md + manifest.json + 3 icons + 2 dirs)
+- Verified ZIP contents via `unzip -l`: all 9 files present, popup.js = 67,487 bytes (up from 59,972 in v3.2.3, +7,515 bytes for helper + 6 return updates + missing-var additions)
+
+Stage Summary:
+- Scraper v3.3.0 ("All Marketplace") properly extracts rating, soldCount, reviewCount, AND location from ALL 6 product-detail scrapers (Shopee/Blibli/Lazada/Bukalapak/Zalora/Sociolla) — previously these had inconsistent extraction (3 had rating+soldCount, 3 had only rating with hardcoded soldCount:0). TikTok & Tokopedia scrapers untouched (already had proper reviewCount extraction).
+- `extractProductStats(card)` helper (~110 lines) inserted before TikTok scraper; uses CSS selector → text regex → JSON-LD fallback strategy. Called with `document.body` for product-detail pages.
+- Indonesian number format disambiguation: `1.2RB`=1200, `1,5RB`=1500, `10.5RB`=10500, `10RB`=10000, `1.234 terjual`=1234, `1.500`=1500, `100+`=100 — all 12 test cases pass.
+- 2 bug fixes vs task spec: (a) added 3rd rating fallback pattern `/(?<!\d)(\d\.\d)(?!\d)/` to catch standalone "4.8" ratings, (b) changed soldCount `multiplier` from static flag to dynamic `hasMultiplier` based on whether RB/ribu was actually captured (fixes "Terjual 1.500" → 2 bug).
+- Bukalapak/Zalora/Sociolla now extract `soldCount` (and Zalora/Sociolla also `location`) — these were completely missing in v3.2.3.
+- Files modified: `popup.js` (+~157 lines, 59972→67487 bytes), `manifest.json` (version+desc), `README.md` (v3.3 header + changelog).
+- Files created: `/tmp/test_v33.js` (test script, 12 cases), `/home/z/my-project/.zscripts/upgrade_v33.py` (upgrade script for reproducibility), `/home/z/my-project/.zscripts/test_v33.js` (mirror).
+- ZIP package: `/home/z/my-project/download/jb-scraper-all-v33.zip` (19,353 bytes, 9 files).
+- 0 syntax errors. 12/12 tests pass. Complements prior Task 1 (Shopee+Tokopedia search-page scraper v3.3) + Task 2 (cron refresh): this task covers the 6 product-detail scrapers that were left untouched by Task 1.
