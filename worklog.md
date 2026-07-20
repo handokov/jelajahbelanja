@@ -817,3 +817,31 @@ Stage Summary:
 - Build script permanent fix: pakai db push, tidak akan P3005 lagi di future deploys
 - Production verified end-to-end via browser
 - 2 commits: e40231c (emoji+tabs) + f91085d (build fix)
+
+---
+Task ID: fix-tab-produk-not-visible-mobile
+Agent: main
+Task: User report — "kok tab produk gak kelihatan ya?" di mobile
+
+Work Log:
+- Investigasi via agent-browser di viewport 375px (iPhone)
+- Found: tab "Produk" firstTabRect=[-361,-267] — posisi di luar viewport kiri (NEGATIF)
+- Root cause: shadcn TabsList default class 'justify-center' + flex overflow-x-auto
+  - justify-center bikin tab pertama di-center
+  - Kalau content overflow (10 tab > container width), tab pertama malah overflow ke kiri (posisi negatif)
+  - Di desktop 577px masih OK (rect=[44,137]), tapi di mobile 375px tab "Produk" hilang ke kiri
+- Fix: override justify-center → justify-start di TabsList className
+  - Tab pertama sekarang mulai dari x=19 (terlihat di mobile)
+- Test lokal di viewport 375px: firstTabVisible=true, rect=[19,113] ✅
+- Commit fdc2279 pushed ke GitHub
+- Vercel build + deploy (~2 menit)
+- Verified production di mobile viewport 375px:
+  - firstTabText: "Produk" ✅
+  - firstTabVisible: true ✅
+  - firstTabRect: [19, 113] ✅
+
+Stage Summary:
+- Tab "Produk" sekarang terlihat di mobile (sebelumnya hilang ke kiri karena justify-center)
+- Fix permanent: justify-start di TabsList
+- Production verified live
+- User perlu hard reload (Ctrl+Shift+R) untuk bypass browser cache, atau tunggu cache expire
