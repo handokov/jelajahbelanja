@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JB Scraper (All Marketplace)",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "description": "JB Scraper v3.3 — extract rating + sold + review dari semua marketplace (Shopee/Tokopedia/Blibli/Lazada/Bukalapak/Zalora/Sociolla/TikTok)",
   "permissions": [
     "activeTab",
