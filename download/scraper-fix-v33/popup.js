@@ -815,113 +815,6 @@ function formatRupiah(n) {
   return 'Rp ' + Number(n).toLocaleString('id-ID');
 }
 
-/**
- * Extract rating, soldCount, reviewCount, location from a product card element.
- * Works across Shopee, Tokopedia, Blibli, Lazada, Bukalapak, Zalora, Sociolla, TikTok Shop.
- * Multiple fallback strategies: CSS selector -> text regex -> JSON-LD.
- *
- * Indonesian number formats:
- *   "1.2RB terjual"    -> 1200
- *   "10RB terjual"     -> 10000
- *   "1,5RB terjual"    -> 1500
- *   "1.234 terjual"    -> 1234
- *   "100+ terjual"     -> 100
- *   "Terjual 100"      -> 100
- *
- * v3.3.0
- */
-function extractProductStats(card) {
-  const out = { rating: null, reviewCount: null, soldCount: null, location: null };
-  if (!card) return out;
-  const text = (card.textContent || '').trim();
-  if (!text) return out;
-
-  // -- Rating + Review count (combined "4.9 (1.234 rating)" pattern) --
-  const ratingReviewMatch = text.match(
-    /(\d+[.,]\d+)\s*\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i
-  );
-  if (ratingReviewMatch) {
-    out.rating = parseFloat(ratingReviewMatch[1].replace(',', '.'));
-    let rn = parseFloat(ratingReviewMatch[2].replace(/\./g, '').replace(',', '.'));
-    if (ratingReviewMatch[3]) rn *= 1000;
-    out.reviewCount = Math.round(rn);
-  }
-
-  // -- Rating (DOM element selector first, then text fallback) --
-  if (out.rating === null && card.querySelector) {
-    const ratingEl = card.querySelector(
-      '[class*="rating"], [class*="Rating"], [class*="pcv3__info__rating"], ' +
-      '[data-testid*="Rating"], [data-testid*="rating"], [data-e2e*="rating"], ' +
-      '.rating-value, .product-rating, [class*="star"]'
-    );
-    if (ratingEl) {
-      const rMatch = ratingEl.textContent.match(/(\d+[.,]\d+)/);
-      if (rMatch) out.rating = parseFloat(rMatch[1].replace(',', '.'));
-    }
-  }
-  if (out.rating === null) {
-    const fallbackPats = [
-      /(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang|\u2b50|\u1f31f)/i,
-      /(?:rating|rate)\s*[:\-]?\s*(\d+[.,]\d+)/i,
-      // v3.3.0: standalone rating like "4.8" (1-digit.1-digit, not surrounded by digits)
-      // Avoids matching Indonesian prices "1.234" (thousands sep) or "10.5RB" (decimal in sold count)
-      /(?<!\d)(\d\.\d)(?!\d)/,
-    ];
-    for (const p of fallbackPats) {
-      const m = text.match(p);
-      if (m) { out.rating = parseFloat(m[1].replace(',', '.')); break; }
-    }
-  }
-
-  // -- Review count (standalone, if not captured above) --
-  if (out.reviewCount === null) {
-    const rm = text.match(/\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
-    if (rm) {
-      let rn = parseFloat(rm[1].replace(/\./g, '').replace(',', '.'));
-      if (rm[2]) rn *= 1000;
-      out.reviewCount = Math.round(rn);
-    }
-  }
-
-  // -- Sold count -- disambiguates dot: decimal (when RB/ribu present) vs thousands sep --
-  const soldPats = [
-    /(\d+(?:[.,]\d+)?)\s*(rb|ribu)\s*terjual/i,
-    /terjual\s*(\d+(?:[.,]\d+)?)\s*\+?\s*(rb|ribu)?/i,
-    /([\d.,]+)\s*\+?\s*terjual/i,
-  ];
-  for (const pat of soldPats) {
-    const m = text.match(pat);
-    if (m) {
-      // v3.3.0: disambiguate dot/comma based on RB/ribu presence
-      //   hasMultiplier=true  -> "1.5RB"  -> dot is DECIMAL    -> 1.5 * 1000 = 1500
-      //   hasMultiplier=false -> "1.500"  -> dot is THOUSANDS  -> 1500
-      const hasMultiplier = !!(m[2] && /rb|ribu/i.test(m[2]));
-      let numStr = m[1];
-      numStr = hasMultiplier
-        ? numStr.replace(',', '.')
-        : numStr.replace(/\./g, '').replace(',', '.');
-      let n = parseFloat(numStr);
-      if (hasMultiplier) n *= 1000;
-      if (!isNaN(n)) { out.soldCount = Math.round(n); break; }
-    }
-  }
-
-  // -- Location --
-  if (card.querySelector) {
-    const locEl = card.querySelector(
-      '[class*="location"], [class*="Location"], [class*="shop-location"], ' +
-      '[class*="pcv3__info__shop"], [data-sqe="location"]'
-    );
-    if (locEl) {
-      const lt = (locEl.textContent || '').trim();
-      const lm = lt.match(/(Kab(?:upaten|\.)?\s*[\w\s.]+|Kota\s+[\w\s.]+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
-      if (lm) out.location = lm[1].trim().substring(0, 50);
-    }
-  }
-
-  return out;
-}
-
 // === TIKTOK SHOP SCRAPER ===
 function scrapeTikTokProduct() {
   let title = '';
@@ -1302,14 +1195,87 @@ function scrapeShopeeProduct() {
     if (cat && cat.length > 1 && cat.length < 50) category = cat;
   }
 
-  // v3.3.0: extractProductStats helper fills rating/sold/review if main selectors missed
-  const _stats = extractProductStats(document.body || document.documentElement);
+  // v3.3.1: inline stats extraction (top-level helper not available in page context
+  // when injected via chrome.scripting.executeScript({ func }))
+  const _pageText = (document.body?.textContent || '').trim();
+  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+
+  // Rating (fallback if not already extracted)
+  if (!_rating) {
+    const _rr = _pageText.match(/(\d+[.,]\d+)\s*\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rr) {
+      _rating = parseFloat(_rr[1].replace(',', '.'));
+      let _rn = parseFloat(_rr[2].replace(/\./g, '').replace(',', '.'));
+      if (_rr[3]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    } else {
+      const _ratingEl = document.querySelector('[class*="rating"], [class*="Rating"], [class*="pcv3__info__rating"], [data-testid*="Rating"], [data-testid*="rating"], [data-e2e*="rating"], .rating-value, .product-rating');
+      if (_ratingEl) {
+        const _m = _ratingEl.textContent.match(/(\d+[.,]\d+)/);
+        if (_m) _rating = parseFloat(_m[1].replace(',', '.'));
+      }
+    }
+    if (!_rating) {
+      const _pats = [
+        /(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang|\u2b50|\u1f31f)/i,
+        /(?:rating|rate)\s*[:\-]?\s*(\d+[.,]\d+)/i,
+        // standalone rating like "4.8" (1-digit.1-digit, not surrounded by digits)
+        /(?<!\d)(\d\.\d)(?!\d)/,
+      ];
+      for (const _p of _pats) {
+        const _m = _pageText.match(_p);
+        if (_m) { _rating = parseFloat(_m[1].replace(',', '.')); break; }
+      }
+    }
+  }
+
+  // Review count (if not captured above)
+  if (!_reviewCount) {
+    const _rm = _pageText.match(/\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rm) {
+      let _rn = parseFloat(_rm[1].replace(/\./g, '').replace(',', '.'));
+      if (_rm[2]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    }
+  }
+
+  // Sold count (fallback if not already extracted) — disambiguates dot:
+  //   "1.5RB terjual" -> dot is DECIMAL    -> 1.5 * 1000 = 1500
+  //   "1.500 terjual"  -> dot is THOUSANDS  -> 1500
+  if (!_soldCount) {
+    const _soldPats = [
+      { pat: /(\d+(?:[.,]\d+)?)\s*(rb|ribu)\s*terjual/i, mult: true },
+      { pat: /terjual\s*(\d+(?:[.,]\d+)?)\s*\+?\s*(rb|ribu)?/i, mult: true },
+      { pat: /([\d.,]+)\s*\+?\s*terjual/i, mult: false },
+    ];
+    for (const { pat: _pat, mult: _mult } of _soldPats) {
+      const _m = _pageText.match(_pat);
+      if (_m) {
+        let _ns = _m[1];
+        _ns = _mult ? _ns.replace(',', '.') : _ns.replace(/\./g, '').replace(',', '.');
+        let _n = parseFloat(_ns);
+        if (_m[2] && /rb|ribu/i.test(_m[2])) _n *= 1000;
+        if (!isNaN(_n)) { _soldCount = Math.round(_n); break; }
+      }
+    }
+  }
+
+  // Location (fallback if not already extracted)
+  if (!_location) {
+    const _locEl = document.querySelector('[class*="location"], [class*="Location"], [class*="shop-location"], [class*="pcv3__info__shop"], [data-sqe="location"]');
+    if (_locEl) {
+      const _lt = (_locEl.textContent || '').trim();
+      const _lm = _lt.match(/(Kab(?:upaten|\.)?\s*[\w\s.]+|Kota\s+[\w\s.]+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+      if (_lm) _location = _lm[1].trim().substring(0, 50);
+    }
+  }
+
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: rating || _stats.rating || 4.5,
-    reviewCount: _stats.reviewCount || 0,
-    soldCount: soldCount || _stats.soldCount || 0,
-    location: location || _stats.location,
+    rating: _rating || 4.5,
+    reviewCount: _reviewCount,
+    soldCount: _soldCount,
+    location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
   };
@@ -1448,14 +1414,87 @@ function scrapeBlibliProduct() {
     if (cat && cat.length > 1 && cat.length < 50) category = cat;
   }
 
-  // v3.3.0: extractProductStats helper fills rating/sold/review if main selectors missed
-  const _stats = extractProductStats(document.body || document.documentElement);
+  // v3.3.1: inline stats extraction (top-level helper not available in page context
+  // when injected via chrome.scripting.executeScript({ func }))
+  const _pageText = (document.body?.textContent || '').trim();
+  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+
+  // Rating (fallback if not already extracted)
+  if (!_rating) {
+    const _rr = _pageText.match(/(\d+[.,]\d+)\s*\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rr) {
+      _rating = parseFloat(_rr[1].replace(',', '.'));
+      let _rn = parseFloat(_rr[2].replace(/\./g, '').replace(',', '.'));
+      if (_rr[3]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    } else {
+      const _ratingEl = document.querySelector('[class*="rating"], [class*="Rating"], [class*="pcv3__info__rating"], [data-testid*="Rating"], [data-testid*="rating"], [data-e2e*="rating"], .rating-value, .product-rating');
+      if (_ratingEl) {
+        const _m = _ratingEl.textContent.match(/(\d+[.,]\d+)/);
+        if (_m) _rating = parseFloat(_m[1].replace(',', '.'));
+      }
+    }
+    if (!_rating) {
+      const _pats = [
+        /(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang|\u2b50|\u1f31f)/i,
+        /(?:rating|rate)\s*[:\-]?\s*(\d+[.,]\d+)/i,
+        // standalone rating like "4.8" (1-digit.1-digit, not surrounded by digits)
+        /(?<!\d)(\d\.\d)(?!\d)/,
+      ];
+      for (const _p of _pats) {
+        const _m = _pageText.match(_p);
+        if (_m) { _rating = parseFloat(_m[1].replace(',', '.')); break; }
+      }
+    }
+  }
+
+  // Review count (if not captured above)
+  if (!_reviewCount) {
+    const _rm = _pageText.match(/\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rm) {
+      let _rn = parseFloat(_rm[1].replace(/\./g, '').replace(',', '.'));
+      if (_rm[2]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    }
+  }
+
+  // Sold count (fallback if not already extracted) — disambiguates dot:
+  //   "1.5RB terjual" -> dot is DECIMAL    -> 1.5 * 1000 = 1500
+  //   "1.500 terjual"  -> dot is THOUSANDS  -> 1500
+  if (!_soldCount) {
+    const _soldPats = [
+      { pat: /(\d+(?:[.,]\d+)?)\s*(rb|ribu)\s*terjual/i, mult: true },
+      { pat: /terjual\s*(\d+(?:[.,]\d+)?)\s*\+?\s*(rb|ribu)?/i, mult: true },
+      { pat: /([\d.,]+)\s*\+?\s*terjual/i, mult: false },
+    ];
+    for (const { pat: _pat, mult: _mult } of _soldPats) {
+      const _m = _pageText.match(_pat);
+      if (_m) {
+        let _ns = _m[1];
+        _ns = _mult ? _ns.replace(',', '.') : _ns.replace(/\./g, '').replace(',', '.');
+        let _n = parseFloat(_ns);
+        if (_m[2] && /rb|ribu/i.test(_m[2])) _n *= 1000;
+        if (!isNaN(_n)) { _soldCount = Math.round(_n); break; }
+      }
+    }
+  }
+
+  // Location (fallback if not already extracted)
+  if (!_location) {
+    const _locEl = document.querySelector('[class*="location"], [class*="Location"], [class*="shop-location"], [class*="pcv3__info__shop"], [data-sqe="location"]');
+    if (_locEl) {
+      const _lt = (_locEl.textContent || '').trim();
+      const _lm = _lt.match(/(Kab(?:upaten|\.)?\s*[\w\s.]+|Kota\s+[\w\s.]+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+      if (_lm) _location = _lm[1].trim().substring(0, 50);
+    }
+  }
+
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: rating || _stats.rating || 4.5,
-    reviewCount: _stats.reviewCount || 0,
-    soldCount: soldCount || _stats.soldCount || 0,
-    location: location || _stats.location,
+    rating: _rating || 4.5,
+    reviewCount: _reviewCount,
+    soldCount: _soldCount,
+    location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
   };
@@ -1552,14 +1591,87 @@ function scrapeLazadaProduct() {
     if (cat && cat.length > 1 && cat.length < 50) category = cat;
   }
 
-  // v3.3.0: extractProductStats helper fills rating/sold/review if main selectors missed
-  const _stats = extractProductStats(document.body || document.documentElement);
+  // v3.3.1: inline stats extraction (top-level helper not available in page context
+  // when injected via chrome.scripting.executeScript({ func }))
+  const _pageText = (document.body?.textContent || '').trim();
+  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+
+  // Rating (fallback if not already extracted)
+  if (!_rating) {
+    const _rr = _pageText.match(/(\d+[.,]\d+)\s*\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rr) {
+      _rating = parseFloat(_rr[1].replace(',', '.'));
+      let _rn = parseFloat(_rr[2].replace(/\./g, '').replace(',', '.'));
+      if (_rr[3]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    } else {
+      const _ratingEl = document.querySelector('[class*="rating"], [class*="Rating"], [class*="pcv3__info__rating"], [data-testid*="Rating"], [data-testid*="rating"], [data-e2e*="rating"], .rating-value, .product-rating');
+      if (_ratingEl) {
+        const _m = _ratingEl.textContent.match(/(\d+[.,]\d+)/);
+        if (_m) _rating = parseFloat(_m[1].replace(',', '.'));
+      }
+    }
+    if (!_rating) {
+      const _pats = [
+        /(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang|\u2b50|\u1f31f)/i,
+        /(?:rating|rate)\s*[:\-]?\s*(\d+[.,]\d+)/i,
+        // standalone rating like "4.8" (1-digit.1-digit, not surrounded by digits)
+        /(?<!\d)(\d\.\d)(?!\d)/,
+      ];
+      for (const _p of _pats) {
+        const _m = _pageText.match(_p);
+        if (_m) { _rating = parseFloat(_m[1].replace(',', '.')); break; }
+      }
+    }
+  }
+
+  // Review count (if not captured above)
+  if (!_reviewCount) {
+    const _rm = _pageText.match(/\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rm) {
+      let _rn = parseFloat(_rm[1].replace(/\./g, '').replace(',', '.'));
+      if (_rm[2]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    }
+  }
+
+  // Sold count (fallback if not already extracted) — disambiguates dot:
+  //   "1.5RB terjual" -> dot is DECIMAL    -> 1.5 * 1000 = 1500
+  //   "1.500 terjual"  -> dot is THOUSANDS  -> 1500
+  if (!_soldCount) {
+    const _soldPats = [
+      { pat: /(\d+(?:[.,]\d+)?)\s*(rb|ribu)\s*terjual/i, mult: true },
+      { pat: /terjual\s*(\d+(?:[.,]\d+)?)\s*\+?\s*(rb|ribu)?/i, mult: true },
+      { pat: /([\d.,]+)\s*\+?\s*terjual/i, mult: false },
+    ];
+    for (const { pat: _pat, mult: _mult } of _soldPats) {
+      const _m = _pageText.match(_pat);
+      if (_m) {
+        let _ns = _m[1];
+        _ns = _mult ? _ns.replace(',', '.') : _ns.replace(/\./g, '').replace(',', '.');
+        let _n = parseFloat(_ns);
+        if (_m[2] && /rb|ribu/i.test(_m[2])) _n *= 1000;
+        if (!isNaN(_n)) { _soldCount = Math.round(_n); break; }
+      }
+    }
+  }
+
+  // Location (fallback if not already extracted)
+  if (!_location) {
+    const _locEl = document.querySelector('[class*="location"], [class*="Location"], [class*="shop-location"], [class*="pcv3__info__shop"], [data-sqe="location"]');
+    if (_locEl) {
+      const _lt = (_locEl.textContent || '').trim();
+      const _lm = _lt.match(/(Kab(?:upaten|\.)?\s*[\w\s.]+|Kota\s+[\w\s.]+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+      if (_lm) _location = _lm[1].trim().substring(0, 50);
+    }
+  }
+
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: rating || _stats.rating || 4.5,
-    reviewCount: _stats.reviewCount || 0,
-    soldCount: soldCount || _stats.soldCount || 0,
-    location: location || _stats.location,
+    rating: _rating || 4.5,
+    reviewCount: _reviewCount,
+    soldCount: _soldCount,
+    location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
   };
@@ -1660,14 +1772,87 @@ function scrapeBukalapakProduct() {
     if (cat && cat.length > 1 && cat.length < 50) category = cat;
   }
 
-  // v3.3.0: extractProductStats helper fills rating/sold/review if main selectors missed
-  const _stats = extractProductStats(document.body || document.documentElement);
+  // v3.3.1: inline stats extraction (top-level helper not available in page context
+  // when injected via chrome.scripting.executeScript({ func }))
+  const _pageText = (document.body?.textContent || '').trim();
+  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+
+  // Rating (fallback if not already extracted)
+  if (!_rating) {
+    const _rr = _pageText.match(/(\d+[.,]\d+)\s*\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rr) {
+      _rating = parseFloat(_rr[1].replace(',', '.'));
+      let _rn = parseFloat(_rr[2].replace(/\./g, '').replace(',', '.'));
+      if (_rr[3]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    } else {
+      const _ratingEl = document.querySelector('[class*="rating"], [class*="Rating"], [class*="pcv3__info__rating"], [data-testid*="Rating"], [data-testid*="rating"], [data-e2e*="rating"], .rating-value, .product-rating');
+      if (_ratingEl) {
+        const _m = _ratingEl.textContent.match(/(\d+[.,]\d+)/);
+        if (_m) _rating = parseFloat(_m[1].replace(',', '.'));
+      }
+    }
+    if (!_rating) {
+      const _pats = [
+        /(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang|\u2b50|\u1f31f)/i,
+        /(?:rating|rate)\s*[:\-]?\s*(\d+[.,]\d+)/i,
+        // standalone rating like "4.8" (1-digit.1-digit, not surrounded by digits)
+        /(?<!\d)(\d\.\d)(?!\d)/,
+      ];
+      for (const _p of _pats) {
+        const _m = _pageText.match(_p);
+        if (_m) { _rating = parseFloat(_m[1].replace(',', '.')); break; }
+      }
+    }
+  }
+
+  // Review count (if not captured above)
+  if (!_reviewCount) {
+    const _rm = _pageText.match(/\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rm) {
+      let _rn = parseFloat(_rm[1].replace(/\./g, '').replace(',', '.'));
+      if (_rm[2]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    }
+  }
+
+  // Sold count (fallback if not already extracted) — disambiguates dot:
+  //   "1.5RB terjual" -> dot is DECIMAL    -> 1.5 * 1000 = 1500
+  //   "1.500 terjual"  -> dot is THOUSANDS  -> 1500
+  if (!_soldCount) {
+    const _soldPats = [
+      { pat: /(\d+(?:[.,]\d+)?)\s*(rb|ribu)\s*terjual/i, mult: true },
+      { pat: /terjual\s*(\d+(?:[.,]\d+)?)\s*\+?\s*(rb|ribu)?/i, mult: true },
+      { pat: /([\d.,]+)\s*\+?\s*terjual/i, mult: false },
+    ];
+    for (const { pat: _pat, mult: _mult } of _soldPats) {
+      const _m = _pageText.match(_pat);
+      if (_m) {
+        let _ns = _m[1];
+        _ns = _mult ? _ns.replace(',', '.') : _ns.replace(/\./g, '').replace(',', '.');
+        let _n = parseFloat(_ns);
+        if (_m[2] && /rb|ribu/i.test(_m[2])) _n *= 1000;
+        if (!isNaN(_n)) { _soldCount = Math.round(_n); break; }
+      }
+    }
+  }
+
+  // Location (fallback if not already extracted)
+  if (!_location) {
+    const _locEl = document.querySelector('[class*="location"], [class*="Location"], [class*="shop-location"], [class*="pcv3__info__shop"], [data-sqe="location"]');
+    if (_locEl) {
+      const _lt = (_locEl.textContent || '').trim();
+      const _lm = _lt.match(/(Kab(?:upaten|\.)?\s*[\w\s.]+|Kota\s+[\w\s.]+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+      if (_lm) _location = _lm[1].trim().substring(0, 50);
+    }
+  }
+
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: rating || _stats.rating || 4.5,
-    reviewCount: _stats.reviewCount || 0,
-    soldCount: soldCount || _stats.soldCount || 0,
-    location: location || _stats.location,
+    rating: _rating || 4.5,
+    reviewCount: _reviewCount,
+    soldCount: _soldCount,
+    location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
   };
@@ -1755,14 +1940,87 @@ function scrapeZaloraProduct() {
     if (cat && cat.length > 1 && cat.length < 50) category = cat;
   }
 
-  // v3.3.0: extractProductStats helper fills rating/sold/review if main selectors missed
-  const _stats = extractProductStats(document.body || document.documentElement);
+  // v3.3.1: inline stats extraction (top-level helper not available in page context
+  // when injected via chrome.scripting.executeScript({ func }))
+  const _pageText = (document.body?.textContent || '').trim();
+  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+
+  // Rating (fallback if not already extracted)
+  if (!_rating) {
+    const _rr = _pageText.match(/(\d+[.,]\d+)\s*\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rr) {
+      _rating = parseFloat(_rr[1].replace(',', '.'));
+      let _rn = parseFloat(_rr[2].replace(/\./g, '').replace(',', '.'));
+      if (_rr[3]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    } else {
+      const _ratingEl = document.querySelector('[class*="rating"], [class*="Rating"], [class*="pcv3__info__rating"], [data-testid*="Rating"], [data-testid*="rating"], [data-e2e*="rating"], .rating-value, .product-rating');
+      if (_ratingEl) {
+        const _m = _ratingEl.textContent.match(/(\d+[.,]\d+)/);
+        if (_m) _rating = parseFloat(_m[1].replace(',', '.'));
+      }
+    }
+    if (!_rating) {
+      const _pats = [
+        /(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang|\u2b50|\u1f31f)/i,
+        /(?:rating|rate)\s*[:\-]?\s*(\d+[.,]\d+)/i,
+        // standalone rating like "4.8" (1-digit.1-digit, not surrounded by digits)
+        /(?<!\d)(\d\.\d)(?!\d)/,
+      ];
+      for (const _p of _pats) {
+        const _m = _pageText.match(_p);
+        if (_m) { _rating = parseFloat(_m[1].replace(',', '.')); break; }
+      }
+    }
+  }
+
+  // Review count (if not captured above)
+  if (!_reviewCount) {
+    const _rm = _pageText.match(/\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rm) {
+      let _rn = parseFloat(_rm[1].replace(/\./g, '').replace(',', '.'));
+      if (_rm[2]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    }
+  }
+
+  // Sold count (fallback if not already extracted) — disambiguates dot:
+  //   "1.5RB terjual" -> dot is DECIMAL    -> 1.5 * 1000 = 1500
+  //   "1.500 terjual"  -> dot is THOUSANDS  -> 1500
+  if (!_soldCount) {
+    const _soldPats = [
+      { pat: /(\d+(?:[.,]\d+)?)\s*(rb|ribu)\s*terjual/i, mult: true },
+      { pat: /terjual\s*(\d+(?:[.,]\d+)?)\s*\+?\s*(rb|ribu)?/i, mult: true },
+      { pat: /([\d.,]+)\s*\+?\s*terjual/i, mult: false },
+    ];
+    for (const { pat: _pat, mult: _mult } of _soldPats) {
+      const _m = _pageText.match(_pat);
+      if (_m) {
+        let _ns = _m[1];
+        _ns = _mult ? _ns.replace(',', '.') : _ns.replace(/\./g, '').replace(',', '.');
+        let _n = parseFloat(_ns);
+        if (_m[2] && /rb|ribu/i.test(_m[2])) _n *= 1000;
+        if (!isNaN(_n)) { _soldCount = Math.round(_n); break; }
+      }
+    }
+  }
+
+  // Location (fallback if not already extracted)
+  if (!_location) {
+    const _locEl = document.querySelector('[class*="location"], [class*="Location"], [class*="shop-location"], [class*="pcv3__info__shop"], [data-sqe="location"]');
+    if (_locEl) {
+      const _lt = (_locEl.textContent || '').trim();
+      const _lm = _lt.match(/(Kab(?:upaten|\.)?\s*[\w\s.]+|Kota\s+[\w\s.]+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+      if (_lm) _location = _lm[1].trim().substring(0, 50);
+    }
+  }
+
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: rating || _stats.rating || 4.5,
-    reviewCount: _stats.reviewCount || 0,
-    soldCount: soldCount || _stats.soldCount || 0,
-    location: location || _stats.location,
+    rating: _rating || 4.5,
+    reviewCount: _reviewCount,
+    soldCount: _soldCount,
+    location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
   };
@@ -1850,14 +2108,87 @@ function scrapeSociollaProduct() {
     if (cat && cat.length > 1 && cat.length < 50) category = cat;
   }
 
-  // v3.3.0: extractProductStats helper fills rating/sold/review if main selectors missed
-  const _stats = extractProductStats(document.body || document.documentElement);
+  // v3.3.1: inline stats extraction (top-level helper not available in page context
+  // when injected via chrome.scripting.executeScript({ func }))
+  const _pageText = (document.body?.textContent || '').trim();
+  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+
+  // Rating (fallback if not already extracted)
+  if (!_rating) {
+    const _rr = _pageText.match(/(\d+[.,]\d+)\s*\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rr) {
+      _rating = parseFloat(_rr[1].replace(',', '.'));
+      let _rn = parseFloat(_rr[2].replace(/\./g, '').replace(',', '.'));
+      if (_rr[3]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    } else {
+      const _ratingEl = document.querySelector('[class*="rating"], [class*="Rating"], [class*="pcv3__info__rating"], [data-testid*="Rating"], [data-testid*="rating"], [data-e2e*="rating"], .rating-value, .product-rating');
+      if (_ratingEl) {
+        const _m = _ratingEl.textContent.match(/(\d+[.,]\d+)/);
+        if (_m) _rating = parseFloat(_m[1].replace(',', '.'));
+      }
+    }
+    if (!_rating) {
+      const _pats = [
+        /(\d+[.,]\d+)\s*(?:\/\s*5|dari\s*5|bintang|\u2b50|\u1f31f)/i,
+        /(?:rating|rate)\s*[:\-]?\s*(\d+[.,]\d+)/i,
+        // standalone rating like "4.8" (1-digit.1-digit, not surrounded by digits)
+        /(?<!\d)(\d\.\d)(?!\d)/,
+      ];
+      for (const _p of _pats) {
+        const _m = _pageText.match(_p);
+        if (_m) { _rating = parseFloat(_m[1].replace(',', '.')); break; }
+      }
+    }
+  }
+
+  // Review count (if not captured above)
+  if (!_reviewCount) {
+    const _rm = _pageText.match(/\(\s*(\d[\d.,]*)\s*(rb|ribu)?\s*(?:rating|review|evaluasi|ulasan)\s*\)/i);
+    if (_rm) {
+      let _rn = parseFloat(_rm[1].replace(/\./g, '').replace(',', '.'));
+      if (_rm[2]) _rn *= 1000;
+      _reviewCount = Math.round(_rn);
+    }
+  }
+
+  // Sold count (fallback if not already extracted) — disambiguates dot:
+  //   "1.5RB terjual" -> dot is DECIMAL    -> 1.5 * 1000 = 1500
+  //   "1.500 terjual"  -> dot is THOUSANDS  -> 1500
+  if (!_soldCount) {
+    const _soldPats = [
+      { pat: /(\d+(?:[.,]\d+)?)\s*(rb|ribu)\s*terjual/i, mult: true },
+      { pat: /terjual\s*(\d+(?:[.,]\d+)?)\s*\+?\s*(rb|ribu)?/i, mult: true },
+      { pat: /([\d.,]+)\s*\+?\s*terjual/i, mult: false },
+    ];
+    for (const { pat: _pat, mult: _mult } of _soldPats) {
+      const _m = _pageText.match(_pat);
+      if (_m) {
+        let _ns = _m[1];
+        _ns = _mult ? _ns.replace(',', '.') : _ns.replace(/\./g, '').replace(',', '.');
+        let _n = parseFloat(_ns);
+        if (_m[2] && /rb|ribu/i.test(_m[2])) _n *= 1000;
+        if (!isNaN(_n)) { _soldCount = Math.round(_n); break; }
+      }
+    }
+  }
+
+  // Location (fallback if not already extracted)
+  if (!_location) {
+    const _locEl = document.querySelector('[class*="location"], [class*="Location"], [class*="shop-location"], [class*="pcv3__info__shop"], [data-sqe="location"]');
+    if (_locEl) {
+      const _lt = (_locEl.textContent || '').trim();
+      const _lm = _lt.match(/(Kab(?:upaten|\.)?\s*[\w\s.]+|Kota\s+[\w\s.]+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+      if (_lm) _location = _lm[1].trim().substring(0, 50);
+    }
+  }
+
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: rating || _stats.rating || 4.5,
-    reviewCount: _stats.reviewCount || 0,
-    soldCount: soldCount || _stats.soldCount || 0,
-    location: location || _stats.location,
+    rating: _rating || 4.5,
+    reviewCount: _reviewCount,
+    soldCount: _soldCount,
+    location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
   };

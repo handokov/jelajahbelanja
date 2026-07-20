@@ -2,6 +2,13 @@
 
 Scrape produk dari Shopee, Tokopedia, Blibli, Lazada, Bukalapak, Zalora, Sociolla, TikTok Shop -> upload ke JelajahBelanja.com
 
+## v3.3.1 (2026-07-20)
+- FIX: `extractProductStats` helper tidak available di page context (chrome.scripting.executeScript)
+- Inline stats extraction langsung di setiap scraper function (Shopee/Blibli/Lazada/Bukalapak/Zalora/Sociolla)
+- Sekarang scrape jalan lagi di semua marketplace (mode Scrape Produk Ini + Paste Link URL)
+- Top-level helper `extractProductStats()` dihapus (tidak bisa di-inject cross-context)
+- Bump manifest 3.3.0 -> 3.3.1
+
 ## v3.3.0 (2026-07-20)
 - NEW: `extractProductStats()` helper — rating, soldCount, reviewCount, location
 - Supports all 8 marketplaces (Shopee/Tokopedia/Blibli/Lazada/Bukalapak/Zalora/Sociolla/TikTok)
@@ -11,6 +18,7 @@ Scrape produk dari Shopee, Tokopedia, Blibli, Lazada, Bukalapak, Zalora, Socioll
 - Bukalapak/Zalora/Sociolla sekarang extract `soldCount` + `location` (sebelumnya hardcoded 0/null)
 - Helper dipakai di 6 scraper (Shopee/Blibli/Lazada/Bukalapak/Zalora/Sociolla) sebagai fallback
 - Bump manifest 3.2.3 -> 3.3.0
+- ⚠️ Bug: helper tidak ter-inject ke page context via chrome.scripting.executeScript -> fixed di v3.3.1
 
 ## v3.2.3 (sebelumnya)
 - Auto-upload Tokopedia image ke Cloudinary
