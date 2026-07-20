@@ -129,21 +129,25 @@ export async function GET(
     const targetUrl = product.affiliateUrl || product.url;
 
     // ─── Log klik ke DB (untuk report analytics per produk) ───
-    // Fire-and-forget — tidak block redirect
-    db.productClick.create({
-      data: {
-        productId: dbId,
-        productTitle: product.title.slice(0, 200),
-        marketplace: product.marketplace || "unknown",
-        category: product.category || "unknown",
-        ipAddress: guard.ip,
-        userAgent: request.headers.get("user-agent")?.slice(0, 500) || null,
-        referer: request.headers.get("referer")?.slice(0, 500) || null,
-        blocked: false,
-      },
-    }).catch((err) => {
+    // WAJIB di-await — Vercel serverless kill function setelah response,
+    // kalau fire-and-forget, insert tidak sempat jalan
+    try {
+      await db.productClick.create({
+        data: {
+          productId: dbId,
+          productTitle: product.title.slice(0, 200),
+          marketplace: product.marketplace || "unknown",
+          category: product.category || "unknown",
+          ipAddress: guard.ip,
+          userAgent: request.headers.get("user-agent")?.slice(0, 500) || null,
+          referer: request.headers.get("referer")?.slice(0, 500) || null,
+          blocked: false,
+        },
+      });
+    } catch (err) {
       console.error("[beli] Failed to log click:", err);
-    });
+      // Jangan block redirect kalau logging gagal
+    }
 
     return NextResponse.redirect(targetUrl);
   } catch (err) {
