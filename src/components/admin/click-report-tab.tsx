@@ -138,20 +138,8 @@ function getMarketplaceColor(m: string): { badge: string; bar: string } {
 }
 
 function getMarketplaceEmoji(m: string): string {
-  switch ((m || "").toLowerCase()) {
-    case "shopee":
-      return "🛍️";
-    case "tokopedia":
-      return "🟢";
-    case "blibli":
-      return "🔵";
-    case "tiktok":
-      return "🎵";
-    case "zalora":
-      return "🛒";
-    default:
-      return "🏪";
-  }
+  // Emoji dihapus — pakai badge warna saja (lihat getMarketplaceColor)
+  return "";
 }
 
 function getMarketplaceLabel(m: string): string {
@@ -262,11 +250,11 @@ export function ClickReportTab() {
               className="h-9 rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-1 text-sm min-w-[160px]"
             >
               <option value="">Semua Marketplace</option>
-              <option value="shopee">🛍️ Shopee</option>
-              <option value="tokopedia">🟢 Tokopedia</option>
-              <option value="blibli">🔵 Blibli</option>
-              <option value="tiktok">🎵 TikTok Shop</option>
-              <option value="zalora">🛒 Zalora</option>
+              <option value="shopee">Shopee</option>
+              <option value="tokopedia">Tokopedia</option>
+              <option value="blibli">Blibli</option>
+              <option value="tiktok">TikTok Shop</option>
+              <option value="zalora">Zalora</option>
             </select>
           </div>
 
@@ -353,7 +341,7 @@ export function ClickReportTab() {
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-sm">
-              🔥 Produk Paling Banyak Diklik{" "}
+              Produk Paling Banyak Diklik{" "}
               <span className="text-zinc-400 font-normal">({topProducts.length})</span>
             </h3>
           </div>
@@ -441,7 +429,7 @@ export function ClickReportTab() {
       {/* ─── 4. Daily Clicks Chart ─── */}
       {data && (
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
-          <h3 className="font-semibold text-sm mb-4">📊 Klik per Hari</h3>
+          <h3 className="font-semibold text-sm mb-4">Klik per Hari</h3>
 
           {dailyStats.length === 0 ? (
             <p className="text-sm text-zinc-500 text-center py-8">
@@ -482,7 +470,7 @@ export function ClickReportTab() {
       {/* ─── 5. Marketplace breakdown ─── */}
       {data && (
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
-          <h3 className="font-semibold text-sm mb-4">🛒 Klik per Marketplace</h3>
+          <h3 className="font-semibold text-sm mb-4">Klik per Marketplace</h3>
 
           {byMarketplace.length === 0 ? (
             <p className="text-sm text-zinc-500 text-center py-8">
@@ -529,7 +517,7 @@ export function ClickReportTab() {
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-sm">
-              🕐 Klik Terakhir{" "}
+              Klik Terakhir{" "}
               <span className="text-zinc-400 font-normal">({recentClicks.length})</span>
             </h3>
           </div>
@@ -593,11 +581,11 @@ export function ClickReportTab() {
                             className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-[10px] px-1.5 h-4 cursor-help"
                             title={c.blockReason || "Diblokir"}
                           >
-                            ✗ Blocked
+                            Blocked
                           </Badge>
                         ) : (
                           <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 text-[10px] px-1.5 h-4">
-                            ✓ Allowed
+                            Allowed
                           </Badge>
                         )}
                       </div>
