@@ -757,3 +757,33 @@ Stage Summary:
 - Files modified: prisma/schema.prisma (ProductClick model), src/app/beli/[id]/route.ts (log clicks), src/app/jb-mgr-admin/page.tsx (Klik tab)
 - 0 lint errors, 0 TS errors
 - Production verified end-to-end
+
+---
+Task ID: remove-emoji-scrollable-tabs
+Agent: main
+Task: User request — "emoji logonya hapus aja, gak enak banget diliatnya ketumpuk2, kl ada fitur baru bisa slide aja"
+
+Work Log:
+- Analyzed screenshot via VLM — tidak ada emoji overlap di header admin (hanya ikon Lucide di tabs)
+- Identified emoji locations in click-report-tab.tsx:
+  - Headings: 🔥 Produk Paling Banyak Diklik, 📊 Klik per Hari, 🛒 Klik per Marketplace, 🕐 Klik Terakhir
+  - Status badges: ✓ Allowed, ✗ Blocked
+  - Marketplace options: 🛍️ Shopee, 🟢 Tokopedia, 🔵 Blibli, 🎵 TikTok Shop, 🛒 Zalora
+  - getMarketplaceEmoji function returns emoji per marketplace
+- Removed ALL emoji from click-report-tab.tsx via Python script (verified 0 emoji remaining)
+- Changed admin tabs layout in jb-mgr-admin/page.tsx:
+  - FROM: TabsList grid-cols-10 (rapat di mobile, tab numpuk)
+  - TO: TabsList flex + overflow-x-auto + whitespace-nowrap (horizontal scroll)
+  - All TabsTrigger: added flex-shrink-0 supaya tidak di-squeeze
+  - scrollbar styling: scrollbar-thin scrollbar-thumb-zinc-300
+- Commit e40231c pushed to GitHub
+- Vercel auto-deploy triggered (build in progress)
+- Verified via API: click-report response has 0 emoji ✅
+- Browser UI masih cache versi lama (grid-cols-10) — butuh hard reload / cache expire
+- User yang buka fresh akan langsung lihat versi baru
+
+Stage Summary:
+- Emoji dihapus dari click-report-tab (lebih clean, tidak berantakan)
+- Admin tabs sekarang horizontal scroll — kalau ada fitur baru tinggal tambah tab, auto-scroll kalau overflow, tidak numpuk
+- Commit e40231c pushed, Vercel building
+- Production API verified clean (0 emoji in response)
