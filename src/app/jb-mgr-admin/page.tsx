@@ -77,7 +77,7 @@ export default function AdminPage() {
       {/* Main */}
       <main className="container mx-auto px-4 max-w-5xl py-6">
         <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="flex w-full max-w-4xl h-11 overflow-x-auto overflow-y-hidden whitespace-nowrap gap-1 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
+          <TabsList className="flex w-full max-w-4xl h-11 overflow-x-auto overflow-y-hidden whitespace-nowrap gap-1 justify-start scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
             <TabsTrigger value="products" className="text-sm flex-shrink-0">
               <Package className="w-4 h-4 mr-1.5" />
               Produk
