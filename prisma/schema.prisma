@@ -141,3 +141,24 @@ model BlogArticle {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+// ProductClick — log klik produk (untuk report analytics per produk)
+// Dipakai oleh /beli/[id] route untuk track setiap klik "Beli di marketplace"
+// Lalu di-admin bisa lihat: top produk by clicks, grafik klik per hari, unique IP, dll
+model ProductClick {
+  id           String   @id @default(cuid())
+  productId    String                  // ShopeeProduct.id
+  productTitle String                  // snapshot title produk (utk report walau produk dihapus)
+  marketplace  String                  // shopee, tokopedia, blibli, tiktok, zalora
+  category     String                  // snapshot category produk
+  ipAddress    String                  // IP pengunjung (utk unique count & fraud detect)
+  userAgent    String?                 // browser UA (utk bot detect)
+  referer      String?                 // dari halaman mana klik (homepage, blog, kategori, dll)
+  blocked      Boolean  @default(false) // true kalau klik diblokir click-guard (bot/rate-limit)
+  blockReason  String?                 // alasan diblokir (bot detected, rate limit, dll)
+  createdAt    DateTime @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+  @@index([marketplace])
+}
