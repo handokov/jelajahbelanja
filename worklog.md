@@ -1105,3 +1105,43 @@ Stage Summary:
 - ZIP path: /home/z/my-project/download/jb-scraper-all-v331.zip (+ mirror in public/)
 - Both scrape modes now work: (1) Scrape Produk Ini on current tab, (2) Paste Link URL (uses same scraper funcs)
 - Note on verification metric: task expected grep -c "_pageText" = 6, actual = 30 (5 per scraper × 6 scrapers: 1 declaration + 4 regex match calls). This is the correct implementation per task's example code — the task's expectation of 6 was an undercount.
+
+---
+Task ID: fix-click-tracking-buy-link
+Agent: main
+Task: User report — "laporan klik belum berjalan, kalau user lihat produk tidak ada tambahan, di AT dapat 163 klik tapi JB cuma 9"
+
+Work Log:
+- Investigasi: 9 klik di JB semua dari IP sandbox (test ZAI), 0 dari user asli
+- Padahal AT dashboard user dapat 163 klik → berarti user klik Beli, AT track, tapi JB tidak
+- ROOT CAUSE 1: ProductCard & ProductDetailClient pakai affiliateUrl LANGSUNG
+  - Condition: product.id.startsWith("shopee-") ? /beli/[id] : affiliateUrl
+  - Product ID di DB = CUID ("cmr..."), TIDAK dimulai "shopee-"
+  - Jadi buyUrl = affiliateUrl (atid.me) → user klik → AT track → JB TIDAK log
+- ROOT CAUSE 2: blocked click logging masih fire-and-forget (.then().catch())
+  - Vercel kill function setelah return 429 HTML, insert tidak sempat jalan
+
+Fix 1 (commit 41250e2):
+- ProductCard: buyUrl SELALU /beli/\${product.id} (hapus condition startsWith)
+- ProductDetailClient: href SELALU /beli/\${product.id} (hapus fallback affiliateUrl)
+- /beli/[id] route akan: log klik → redirect ke affiliateUrl (atid.me)
+- AT tetap dapat tracking (karena /beli redirect ke atid.me)
+
+Fix 2 (commit 9e9193f):
+- /beli/[id] blocked click logging: ubah fire-and-forget → await
+- Try-catch, insert blocked click ke DB sebelum return 429 HTML
+
+Verification production:
+- Homepage: semua link Beli sekarang pakai /beli/[id] ✅ (verify via agent-browser)
+- Test klik via browser: totalClicks naik 9 → 10 ✅
+- Blocked click (IP sandbox kena rate limit) juga tercatat dengan blocked: True ✅
+- User asli akan: klik Beli → /beli/[id] → log → redirect atid.me → AT track
+  → JB log + AT log (double tracking, sinkron)
+
+Stage Summary:
+- Root cause utama: link Beli langsung ke affiliate URL, skip /beli/[id] route
+- Fix: selalu lewat /beli/[id] supaya JB log klik
+- Sekarang setiap klik Beli oleh user asli akan tercatat di tab Klik JB
+- Data akan sinkron dengan AT dashboard (JB log + AT log)
+- 2 commits: 41250e2 (link fix) + 9e9193f (blocked click await fix)
+- Production verified live
