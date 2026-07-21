@@ -548,7 +548,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
           <div className="flex gap-2">
             <Button asChild size="lg" className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold shadow-lg shadow-violet-500/25 h-12 text-base">
               <a
-                href={product.affiliateUrl || `/beli/shopee-${product.id}`}
+                href={`/beli/${product.id}`}
                 target="_blank"
                 rel="nofollow sponsored noopener noreferrer"
               >

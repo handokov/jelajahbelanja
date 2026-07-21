@@ -173,9 +173,9 @@ export function ProductCard({ product, variant = "default", rank, badges }: Prod
   // Link ke halaman detail produk
   const detailUrl = `/produk/${productSlug(product.title, product.id)}`;
   // Link beli langsung (shortlink / affiliate)
-  const buyUrl = product.id.startsWith("shopee-")
-    ? `/beli/${product.id}`
-    : (product.affiliateUrl || product.url);
+  // SELALU lewat /beli/[id] supaya klik tercatat di DB (click report)
+  // /beli route akan redirect ke affiliateUrl (atid.me) setelah logging
+  const buyUrl = `/beli/${product.id}`;
 
   if (variant === "featured") {
     return (
