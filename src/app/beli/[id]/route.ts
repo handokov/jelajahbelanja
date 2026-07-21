@@ -37,28 +37,30 @@ export async function GET(
     );
 
     // ─── Log blocked click ke DB (utk analisis fraud pattern) ───
-    // Fire-and-forget — ambil info produk dulu, lalu log
-    db.shopeeProduct.findUnique({
-      where: { id: dbId },
-      select: { title: true, marketplace: true, category: true },
-    }).then((product) => {
-      if (!product) return;
-      return db.productClick.create({
-        data: {
-          productId: dbId,
-          productTitle: product.title.slice(0, 200),
-          marketplace: product.marketplace || "unknown",
-          category: product.category || "unknown",
-          ipAddress: guard.ip,
-          userAgent: request.headers.get("user-agent")?.slice(0, 500) || null,
-          referer: request.headers.get("referer")?.slice(0, 500) || null,
-          blocked: true,
-          blockReason: guard.reason || "Unknown",
-        },
+    // WAJIB di-await — Vercel kill function setelah response
+    try {
+      const product = await db.shopeeProduct.findUnique({
+        where: { id: dbId },
+        select: { title: true, marketplace: true, category: true },
       });
-    }).catch((err) => {
+      if (product) {
+        await db.productClick.create({
+          data: {
+            productId: dbId,
+            productTitle: product.title.slice(0, 200),
+            marketplace: product.marketplace || "unknown",
+            category: product.category || "unknown",
+            ipAddress: guard.ip,
+            userAgent: request.headers.get("user-agent")?.slice(0, 500) || null,
+            referer: request.headers.get("referer")?.slice(0, 500) || null,
+            blocked: true,
+            blockReason: guard.reason || "Unknown",
+          },
+        });
+      }
+    } catch (err) {
       console.error("[beli] Failed to log blocked click:", err);
-    });
+    }
 
     // Return halaman peringatan (bukan redirect ke Shopee)
     const html = `<!DOCTYPE html>
