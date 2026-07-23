@@ -1145,3 +1145,30 @@ Stage Summary:
 - Data akan sinkron dengan AT dashboard (JB log + AT log)
 - 2 commits: 41250e2 (link fix) + 9e9193f (blocked click await fix)
 - Production verified live
+
+---
+Task ID: 2-add-referer-section
+Agent: frontend-styling-expert
+Task: Add "Klik per Sumber Trafik" (Referer breakdown) section to click-report-tab.tsx
+
+Work Log:
+- Read existing click-report-tab.tsx to study marketplace breakdown pattern (rounded-2xl border card, grid-cols-2 md:grid-cols-5 gap-3, per-source card with label + clicks + pct + progress bar)
+- Added RefererStat interface ({ source: string; clicks: number }) after MarketplaceStat
+- Extended ClickReportResponse with `byReferer: RefererStat[]` field
+- Added `getRefererMeta(source)` helper after getMarketplaceEmoji — returns { emoji, label, color } for all 11 sources (pinterest, tiktok, threads, instagram, facebook, google, youtube, twitter, direct, jb_internal, other) + default fallback
+- Added safe accessor `byReferer = data?.byReferer ?? []` next to byMarketplace
+- Added `totalRefererClicks` useMemo (reduce sum of clicks) mirroring totalMarketplaceClicks pattern
+- Inserted new section "Klik per Sumber Trafik" (section 6) BETWEEN marketplace breakdown (5) and recent clicks log (renumbered 6 → 7)
+- Section uses same card structure as marketplace breakdown: rounded-xl border + zinc-50 bg, emoji + label, bold clicks count, pct text-[10px] zinc-500, h-1.5 progress bar with per-source color
+- Grid: grid-cols-2 md:grid-cols-4 (4 cols instead of 5 since referer sources are more numerous)
+- Heading is plain "Klik per Sumber Trafik" with NO emoji (per user's previous request to remove emojis from headings)
+- Empty state shows italic text "Belum ada data referer."
+- Lint check: 0 errors in click-report-tab.tsx (existing lint errors in unrelated files: download/jb-image-server, scripts/, src/components/outfit-style-board.tsx are pre-existing and not touched by this task)
+
+Stage Summary:
+- New "Klik per Sumber Trafik" section added to admin Klik tab showing per-source click breakdown
+- Each source gets: emoji icon, human label, click count (bold lg), % of total, colored progress bar
+- Consistent styling with existing marketplace breakdown section
+- Section placed after marketplace breakdown, before recent clicks log
+- TypeScript-safe via optional chaining + nullish coalescing fallback
+- Lint clean for click-report-tab.tsx

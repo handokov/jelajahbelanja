@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, Star, ExternalLink, MapPin } from "lucide-react";
+import { Sparkles, Star, ExternalLink, MapPin, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,6 +120,9 @@ function ViralBadge() {
 }
 
 function RatingStars({ rating, reviewCount }: { rating: number; reviewCount: number }) {
+  // Hide kalau tidak ada review (data masih default/kosong dari scraper)
+  // Tampilkan hanya kalau reviewCount > 0 supaya credible
+  if (!reviewCount || reviewCount <= 0) return null;
   return (
     <div className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
       <div className="flex items-center gap-0.5">
@@ -223,14 +226,17 @@ export function ProductCard({ product, variant = "default", rank, badges }: Prod
               size="large"
             />
             <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
-            <div className="text-sm text-zinc-700 dark:text-zinc-300">
-              <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
-                {formatSoldCount(product.soldCount)}
-              </span>
-              <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
-                · Viral score: {product.viralScore.toFixed(1)}
-              </span>
-            </div>
+            {product.soldCount > 0 && (
+              <div className="text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5 text-fuchsia-600 dark:text-fuchsia-400" />
+                <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
+                  {formatSoldCount(product.soldCount)}
+                </span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  · Viral: {product.viralScore.toFixed(1)}
+                </span>
+              </div>
+            )}
             {badges && badges.length > 0 && (
               <div className="pt-1">
                 <ProductBadgeStrip badges={badges} />
@@ -289,10 +295,16 @@ export function ProductCard({ product, variant = "default", rank, badges }: Prod
             )}
           </div>
           <div className="flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
-            <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
-            <span>{product.rating.toFixed(1)}</span>
-            <span aria-hidden>·</span>
-            <span>{formatSoldCount(product.soldCount)}</span>
+            {product.reviewCount > 0 && (
+              <>
+                <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+                <span>{product.rating.toFixed(1)}</span>
+                <span aria-hidden>·</span>
+              </>
+            )}
+            <span className={product.soldCount > 0 ? "font-semibold text-fuchsia-600 dark:text-fuchsia-400" : ""}>
+              {product.soldCount > 0 ? formatSoldCount(product.soldCount) : ""}
+            </span>
           </div>
         </div>
       </Link>
@@ -338,11 +350,14 @@ export function ProductCard({ product, variant = "default", rank, badges }: Prod
           </h3>
           <PriceBlock price={product.price} originalPrice={product.originalPrice} />
           <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
-          <div className="text-[10px] sm:text-xs text-zinc-600 dark:text-zinc-400">
-            <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
-              {formatSoldCount(product.soldCount)}
-            </span>
-          </div>
+          {product.soldCount > 0 && (
+            <div className="text-[10px] sm:text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
+              <TrendingUp className="w-3 h-3 text-fuchsia-600 dark:text-fuchsia-400" />
+              <span className="font-semibold text-fuchsia-600 dark:text-fuchsia-400">
+                {formatSoldCount(product.soldCount)}
+              </span>
+            </div>
+          )}
         </Link>
         <Button asChild size="sm" variant="outline" className="mt-auto w-full h-8 sm:h-9 text-xs">
           <a

@@ -50,6 +50,11 @@ interface MarketplaceStat {
   clicks: number;
 }
 
+interface RefererStat {
+  source: string;
+  clicks: number;
+}
+
 interface RecentClick {
   id: string;
   productId: string;
@@ -71,6 +76,7 @@ interface ClickReportResponse {
   topProducts: TopProduct[];
   dailyStats: DailyStat[];
   byMarketplace: MarketplaceStat[];
+  byReferer: RefererStat[];
   recentClicks: RecentClick[];
 }
 
@@ -142,6 +148,35 @@ function getMarketplaceEmoji(m: string): string {
   return "";
 }
 
+function getRefererMeta(source: string): { emoji: string; label: string; color: string } {
+  switch (source) {
+    case "pinterest":
+      return { emoji: "📌", label: "Pinterest", color: "bg-red-500" };
+    case "tiktok":
+      return { emoji: "🎵", label: "TikTok", color: "bg-zinc-900 dark:bg-zinc-100" };
+    case "threads":
+      return { emoji: "🧵", label: "Threads", color: "bg-black dark:bg-white" };
+    case "instagram":
+      return { emoji: "📷", label: "Instagram", color: "bg-pink-500" };
+    case "facebook":
+      return { emoji: "👤", label: "Facebook", color: "bg-blue-600" };
+    case "google":
+      return { emoji: "🔍", label: "Google", color: "bg-emerald-500" };
+    case "youtube":
+      return { emoji: "▶️", label: "YouTube", color: "bg-red-600" };
+    case "twitter":
+      return { emoji: "🐦", label: "Twitter/X", color: "bg-sky-500" };
+    case "direct":
+      return { emoji: "🔗", label: "Direct Link", color: "bg-zinc-500" };
+    case "jb_internal":
+      return { emoji: "🏠", label: "Internal JB", color: "bg-fuchsia-500" };
+    case "other":
+      return { emoji: "🌐", label: "Lainnya", color: "bg-amber-500" };
+    default:
+      return { emoji: "❓", label: source, color: "bg-zinc-400" };
+  }
+}
+
 function getMarketplaceLabel(m: string): string {
   const map: Record<string, string> = {
     shopee: "Shopee",
@@ -192,6 +227,7 @@ export function ClickReportTab() {
   const topProducts = data?.topProducts ?? [];
   const dailyStats = data?.dailyStats ?? [];
   const byMarketplace = data?.byMarketplace ?? [];
+  const byReferer = data?.byReferer ?? [];
   const recentClicks = data?.recentClicks ?? [];
 
   const maxDailyClicks = React.useMemo(() => {
@@ -202,6 +238,10 @@ export function ClickReportTab() {
   const totalMarketplaceClicks = React.useMemo(() => {
     return byMarketplace.reduce((sum, m) => sum + m.clicks, 0);
   }, [byMarketplace]);
+
+  const totalRefererClicks = React.useMemo(() => {
+    return byReferer.reduce((sum, r) => sum + r.clicks, 0);
+  }, [byReferer]);
 
   function handleRefresh() {
     refetch();
@@ -512,7 +552,52 @@ export function ClickReportTab() {
         </div>
       )}
 
-      {/* ─── 6. Recent Clicks log ─── */}
+      {/* ─── 6. Klik per Sumber Trafik (Referer) ─── */}
+      {data && (
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
+          <h3 className="font-semibold text-sm mb-4">Klik per Sumber Trafik</h3>
+
+          {byReferer.length === 0 ? (
+            <p className="text-sm text-zinc-500 text-center py-8">
+              Belum ada data referer.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {byReferer.map((r) => {
+                const meta = getRefererMeta(r.source);
+                const pct =
+                  totalRefererClicks > 0
+                    ? (r.clicks / totalRefererClicks) * 100
+                    : 0;
+                return (
+                  <div
+                    key={r.source}
+                    className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 bg-zinc-50 dark:bg-zinc-800/50"
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-base">{meta.emoji}</span>
+                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">
+                        {meta.label}
+                      </span>
+                    </div>
+                    <p className="font-bold text-lg">{r.clicks.toLocaleString("id-ID")}</p>
+                    <p className="text-[10px] text-zinc-500 mb-1.5">{pct.toFixed(1)}% dari total</p>
+                    {/* Progress bar */}
+                    <div className="h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${meta.color}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── 7. Recent Clicks log ─── */}
       {data && (
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 md:p-6">
           <div className="flex items-center justify-between mb-3">
