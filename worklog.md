@@ -1172,3 +1172,50 @@ Stage Summary:
 - Section placed after marketplace breakdown, before recent clicks log
 - TypeScript-safe via optional chaining + nullish coalescing fallback
 - Lint clean for click-report-tab.tsx
+
+---
+Task ID: feature-rating-display-referer-breakdown
+Agent: main
+Task: User request — kerjakan #1 (Rating+Sold di ProductCard) & #2 (Referer breakdown di Tab Klik)
+
+Work Log:
+#1 ProductCard: tampilkan rating + soldCount cuma kalau ada data real
+- RatingStars function: return null kalau reviewCount <= 0
+  (sebelumnya tampil "4.5 · 0 review" yang tidak credible)
+- Featured variant: soldCount display pakai TrendingUp icon (fuchsia), hide kalau 0
+- Default variant: soldCount display dengan TrendingUp icon, hide kalau 0
+- Compact variant: conditional render rating+sold, hide kalau kosong
+- Tambah import TrendingUp dari lucide-react
+- Effect: card lebih clean, kalau data kosong tidak tampil "0 review · 0 terjual"
+
+#2 Click Report: tambah section "Klik per Sumber Trafik"
+- API /api/admin/click-report/route.ts:
+  - Tambah field byReferer di response
+  - Categorize 11 sources: pinterest, tiktok, threads, instagram, facebook,
+    google, youtube, twitter, direct, jb_internal, other
+  - App-level filter (tolowercase + includes) supaya cross-DB compat
+- Component click-report-tab.tsx:
+  - Tambah interface RefererStat + byReferer field
+  - Tambah helper getRefererMeta(source) — return emoji, label, color per source
+  - Tambah section "Klik per Sumber Trafik" (grid 2-4 cols)
+  - Card: emoji + label + clicks + percentage + progress bar (colored per source)
+  - Section heading tanpa emoji (per user preference sebelumnya)
+- User bisa lihat: Pinterest bawa X klik, TikTok Y klik, Google Z klik
+  → tahu platform mana yang paling effective bawa traffic
+
+Verification production (commit 406ae2a):
+- Tab Klik: 5 sections render (Produk Paling, Klik per Hari, Klik per Marketplace,
+  Klik per Sumber Trafik, Klik Terakhir) ✅
+- byReferer data real: 31 direct + 3 jb_internal ✅
+- ProductCard homepage: "0 review" hilang, card lebih clean ✅
+- Total klik naik dari 9 (test) → 34 (ada user asli klik via /beli/[id])
+
+Stage Summary:
+- #1 Rating+Sold hide kalau kosong: live di production, card lebih credible
+- #2 Referer breakdown: live di production, user bisa track traffic source per platform
+- Setelah scraper v3.3.1 jalan + data rating/sold masuk, ProductCard akan auto-tampil
+  social proof (4.9 ⭐ · 1.2k review · 1.2RB terjual)
+- Setelah user aktif pin di Pinterest + post TikTok, byReferer akan tampil
+  breakdown per platform → user bisa fokus ke platform yang paling effective
+- 1 commit: 406ae2a
+- Production verified live via agent-browser
