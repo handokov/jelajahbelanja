@@ -108,6 +108,55 @@ export async function GET(req: NextRequest) {
       orderBy: { _count: { id: "desc" } },
     });
 
+    // ─── 3b. Klik per referer source (Pinterest/TikTok/Threads/Google/Direct/Other) ───
+    const allClicksForReferer = await db.productClick.findMany({
+      where,
+      select: { referer: true },
+    });
+    const refererCategories: Record<string, number> = {
+      pinterest: 0,
+      tiktok: 0,
+      threads: 0,
+      instagram: 0,
+      facebook: 0,
+      google: 0,
+      youtube: 0,
+      twitter: 0,
+      direct: 0,
+      jb_internal: 0,
+      other: 0,
+    };
+    for (const c of allClicksForReferer) {
+      const ref = (c.referer || "").toLowerCase();
+      if (!ref || ref === "direct") {
+        refererCategories.direct++;
+      } else if (ref.includes("jelajahbelanja.com")) {
+        refererCategories.jb_internal++;
+      } else if (ref.includes("pinterest")) {
+        refererCategories.pinterest++;
+      } else if (ref.includes("tiktok")) {
+        refererCategories.tiktok++;
+      } else if (ref.includes("threads")) {
+        refererCategories.threads++;
+      } else if (ref.includes("instagram")) {
+        refererCategories.instagram++;
+      } else if (ref.includes("facebook") || ref.includes("fb.com")) {
+        refererCategories.facebook++;
+      } else if (ref.includes("google")) {
+        refererCategories.google++;
+      } else if (ref.includes("youtube") || ref.includes("youtu.be")) {
+        refererCategories.youtube++;
+      } else if (ref.includes("twitter") || ref.includes("x.com")) {
+        refererCategories.twitter++;
+      } else {
+        refererCategories.other++;
+      }
+    }
+    const byReferer = Object.entries(refererCategories)
+      .filter(([_, count]) => count > 0)
+      .map(([source, clicks]) => ({ source, clicks }))
+      .sort((a, b) => b.clicks - a.clicks);
+
     // ─── 4. Overall stats ───
     const totalCount = await db.productClick.count({ where });
     const blockedCount = await db.productClick.count({ where: { ...where, blocked: true } });
@@ -161,6 +210,7 @@ export async function GET(req: NextRequest) {
         marketplace: m.marketplace,
         clicks: m._count.id,
       })),
+      byReferer,
       recentClicks,
     });
   } catch (err: any) {
