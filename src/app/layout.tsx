@@ -145,6 +145,8 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <head>
+        {/* Pinterest website verification */}
+        <meta name="p:domain_verify" content="9630ed65f8d1c0b58a7ff760f26656b8" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
