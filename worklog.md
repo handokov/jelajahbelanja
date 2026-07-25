@@ -1285,3 +1285,38 @@ Stage Summary:
 - Setelah data masuk, ProductCard (yang sudah hide 0 review) akan auto-tampil social proof real
 - 1 commit: a9c8114
 - Production verified live
+
+---
+Task ID: scraper-manual-rating-input
+Agent: general-purpose
+Task: Tambah kolom input manual untuk rating, soldCount, reviewCount di popup scraper
+
+Work Log:
+- Read worklog.md + popup.js (2196 lines) + manifest.json + README.md untuk understand existing pattern (aff-input & img-input)
+- Found existing pattern: renderCollection() template literal + querySelectorAll forEach addEventListener('change', ...) per class
+- Note: `updateProductField` helper tidak ada di codebase — task spec assumed it existed. Created small helper supaya bisa pakai persis seperti task spec, ditaruh setelah clearCollection() (line 370-377)
+- Added 3 new input fields in renderCollection HTML (after .img-input, before closing </div>):
+    * label row (⭐ Rating / 📦 Terjual / 💬 Review) — flex, font-size 9px, color #71717a
+    * flex row dengan 3 <input type="number">: .rating-input (step 0.1, min 0, max 5), .sold-input (step 1, min 0), .review-input (step 1, min 0)
+    * value empty string jika default (rating=4.5 atau 0) supaya placeholder muncul
+- Added 3 event listeners setelah .aff-input listener, pakai updateProductField helper:
+    * rating: parseFloat, fallback 4.5 jika NaN/diluar range 0-5
+    * soldCount: parseInt base 10, fallback 0 jika NaN/negatif
+    * reviewCount: parseInt base 10, fallback 0 jika NaN/negatif
+- Pakai arrow function `(e) =>` + `e.target` (konsisten dengan handler .img-input/.aff-input yang sudah ada), bukan `function() { this }` — lebih aman di forEach context
+- Bump version manifest.json: 3.3.3 → 3.3.4, update description mention manual input + anti-bot Shopee
+- Update README.md: tambah changelog v3.3.4 (2026-07-25) di atas v3.3.1
+- Verify: `node --check popup.js` PASS (no syntax errors)
+- Verify: grep counts — rating-input: 2, sold-input: 2, review-input: 2, updateProductField: 4 (1 def + 3 listeners) — all >= 2 as required
+- Verify: manifest.json parse OK, version 3.3.4, description updated
+- Repackage ZIP: rm -f jb-scraper-all-v334.zip && zip -r (19967 bytes, 9 files)
+- Copy ke public: /home/z/my-project/public/jb-scraper-all-v334.zip (19967 bytes, sama persis)
+- Existing scrape flow (v3.3.3 working) tidak diubah — auto-extract logic tetap utuh sebagai fallback
+
+Stage Summary:
+- 3 files modified: popup.js (+62 lines: 1 helper + 10 HTML + 25 listener), manifest.json (version+desc), README.md (+6 lines changelog)
+- 1 new file: jb-scraper-all-v334.zip (19967 bytes) di /home/z/my-project/download/ dan /home/z/my-project/public/
+- User sekarang bisa isi manual rating/soldCount/reviewCount per produk di popup setelah scrape, sebelum upload ke JB
+- Default value tetap dipakai (rating=4.5, sold=0, review=0) jika user tidak isi — backward compatible dengan upload logic di line 615-617 (product.rating || 4.5 dst)
+- v3.3.3 working scrape flow preserved (auto-extract tetap jalan sebagai fallback kalau Shopee tidak block)
+- Verification: node --check PASS, grep counts all ≥ 2, manifest valid JSON

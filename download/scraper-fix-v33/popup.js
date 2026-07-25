@@ -367,6 +367,15 @@ async function clearCollection() {
   renderCollection();
 }
 
+// v3.3.4: Update single field on a collection item (used by manual rating/sold/review inputs)
+async function updateProductField(idx, field, value) {
+  const coll = await getCollection();
+  if (coll[idx]) {
+    coll[idx][field] = value;
+    await saveCollection(coll);
+  }
+}
+
 async function renderCollection() {
   const collection = await getCollection();
   const listEl = document.getElementById('productList');
@@ -405,6 +414,16 @@ async function renderCollection() {
         </div>
         <input type="text" class="aff-input" data-index="${i}" placeholder="Paste affiliate URL di sini..." value="${p.affiliateUrl || ''}" style="width:100%;margin-top:4px;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;">
         <input type="text" class="img-input" data-index="${i}" placeholder="Image URL (bisa diubah / paste Cloudinary URL)" value="${p.image || ''}" style="width:100%;margin-top:2px;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;">
+        <div style="display:flex;gap:4px;margin-top:3px;font-size:9px;color:#71717a;">
+          <span style="flex:1;">⭐ Rating</span>
+          <span style="flex:1;">📦 Terjual</span>
+          <span style="flex:1;">💬 Review</span>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:2px;">
+          <input type="number" class="rating-input" data-index="${i}" placeholder="Rating" value="${p.rating && p.rating !== 4.5 ? p.rating : ''}" step="0.1" min="0" max="5" style="flex:1;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;" title="Rating bintang (0-5), contoh: 4.9">
+          <input type="number" class="sold-input" data-index="${i}" placeholder="Terjual" value="${p.soldCount && p.soldCount > 0 ? p.soldCount : ''}" min="0" step="1" style="flex:1;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;" title="Jumlah terjual, contoh: 1200">
+          <input type="number" class="review-input" data-index="${i}" placeholder="Review" value="${p.reviewCount && p.reviewCount > 0 ? p.reviewCount : ''}" min="0" step="1" style="flex:1;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;" title="Jumlah review/penilaian, contoh: 856">
+        </div>
       </div>
     `).join('');
 
@@ -478,6 +497,33 @@ async function renderCollection() {
           const mpEl = e.target.parentElement.querySelector('.info-mp');
           if (mpEl) mpEl.textContent = `${coll[idx].marketplace}${url ? ' ✅' : ' ⚠️ no aff'}`;
         }
+      });
+    });
+
+    // v3.3.4: Rating manual input handler (auto-extract dari marketplace sering diblok anti-bot)
+    listEl.querySelectorAll('.rating-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const idx = parseInt(e.target.dataset.index, 10);
+        const val = parseFloat(e.target.value);
+        await updateProductField(idx, 'rating', (!isNaN(val) && val >= 0 && val <= 5) ? val : 4.5);
+      });
+    });
+
+    // v3.3.4: Sold count manual input handler
+    listEl.querySelectorAll('.sold-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const idx = parseInt(e.target.dataset.index, 10);
+        const val = parseInt(e.target.value, 10);
+        await updateProductField(idx, 'soldCount', (!isNaN(val) && val >= 0) ? val : 0);
+      });
+    });
+
+    // v3.3.4: Review count manual input handler
+    listEl.querySelectorAll('.review-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const idx = parseInt(e.target.dataset.index, 10);
+        const val = parseInt(e.target.value, 10);
+        await updateProductField(idx, 'reviewCount', (!isNaN(val) && val >= 0) ? val : 0);
       });
     });
 
