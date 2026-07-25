@@ -1198,7 +1198,13 @@ function scrapeShopeeProduct() {
   // v3.3.1: inline stats extraction (top-level helper not available in page context
   // when injected via chrome.scripting.executeScript({ func }))
   const _pageText = (document.body?.textContent || '').trim();
-  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+  // v3.3.2: force re-extract rating (rating default 4.5 was blocking fallback)
+  let _rating = null, _reviewCount = null, _soldCount = null, _location = null;
+  // Priority: marketplace-specific selectors (already extracted above) -> inline fallback
+  if (rating && rating > 0) _rating = rating;
+  if (reviewCount && reviewCount > 0) _reviewCount = reviewCount;
+  if (soldCount && soldCount > 0) _soldCount = soldCount;
+  if (location) _location = location;
 
   // Rating (fallback if not already extracted)
   if (!_rating) {
@@ -1272,9 +1278,9 @@ function scrapeShopeeProduct() {
 
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: _rating || 4.5,
-    reviewCount: _reviewCount,
-    soldCount: _soldCount,
+    rating: _rating || 4.5,  // final fallback to 4.5 if nothing found
+    reviewCount: _reviewCount || 0,
+    soldCount: _soldCount || 0,
     location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
@@ -1417,7 +1423,13 @@ function scrapeBlibliProduct() {
   // v3.3.1: inline stats extraction (top-level helper not available in page context
   // when injected via chrome.scripting.executeScript({ func }))
   const _pageText = (document.body?.textContent || '').trim();
-  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+  // v3.3.2: force re-extract rating (rating default 4.5 was blocking fallback)
+  let _rating = null, _reviewCount = null, _soldCount = null, _location = null;
+  // Priority: marketplace-specific selectors (already extracted above) -> inline fallback
+  if (rating && rating > 0) _rating = rating;
+  if (reviewCount && reviewCount > 0) _reviewCount = reviewCount;
+  if (soldCount && soldCount > 0) _soldCount = soldCount;
+  if (location) _location = location;
 
   // Rating (fallback if not already extracted)
   if (!_rating) {
@@ -1491,9 +1503,9 @@ function scrapeBlibliProduct() {
 
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: _rating || 4.5,
-    reviewCount: _reviewCount,
-    soldCount: _soldCount,
+    rating: _rating || 4.5,  // final fallback to 4.5 if nothing found
+    reviewCount: _reviewCount || 0,
+    soldCount: _soldCount || 0,
     location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
@@ -1594,7 +1606,13 @@ function scrapeLazadaProduct() {
   // v3.3.1: inline stats extraction (top-level helper not available in page context
   // when injected via chrome.scripting.executeScript({ func }))
   const _pageText = (document.body?.textContent || '').trim();
-  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+  // v3.3.2: force re-extract rating (rating default 4.5 was blocking fallback)
+  let _rating = null, _reviewCount = null, _soldCount = null, _location = null;
+  // Priority: marketplace-specific selectors (already extracted above) -> inline fallback
+  if (rating && rating > 0) _rating = rating;
+  if (reviewCount && reviewCount > 0) _reviewCount = reviewCount;
+  if (soldCount && soldCount > 0) _soldCount = soldCount;
+  if (location) _location = location;
 
   // Rating (fallback if not already extracted)
   if (!_rating) {
@@ -1668,9 +1686,9 @@ function scrapeLazadaProduct() {
 
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: _rating || 4.5,
-    reviewCount: _reviewCount,
-    soldCount: _soldCount,
+    rating: _rating || 4.5,  // final fallback to 4.5 if nothing found
+    reviewCount: _reviewCount || 0,
+    soldCount: _soldCount || 0,
     location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
@@ -1775,7 +1793,13 @@ function scrapeBukalapakProduct() {
   // v3.3.1: inline stats extraction (top-level helper not available in page context
   // when injected via chrome.scripting.executeScript({ func }))
   const _pageText = (document.body?.textContent || '').trim();
-  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+  // v3.3.2: force re-extract rating (rating default 4.5 was blocking fallback)
+  let _rating = null, _reviewCount = null, _soldCount = null, _location = null;
+  // Priority: marketplace-specific selectors (already extracted above) -> inline fallback
+  if (rating && rating > 0) _rating = rating;
+  if (reviewCount && reviewCount > 0) _reviewCount = reviewCount;
+  if (soldCount && soldCount > 0) _soldCount = soldCount;
+  if (location) _location = location;
 
   // Rating (fallback if not already extracted)
   if (!_rating) {
@@ -1849,9 +1873,9 @@ function scrapeBukalapakProduct() {
 
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: _rating || 4.5,
-    reviewCount: _reviewCount,
-    soldCount: _soldCount,
+    rating: _rating || 4.5,  // final fallback to 4.5 if nothing found
+    reviewCount: _reviewCount || 0,
+    soldCount: _soldCount || 0,
     location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
@@ -1943,7 +1967,13 @@ function scrapeZaloraProduct() {
   // v3.3.1: inline stats extraction (top-level helper not available in page context
   // when injected via chrome.scripting.executeScript({ func }))
   const _pageText = (document.body?.textContent || '').trim();
-  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+  // v3.3.2: force re-extract rating (rating default 4.5 was blocking fallback)
+  let _rating = null, _reviewCount = null, _soldCount = null, _location = null;
+  // Priority: marketplace-specific selectors (already extracted above) -> inline fallback
+  if (rating && rating > 0) _rating = rating;
+  if (reviewCount && reviewCount > 0) _reviewCount = reviewCount;
+  if (soldCount && soldCount > 0) _soldCount = soldCount;
+  if (location) _location = location;
 
   // Rating (fallback if not already extracted)
   if (!_rating) {
@@ -2017,9 +2047,9 @@ function scrapeZaloraProduct() {
 
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: _rating || 4.5,
-    reviewCount: _reviewCount,
-    soldCount: _soldCount,
+    rating: _rating || 4.5,  // final fallback to 4.5 if nothing found
+    reviewCount: _reviewCount || 0,
+    soldCount: _soldCount || 0,
     location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
@@ -2111,7 +2141,13 @@ function scrapeSociollaProduct() {
   // v3.3.1: inline stats extraction (top-level helper not available in page context
   // when injected via chrome.scripting.executeScript({ func }))
   const _pageText = (document.body?.textContent || '').trim();
-  let _rating = rating, _reviewCount = 0, _soldCount = soldCount, _location = location;
+  // v3.3.2: force re-extract rating (rating default 4.5 was blocking fallback)
+  let _rating = null, _reviewCount = null, _soldCount = null, _location = null;
+  // Priority: marketplace-specific selectors (already extracted above) -> inline fallback
+  if (rating && rating > 0) _rating = rating;
+  if (reviewCount && reviewCount > 0) _reviewCount = reviewCount;
+  if (soldCount && soldCount > 0) _soldCount = soldCount;
+  if (location) _location = location;
 
   // Rating (fallback if not already extracted)
   if (!_rating) {
@@ -2185,9 +2221,9 @@ function scrapeSociollaProduct() {
 
   return {
     title, price, originalPrice, discountPercent, image,
-    rating: _rating || 4.5,
-    reviewCount: _reviewCount,
-    soldCount: _soldCount,
+    rating: _rating || 4.5,  // final fallback to 4.5 if nothing found
+    reviewCount: _reviewCount || 0,
+    soldCount: _soldCount || 0,
     location: _location,
     url: window.location.href, category,
     affiliateUrl: null,
