@@ -424,6 +424,10 @@ async function renderCollection() {
           <input type="number" class="sold-input" data-index="${i}" placeholder="Terjual" value="${p.soldCount && p.soldCount > 0 ? p.soldCount : ''}" min="0" step="1" style="flex:1;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;" title="Jumlah terjual, contoh: 1200">
           <input type="number" class="review-input" data-index="${i}" placeholder="Review" value="${p.reviewCount && p.reviewCount > 0 ? p.reviewCount : ''}" min="0" step="1" style="flex:1;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;" title="Jumlah review/penilaian, contoh: 856">
         </div>
+        <div style="display:flex;gap:4px;margin-top:3px;font-size:9px;color:#71717a;">
+          <span style="flex:1;">📍 Lokasi Seller</span>
+        </div>
+        <input type="text" class="location-input" data-index="${i}" placeholder="Lokasi seller, contoh: Jakarta Barat / Kab. Tangerang" value="${p.location ? escapeHtml(p.location) : ''}" style="width:100%;margin-top:2px;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;" title="Lokasi seller, contoh: Jakarta Barat, Kab. Tangerang, Bandung">
       </div>
     `).join('');
 
@@ -524,6 +528,15 @@ async function renderCollection() {
         const idx = parseInt(e.target.dataset.index, 10);
         const val = parseInt(e.target.value, 10);
         await updateProductField(idx, 'reviewCount', (!isNaN(val) && val >= 0) ? val : 0);
+      });
+    });
+
+    // v3.3.5: Location seller manual input handler
+    listEl.querySelectorAll('.location-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const idx = parseInt(e.target.dataset.index, 10);
+        const val = (e.target.value || '').trim();
+        await updateProductField(idx, 'location', val || null);
       });
     });
 

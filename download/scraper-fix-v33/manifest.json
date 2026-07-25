@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "JB Scraper (All Marketplace)",
-  "version": "3.3.4",
-  "description": "JB Scraper v3.3.4 — v3.2.3 + input manual rating/sold/review (auto-extract gagal karena anti-bot Shopee)",
+  "version": "3.3.5",
+  "description": "JB Scraper v3.3.5 — v3.2.3 + input manual rating/sold/review/location (auto-extract gagal karena anti-bot Shopee)",
   "permissions": [
     "activeTab",
     "scripting",
