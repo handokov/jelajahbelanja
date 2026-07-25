@@ -2,6 +2,12 @@
 
 Scrape produk dari Shopee, Tokopedia, Blibli, Lazada, Bukalapak, Zalora, Sociolla, TikTok Shop -> upload ke JelajahBelanja.com
 
+## v3.3.4 (2026-07-25)
+- NEW: Input manual rating, terjual, review per produk di popup
+- Auto-extract rating dari marketplace gagal (Shopee/Tokopedia anti-bot)
+- User bisa isi manual setelah scrape, sebelum upload ke JB
+- 3 kolom: Rating (0-5), Terjual, Review — di setiap product card
+
 ## v3.3.1 (2026-07-20)
 - FIX: `extractProductStats` helper tidak available di page context (chrome.scripting.executeScript)
 - Inline stats extraction langsung di setiap scraper function (Shopee/Blibli/Lazada/Bukalapak/Zalora/Sociolla)
