@@ -2,11 +2,6 @@
 
 Scrape produk dari Shopee, Tokopedia, Blibli, Lazada, Bukalapak, Zalora, Sociolla, TikTok Shop -> upload ke JelajahBelanja.com
 
-## v3.3.2 (2026-07-25)
-- FIX: _rating fallback blocked by default 4.5 (always truthy)
-- Force re-extract rating/sold/review via inline fallback
-- Rating sekarang ke-extract dengan benar dari Shopee/Tokopedia/Blibli/dll
-
 ## v3.3.1 (2026-07-20)
 - FIX: `extractProductStats` helper tidak available di page context (chrome.scripting.executeScript)
 - Inline stats extraction langsung di setiap scraper function (Shopee/Blibli/Lazada/Bukalapak/Zalora/Sociolla)

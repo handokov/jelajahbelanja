@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "JB Scraper (All Marketplace)",
-  "version": "3.3.2",
-  "description": "JB Scraper v3.3.2 — based on v3.2.3 + fix rating/sold/review extraction (Shopee/Tokopedia/Blibli/Lazada/Bukalapak/Zalora/Sociolla/TikTok). Fitur: auto AT link, mirror image Tokped ke Cloudinary, paste URL, save CSV, upload ke JB",
+  "version": "3.3.3",
+  "description": "JB Scraper v3.3.3 (revert to working v3.3.1) — extract rating + sold + review dari semua marketplace (Shopee/Tokopedia/Blibli/Lazada/Bukalapak/Zalora/Sociolla/TikTok)",
   "permissions": [
     "activeTab",
     "scripting",
