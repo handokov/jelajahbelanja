@@ -191,7 +191,8 @@ export async function POST(req: NextRequest) {
         if (p.isViral) score += 30;
 
         // Flash sale (diskon > 40%) — prioritas
-        if ((p.discountPercent || 0) > 40) score += 20;
+        const effDiscount = p.discountPercent || (p.originalPrice && p.originalPrice > p.price ? Math.round((1 - p.price / p.originalPrice) * 100) : 0);
+        if (effDiscount > 40) score += 20;
 
         // High rating
         if (p.rating >= 4.8) score += 10;

@@ -68,7 +68,7 @@ function dbRowToProduct(row: {
     image: row.image,
     price: row.price,
     originalPrice: row.originalPrice ?? undefined,
-    discountPercent: row.discountPercent ?? undefined,
+    discountPercent: row.discountPercent ?? (row.originalPrice && row.originalPrice > row.price ? Math.round((1 - row.price / row.originalPrice) * 100) : undefined),
     rating: row.rating,
     reviewCount: row.reviewCount,
     soldCount: row.soldCount,
