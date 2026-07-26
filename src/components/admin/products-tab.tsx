@@ -564,7 +564,7 @@ export function ProductsTab() {
           <div>
             <Label className="text-xs">Kategori *</Label>
             <select
-              className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="w-full h-9 rounded-md border border-input bg-background text-zinc-900 dark:text-zinc-100 px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               value={productForm.category}
               onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
             >
@@ -579,7 +579,7 @@ export function ProductsTab() {
           <div>
             <Label className="text-xs">Marketplace</Label>
             <select
-              className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="w-full h-9 rounded-md border border-input bg-background text-zinc-900 dark:text-zinc-100 px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               value={productForm.marketplace}
               onChange={(e) => setProductForm({ ...productForm, marketplace: e.target.value })}
             >
@@ -1050,7 +1050,7 @@ export function ProductsTab() {
             <div>
               <Label className="text-xs font-medium">Kategori</Label>
               <select
-                className="w-full h-9 mt-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full h-9 mt-1 rounded-md border border-input bg-background text-zinc-900 dark:text-zinc-100 px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={filterDeleteCategory}
                 onChange={(e) => setFilterDeleteCategory(e.target.value)}
               >
@@ -1065,7 +1065,7 @@ export function ProductsTab() {
             <div>
               <Label className="text-xs font-medium">Marketplace</Label>
               <select
-                className="w-full h-9 mt-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full h-9 mt-1 rounded-md border border-input bg-background text-zinc-900 dark:text-zinc-100 px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={filterDeleteMarketplace}
                 onChange={(e) => setFilterDeleteMarketplace(e.target.value)}
               >

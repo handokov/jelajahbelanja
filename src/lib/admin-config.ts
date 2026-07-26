@@ -85,6 +85,7 @@ export const MARKETPLACE_OPTIONS = [
   { value: "aliexpress", label: "AliExpress" },
   { value: "amazon", label: "Amazon" },
   { value: "tiktok", label: "TikTok Shop" },
+  { value: "other", label: "Other (Brand Sendiri)" },
 ];
 
 export const AFFILIATE_INFO: Array<{

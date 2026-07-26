@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "JB Scraper (All Marketplace)",
   "version": "3.3.6",
-  "description": "JB Scraper v3.3.6 — v3.3.5 + original price display + manual input harga asli/coret",
+  "description": "JB Scraper v3.3.6 — v3.3.6 + original price display + manual input harga asli/coret",
   "permissions": [
     "activeTab",
     "scripting",
