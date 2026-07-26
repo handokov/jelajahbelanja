@@ -18,6 +18,7 @@ function normalizeMarketplace(raw: string): string {
   const VALID = [
     "shopee", "tokopedia", "lazada", "blibli", "bukalapak",
     "zalora", "sociolla", "aliexpress", "amazon", "tiktok",
+    "other",
   ];
   if (VALID.includes(lower)) {
     return lower;
