@@ -28,6 +28,7 @@ const MARKETPLACE_META: Record<Marketplace, { label: string; className: string }
   lazada: { label: "Lazada", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" },
   aliexpress: { label: "AliExpress", className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" },
   amazon: { label: "Amazon", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  other: { label: "Brand Sendiri", className: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300" },
   mock: { label: "Demo", className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
 };
 

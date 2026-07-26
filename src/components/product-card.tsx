@@ -95,6 +95,10 @@ const MARKETPLACE_META: Record<Marketplace, { label: string; className: string }
     label: "TikTok Shop",
     className: "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:bg-zinc-900",
   },
+  other: {
+    label: "Brand Sendiri",
+    className: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300 hover:bg-violet-100",
+  },
   mock: {
     label: "Mock",
     className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 hover:bg-zinc-100",

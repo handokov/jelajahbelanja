@@ -117,6 +117,11 @@ const MARKETPLACE_META: Record<string, { label: string; className: string; buyLa
     className: "bg-zinc-900 text-white",
     buyLabel: "Beli di TikTok Shop",
   },
+  other: {
+    label: "Brand Sendiri",
+    className: "bg-violet-100 text-violet-800",
+    buyLabel: "Beli di Website Brand",
+  },
 };
 
 function getMarketplaceMeta(marketplace: string) {
