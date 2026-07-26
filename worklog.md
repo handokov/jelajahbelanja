@@ -1351,3 +1351,41 @@ Stage Summary:
 - Scraper v3.3.6 download: jelajahbelanja.com/jb-scraper-all-v336.zip
 - 1 commit: 2514f2d
 - Production verified live
+
+---
+Task ID: fix-badge-other-marketplace
+Agent: main
+Task: User report — badge produk masih tertulis Shopee padahal marketplace=other, tombol beli sudah tertulis other
+
+Work Log:
+- Investigasi: MARKETPLACE_META di 4 file tidak punya entry 'other'
+  - src/components/product-card.tsx (MarketplaceBadge)
+  - src/app/produk/[id]/ProductDetailClient.tsx (getMarketplaceMeta)
+  - src/components/product-detail-dialog.tsx
+  - src/components/outfit-style-board.tsx
+- Saat product marketplace='other':
+  - product-card: fallback ke MARKETPLACE_META.mock → label "Mock" (wrong)
+  - ProductDetailClient: fallback capitalize → "Other" (OK for buyLabel, tapi label tidak konsisten)
+  - dialog: fallback ke "Demo" (wrong)
+- Fix: tambah entry 'other' di semua 4 MARKETPLACE_META:
+  - label: "Brand Sendiri"
+  - className: bg-violet-100 text-violet-800 (violet = brand sendiri)
+  - ProductDetailClient buyLabel: "Beli di Website Brand"
+- Commit 5fec83d pushed
+
+Verification production:
+- 3 produk dengan marketplace=other di DB:
+  - Earth Facts Glow-in-the-Dark T-Shirt
+  - Tan Chino Trousers
+  - HGL Bambini - Pac-Man - Meet The Kids
+- Detail page produk "Earth Facts": badge tampil "Brand Sendiri" ✅ (verified via browser)
+- Homepage: produk other tidak tampil di page 1 (40 produk pertama), tapi badge fix live
+
+Stage Summary:
+- Badge marketplace 'other' sekarang tampil "Brand Sendiri" (violet) di:
+  - ProductCard (homepage, kategori page)
+  - ProductDetailClient (detail page + tombol beli "Beli di Website Brand")
+  - ProductDetailDialog (popup)
+  - OutfitStyleBoard
+- 1 commit: 5fec83d
+- Production verified
