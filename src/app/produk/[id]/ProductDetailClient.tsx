@@ -143,9 +143,9 @@ function RecCard({ product }: { product: ShopeeProduct }) {
           loading="lazy"
           className="w-full h-full object-cover"
         />
-        {product.discountPercent && product.discountPercent > 0 && (
+        {(product.discountPercent || (product.originalPrice && product.originalPrice > product.price)) && (
           <Badge className="absolute top-1.5 right-1.5 bg-red-500 text-white hover:bg-red-500 text-[8px] font-bold px-1 py-0 h-4">
-            −{product.discountPercent}%
+            −{product.discountPercent || Math.round((1 - product.price / product.originalPrice) * 100)}%
           </Badge>
         )}
         {product.isViral && (
@@ -386,9 +386,9 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                   {getMarketplaceMeta(product.marketplace).label}
                 </Badge>
               </div>
-              {product.discountPercent && product.discountPercent > 0 && (
+              {(product.discountPercent || (product.originalPrice && product.originalPrice > product.price)) && (
                 <Badge className="absolute top-3 right-3 bg-red-500 text-white hover:bg-red-500 text-sm font-bold px-3 py-1 h-7 shadow-lg">
-                  −{product.discountPercent}%
+                  −{product.discountPercent || Math.round((1 - product.price / product.originalPrice) * 100)}%
                 </Badge>
               )}
             </div>

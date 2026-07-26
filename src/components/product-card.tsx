@@ -148,6 +148,7 @@ function PriceBlock({
   discountPercent?: number;
   size?: "default" | "large";
 }) {
+  const effDiscount = discountPercent || (originalPrice && originalPrice > price ? Math.round((1 - price / originalPrice) * 100) : 0);
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span
@@ -163,9 +164,9 @@ function PriceBlock({
           {formatRupiah(originalPrice)}
         </span>
       )}
-      {discountPercent && discountPercent > 0 && (
+      {effDiscount > 0 && (
         <Badge className="bg-red-500 text-white hover:bg-red-500 text-[10px] font-bold px-1.5 py-0 h-5">
-          −{discountPercent}%
+          −{effDiscount}%
         </Badge>
       )}
     </div>
@@ -325,9 +326,9 @@ export function ProductCard({ product, variant = "default", rank, badges }: Prod
             {product.isViral && <ViralBadge />}
             <MarketplaceBadge marketplace={product.marketplace} />
           </div>
-          {product.discountPercent && product.discountPercent > 0 && (
+          {(product.discountPercent || (product.originalPrice && product.originalPrice > product.price)) && (
             <Badge className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-red-500 text-white hover:bg-red-500 text-[10px] font-bold px-1.5 py-0 h-5 z-10">
-              −{product.discountPercent}%
+              −{product.discountPercent || Math.round((1 - product.price / product.originalPrice) * 100)}%
             </Badge>
           )}
         </div>
@@ -348,7 +349,7 @@ export function ProductCard({ product, variant = "default", rank, badges }: Prod
           <h3 className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-50 line-clamp-2 leading-snug min-h-[2.25rem] sm:min-h-[2.5rem]">
             {product.title}
           </h3>
-          <PriceBlock price={product.price} originalPrice={product.originalPrice} />
+          <PriceBlock price={product.price} originalPrice={product.originalPrice} discountPercent={product.discountPercent} />
           <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
           {product.soldCount > 0 && (
             <div className="text-[10px] sm:text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-1">

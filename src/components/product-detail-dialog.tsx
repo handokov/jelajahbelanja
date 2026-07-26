@@ -177,9 +177,9 @@ export function ProductDetailDialog({
                 {mpMeta.label}
               </Badge>
             </div>
-            {product.discountPercent && product.discountPercent > 0 && (
+            {(product.discountPercent || (product.originalPrice && product.originalPrice > product.price)) && (
               <Badge className="absolute bottom-2 right-2 bg-red-500 text-white hover:bg-red-500 text-xs font-bold px-2 py-0.5 h-6 shadow-lg">
-                −{product.discountPercent}%
+                −{product.discountPercent || Math.round((1 - product.price / product.originalPrice) * 100)}%
               </Badge>
             )}
             {/* Bottom gradient */}

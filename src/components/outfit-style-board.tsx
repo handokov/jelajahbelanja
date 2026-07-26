@@ -234,9 +234,9 @@ function OutfitBoardItem({
             {mpMeta.label}
           </Badge>
         </div>
-        {product.discountPercent && product.discountPercent > 0 && (
+        {(product.discountPercent || (product.originalPrice && product.originalPrice > product.price)) && (
           <Badge className="absolute top-1.5 right-1.5 bg-red-500 text-white hover:bg-red-500 text-[7px] font-bold px-1 py-0 h-4">
-            −{product.discountPercent}%
+            −{product.discountPercent || Math.round((1 - product.price / product.originalPrice) * 100)}%
           </Badge>
         )}
         {product.isViral && (
