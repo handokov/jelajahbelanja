@@ -2,6 +2,12 @@
 
 Scrape produk dari Shopee, Tokopedia, Blibli, Lazada, Bukalapak, Zalora, Sociolla, TikTok Shop -> upload ke JelajahBelanja.com
 
+## v3.3.6 (2026-07-26)
+- NEW: Tampilkan harga asli (harga coret/strikethrough) di koleksi produk
+- NEW: Input manual harga asli sebelum diskon di setiap product card
+- NEW: Persen diskon otomatis tampil di samping harga
+- Otomatis pakai originalPrice dari scraping (Shopee/Tokopedia/TikTok/dll)
+
 ## v3.3.4 (2026-07-25)
 - NEW: Input manual rating, terjual, review per produk di popup
 - Auto-extract rating dari marketplace gagal (Shopee/Tokopedia anti-bot)

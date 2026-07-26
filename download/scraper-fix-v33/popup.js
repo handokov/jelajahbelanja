@@ -1,5 +1,5 @@
 /**
- * JB Scraper v1.2 — Koleksi multi-produk + batch upload
+ * JB Scraper v3.3.6 — Koleksi multi-produk + batch upload
  *
  * Fitur:
  * - Scrape produk → masuk ke koleksi (localStorage)
@@ -8,6 +8,7 @@
  * - Auto-detect marketplace (TikTok / Tokopedia)
  * - Skip duplikat (URL sama)
  * - Remove per produk
+ * - Harga asli (harga coret) + diskon otomatis
  */
 
 // State
@@ -404,7 +405,7 @@ async function renderCollection() {
           <img src="${p.image || ''}" alt="" class="product-thumb" data-index="${i}">
           <div class="info" style="flex:1;">
             <div class="info-title">${escapeHtml(p.title.slice(0, 40))}${p.title.length > 40 ? '...' : ''}</div>
-            <div class="info-price">${formatRupiah(p.price)}</div>
+            <div class="info-price">${p.originalPrice ? `<span style="text-decoration:line-through;color:#a1a1aa;font-weight:400;margin-right:6px;">${formatRupiah(p.originalPrice)}</span>` : ''}${formatRupiah(p.price)}${p.discountPercent ? ` <span style="color:#ef4444;font-size:9px;">-${p.discountPercent}%</span>` : ''}</div>
             <div class="info-mp">${p.marketplace}${p.affiliateUrl ? ' ✅' : ' ⚠️ no aff'}</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:2px;">
@@ -426,8 +427,12 @@ async function renderCollection() {
         </div>
         <div style="display:flex;gap:4px;margin-top:3px;font-size:9px;color:#71717a;">
           <span style="flex:1;">📍 Lokasi Seller</span>
+          <span style="flex:1;">💰 Harga Asli</span>
         </div>
-        <input type="text" class="location-input" data-index="${i}" placeholder="Lokasi seller, contoh: Jakarta Barat / Kab. Tangerang" value="${p.location ? escapeHtml(p.location) : ''}" style="width:100%;margin-top:2px;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;" title="Lokasi seller, contoh: Jakarta Barat, Kab. Tangerang, Bandung">
+        <div style="display:flex;gap:4px;margin-top:2px;">
+          <input type="text" class="location-input" data-index="${i}" placeholder="Lokasi seller, contoh: Jakarta Barat / Kab. Tangerang" value="${p.location ? escapeHtml(p.location) : ''}" style="flex:1;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;" title="Lokasi seller, contoh: Jakarta Barat, Kab. Tangerang, Bandung">
+          <input type="number" class="originalprice-input" data-index="${i}" placeholder="Harga asli (coret)" value="${p.originalPrice || ''}" min="0" step="100" style="flex:1;padding:4px 6px;font-size:10px;border:1px solid #e4e4e7;border-radius:4px;background:#f9fafb;" title="Harga sebelum diskon (harga coret), contoh: 150000">
+        </div>
       </div>
     `).join('');
 
@@ -537,6 +542,15 @@ async function renderCollection() {
         const idx = parseInt(e.target.dataset.index, 10);
         const val = (e.target.value || '').trim();
         await updateProductField(idx, 'location', val || null);
+      });
+    });
+
+    // v3.3.6: Original price (harga asli/coret) manual input handler
+    listEl.querySelectorAll('.originalprice-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const idx = parseInt(e.target.dataset.index, 10);
+        const val = parseInt(e.target.value, 10);
+        await updateProductField(idx, 'originalPrice', (!isNaN(val) && val >= 0) ? val : null);
       });
     });
 
