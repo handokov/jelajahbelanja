@@ -24,8 +24,17 @@ interface FlashSaleSectionProps {
  */
 export function FlashSaleSection({ products, productBadges = [] }: FlashSaleSectionProps) {
   // Filter produk dengan diskon >= 30%, sort by diskon terbesar
+  // Auto-calc discountPercent dari originalPrice kalau null (scraper v3.3.6 kirim originalPrice)
   const flashSaleProducts = React.useMemo(() => {
     return products
+      .map(p => {
+        // Auto-calc discountPercent kalau null tapi originalPrice > price
+        let effDiscount = p.discountPercent;
+        if (!effDiscount && p.originalPrice && p.originalPrice > p.price) {
+          effDiscount = Math.round((1 - p.price / p.originalPrice) * 100);
+        }
+        return { ...p, discountPercent: effDiscount || 0 };
+      })
       .filter(p => p.discountPercent && p.discountPercent >= 30)
       .sort((a, b) => (b.discountPercent || 0) - (a.discountPercent || 0))
       .slice(0, 12);
