@@ -67,8 +67,7 @@ export default function AdminPage() {
                 window.location.href = "/jb-mgr-login";
               }}
             >
-              <LogOut className="w-3.5 h-3.5" />
-              Logout
+              <LogOut className="w-4 h-4" />
             </Button>
           </div>
         </div>
