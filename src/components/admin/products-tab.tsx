@@ -945,6 +945,7 @@ export function ProductsTab() {
                   <div className="flex items-center gap-2 text-xs text-zinc-500 mt-0.5">
                     <span className="font-semibold text-fuchsia-600">{formatRp(p.price)}</span>
                     {p.originalPrice && <span className="line-through">{formatRp(p.originalPrice)}</span>}
+                    {p.discountPercent && p.discountPercent > 0 && <Badge className="bg-red-100 text-red-700 text-[9px] px-1 py-0 h-4">-{p.discountPercent}%</Badge>}
                     <span>{p.category}</span>
                     <span className="text-zinc-400">•</span>
                     <span className="text-zinc-400 capitalize">{p.marketplace || "shopee"}</span>
