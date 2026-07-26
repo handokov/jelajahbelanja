@@ -1389,3 +1389,29 @@ Stage Summary:
   - OutfitStyleBoard
 - 1 commit: 5fec83d
 - Production verified
+
+---
+Task ID: fix-normalize-marketplace-other
+Agent: main
+Task: User report — badge produk masih tertulis Shopee padahal harusnya Brand Sendiri (other)
+
+Work Log:
+- Investigasi: MARKETPLACE_META di 4 file sudah ada entry 'other' (commit 5fec83d)
+- Tapi user masih lihat badge "Shopee" di produk marketplace=other
+- Root cause: function normalizeMarketplace di /api/products/route.ts TIDAK ada
+  'other' di array VALID. Saat produk marketplace='other', di-normalize jadi
+  'shopee' (default fallback). Itu sebabnya badge tampil "Shopee".
+- Fix: tambah 'other' ke array VALID di normalizeMarketplace
+- Commit 390bda4 pushed
+
+Verification production:
+- /api/products sebelum fix: 0 produk other (semua di-normalize jadi shopee)
+- /api/products setelah fix: 5 produk other (Game Controller, No Limits, Tan Chino, Pac-Man, Earth Facts)
+- Badge sekarang akan tampil "Brand Sendiri" (violet) untuk produk marketplace=other
+- Homepage: produk other mulai tampil (sebelumnya di-normalize shopee, sekarang other)
+
+Stage Summary:
+- Root cause utama: normalizeMarketplace tidak recognize 'other' → fallback shopee
+- Fix: tambah 'other' ke VALID array di /api/products/route.ts
+- 1 commit: 390bda4
+- Production verified via API (5 produk other tampil)
