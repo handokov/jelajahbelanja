@@ -1320,3 +1320,34 @@ Stage Summary:
 - Default value tetap dipakai (rating=4.5, sold=0, review=0) jika user tidak isi — backward compatible dengan upload logic di line 615-617 (product.rating || 4.5 dst)
 - v3.3.3 working scrape flow preserved (auto-extract tetap jalan sebagai fallback kalau Shopee tidak block)
 - Verification: node --check PASS, grep counts all ≥ 2, manifest valid JSON
+
+---
+Task ID: fix-dropdown-marketplace-other
+Agent: main
+Task: User report — dropdown marketplace teks tidak kelihatan + tambah option 'Other' untuk brand sendiri
+
+Work Log:
+- VLM analysis: dropdown marketplace teks tidak kelihatan (CSS contrast issue — bg-transparent tanpa text color)
+- Found 4 select dropdowns di products-tab.tsx dengan className "bg-transparent px-3 py-1 text-sm shadow-sm"
+- Fix CSS: bg-transparent -> bg-background text-zinc-900 dark:text-zinc-100
+- Tambah marketplace 'other':
+  - src/lib/types.ts: Marketplace type tambah 'other'
+  - src/lib/admin-config.ts: MARKETPLACE_OPTIONS tambah { value: 'other', label: 'Other (Brand Sendiri)' }
+  - Scraper popup.html: tambah <option value="other">Other (Brand Sendiri)</option>
+- Scraper version bump: v3.3.5 -> v3.3.6
+- Commit 2514f2d pushed
+
+Verification production:
+- Homepage: HTTP 200 ✅
+- Scraper v3.3.6 download: HTTP 200 ✅
+- Admin dropdown marketplace (via agent-browser):
+  - Index 1: [Shopee, Tokopedia, Lazada, Blibli, Bukalapak, Zalora, Sociolla, AliExpress, Amazon, TikTok Shop, Other (Brand Sendiri)] ✅
+  - CSS fix applied (text-zinc-900 dark:text-zinc-100)
+
+Stage Summary:
+- Dropdown marketplace teks sekarang kelihatan (CSS fix)
+- Option 'Other (Brand Sendiri)' tersedia di admin + scraper v3.3.6
+- User bisa input produk brand sendiri tanpa affiliate URL
+- Scraper v3.3.6 download: jelajahbelanja.com/jb-scraper-all-v336.zip
+- 1 commit: 2514f2d
+- Production verified live
