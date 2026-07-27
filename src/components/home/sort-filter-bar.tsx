@@ -37,10 +37,8 @@ const MARKETPLACE_OPTIONS = [
   { value: "blibli", label: "Blibli" },
   { value: "bukalapak", label: "Bukalapak" },
   { value: "zalora", label: "Zalora" },
-  { value: "sociolla", label: "Sociolla" },
   { value: "tiktok", label: "TikTok Shop" },
-  { value: "aliexpress", label: "AliExpress" },
-  { value: "amazon", label: "Amazon" },
+  { value: "other", label: "Brand Sendiri" },
 ];
 
 const PRICE_PRESETS = [
