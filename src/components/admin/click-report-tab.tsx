@@ -15,7 +15,7 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
 // ════════════════════════════════════════════════════════════════
@@ -27,6 +27,8 @@ interface ClickReportStats {
   blockedClicks: number;
   blockRate: string;
   uniqueIPs: number;
+  conversionCount: number;
+  conversionValue: number;
   conversionRate: string;
 }
 
@@ -37,6 +39,8 @@ interface TopProduct {
   category: string;
   totalClicks: number;
   uniqueClicks: number;
+  conversionCount: number;
+  conversionValue: number;
 }
 
 interface DailyStat {
@@ -201,8 +205,44 @@ function formatDayLabel(isoDate: string): string {
 
 export function ClickReportTab() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [range, setRange] = React.useState<RangeValue>("7d");
   const [marketplace, setMarketplace] = React.useState<string>("");
+
+  // ── Manual conversion input state ──
+  const [editingConv, setEditingConv] = React.useState<string | null>(null);
+  const [convInput, setConvInput] = React.useState("");
+  const [convValueInput, setConvValueInput] = React.useState("");
+  const [savingConv, setSavingConv] = React.useState<string | null>(null);
+
+  const updateConvMutation = useMutation({
+    mutationFn: async ({
+      productId,
+      conversionCount,
+      conversionValue,
+    }: {
+      productId: string;
+      conversionCount: number;
+      conversionValue: number;
+    }) => {
+      const res = await fetch("/api/admin/update-conversion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ productId, conversionCount, conversionValue }),
+      });
+      if (!res.ok) throw new Error("Gagal update konversi");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["click-report"] });
+      toast({ title: "Konversi diupdate" });
+      setEditingConv(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Gagal", description: err.message, variant: "destructive" });
+    },
+  });
 
   const queryParams = new URLSearchParams();
   queryParams.set("range", range);
@@ -368,10 +408,10 @@ export function ClickReportTab() {
           />
           <StatCard
             icon={<TrendingUp className="w-4 h-4" />}
-            color="zinc"
+            color="emerald"
             label="Konversi"
-            value={`${stats.conversionRate}%`}
-            hint="AT belum sync"
+            value={`${stats.conversionCount || 0}`}
+            hint={`${stats.conversionRate || "0"}% • Rp${(stats.conversionValue || 0).toLocaleString("id-ID")}`}
           />
         </div>
       )}
@@ -446,6 +486,72 @@ export function ClickReportTab() {
                       <p className="text-[10px] text-zinc-500">
                         {p.uniqueClicks.toLocaleString("id-ID")} unique IP
                       </p>
+                    </div>
+
+                    {/* Manual conversion input */}
+                    <div className="flex items-center gap-2 mt-1">
+                      {editingConv === p.productId ? (
+                        <>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Konversi"
+                            value={convInput}
+                            onChange={(e) => setConvInput(e.target.value)}
+                            className="w-20 h-7 px-2 text-xs rounded border border-zinc-300 dark:border-zinc-700 bg-background"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Komisi Rp"
+                            value={convValueInput}
+                            onChange={(e) => setConvValueInput(e.target.value)}
+                            className="w-24 h-7 px-2 text-xs rounded border border-zinc-300 dark:border-zinc-700 bg-background"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            disabled={savingConv === p.productId}
+                            onClick={() => {
+                              setSavingConv(p.productId);
+                              updateConvMutation.mutate({
+                                productId: p.productId,
+                                conversionCount: parseInt(convInput) || 0,
+                                conversionValue: parseInt(convValueInput) || 0,
+                              });
+                              setSavingConv(null);
+                            }}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setEditingConv(null)}
+                          >
+                            ✕
+                          </Button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingConv(p.productId);
+                            setConvInput(p.conversionCount?.toString() || "");
+                            setConvValueInput(p.conversionValue?.toString() || "");
+                          }}
+                          className="text-[10px] text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-1"
+                          title="Input konversi manual dari AT dashboard"
+                        >
+                          <TrendingUp className="w-3 h-3" />
+                          Konversi: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{p.conversionCount || 0}</span>
+                          {(p.conversionValue || 0) > 0 && (
+                            <span className="text-zinc-400">• Rp{(p.conversionValue).toLocaleString("id-ID")}</span>
+                          )}
+                          <span className="text-zinc-400">(edit)</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Link to product */}

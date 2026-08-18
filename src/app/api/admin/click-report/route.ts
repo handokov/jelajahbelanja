@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
     // Ambil unique IP per produk (perlu query terpisah karena groupBy gabisa count distinct di sqlite/pg dengan mudah)
     const productIds = topProductsRaw.map(p => p.productId);
     const uniqueIpPerProduct: Record<string, number> = {};
+    const convMap: Record<string, { count: number; value: number }> = {};
     if (productIds.length > 0) {
       // Query semua klik di range ini untuk productIds, lalu group di app level
       const allClicksForTop = await db.productClick.findMany({
@@ -67,6 +68,15 @@ export async function GET(req: NextRequest) {
       }
       for (const pid of productIds) {
         uniqueIpPerProduct[pid] = ipSetPerProduct[pid]?.size || 0;
+      }
+
+      // Fetch conversionCount + conversionValue dari ShopeeProduct untuk top products
+      const productsConv = await db.shopeeProduct.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, conversionCount: true, conversionValue: true },
+      });
+      for (const p of productsConv) {
+        convMap[p.id] = { count: p.conversionCount, value: p.conversionValue };
       }
     }
 
@@ -186,6 +196,13 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    // Hitung total konversi dari semua produk (bukan cuma top 20)
+    const allConv = await db.shopeeProduct.aggregate({
+      _sum: { conversionCount: true, conversionValue: true },
+    });
+    const totalConv = allConv._sum.conversionCount || 0;
+    const totalConvValue = allConv._sum.conversionValue || 0;
+
     return NextResponse.json({
       success: true,
       range,
@@ -195,7 +212,9 @@ export async function GET(req: NextRequest) {
         blockedClicks: blockedCount,
         blockRate: totalCount > 0 ? ((blockedCount / totalCount) * 100).toFixed(1) : "0",
         uniqueIPs,
-        conversionRate: "0", // placeholder — AT belum push conversion data ke JB
+        conversionCount: totalConv,
+        conversionValue: totalConvValue,
+        conversionRate: totalCount > 0 ? ((totalConv / totalCount) * 100).toFixed(1) : "0",
       },
       topProducts: topProductsRaw.map(p => ({
         productId: p.productId,
@@ -204,6 +223,8 @@ export async function GET(req: NextRequest) {
         category: p.category,
         totalClicks: p._count.id,
         uniqueClicks: uniqueIpPerProduct[p.productId] || 0,
+        conversionCount: convMap[p.productId]?.count || 0,
+        conversionValue: convMap[p.productId]?.value || 0,
       })),
       dailyStats,
       byMarketplace: byMarketplaceRaw.map(m => ({

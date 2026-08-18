@@ -1415,3 +1415,29 @@ Stage Summary:
 - Fix: tambah 'other' ke VALID array di /api/products/route.ts
 - 1 commit: 390bda4
 - Production verified via API (5 produk other tampil)
+
+---
+Task ID: add-conversion-input
+Agent: frontend-styling-expert
+Task: Tambah input manual konversi per produk di tab Klik
+
+Work Log:
+- Updated ClickReportStats interface: added `conversionCount: number` and `conversionValue: number` (conversionRate already existed as string)
+- Updated TopProduct interface: added `conversionCount: number` and `conversionValue: number`
+- Added imports `useMutation`, `useQueryClient` from `@tanstack/react-query` (only `useQuery` was previously imported)
+- Added `const queryClient = useQueryClient()` and 4 useState hooks (editingConv, convInput, convValueInput, savingConv) to ClickReportTab component
+- Added `updateConvMutation` (useMutation) — POSTs to `/api/admin/update-conversion` with `{ productId, conversionCount, conversionValue }`; on success invalidates `["click-report"]` query + toast "Konversi diupdate" + closes edit row; on error toast destructive with message
+- Updated Konversi StatCard: color zinc→emerald; value now `stats.conversionCount`; hint now `${conversionRate}% • Rp${conversionValue.toLocaleString("id-ID")}` (was "AT belum sync")
+- Added inline conversion input row in Top Products section (between Clicks div and ExternalLink Link per spec): collapsed state shows button with TrendingUp icon + `Konversi: <N>` + optional `• Rp<komisi>` + `(edit)` label; expanded state shows 2 number inputs (Konversi, Komisi Rp) + Save button + ✕ cancel button
+- Save button triggers mutation; ✕ closes edit row; clicking edit button pre-fills inputs with current product values
+- All inputs use emerald color for money/success semantics; existing functionality (top products list, rank badges, marketplace badges, clicks display, ExternalLink) untouched
+- Lint: 0 errors in click-report-tab.tsx (other pre-existing errors in seed-products.js and outfit-style-board.tsx unrelated)
+- TypeScript check: 0 errors in click-report-tab.tsx (note: API route `/api/admin/click-report/route.ts` has Prisma type errors for conversionCount/conversionValue — backend schema not updated yet, out of scope for this frontend task)
+
+Stage Summary:
+- Manual conversion input per produk aktif di tab Klik → Top Products section
+- StatCard Konversi sekarang menampilkan count utama + rate% & komisi Rupiah di hint
+- Mutation POST ke /api/admin/update-conversion dengan credentials:include, invalidasi query ["click-report"] untuk auto-refresh data
+- Inline edit pattern (bukan modal) — cepat input & save tanpa context switch
+- Save/✕ button row muncul hanya ketika produk sedang di-edit; collapsed state compact dengan info singkat
+- 0 lint error di file target; 0 TS error di file target

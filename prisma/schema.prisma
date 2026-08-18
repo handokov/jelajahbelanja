@@ -59,6 +59,8 @@ model ShopeeProduct {
   notes           String?  // catatan admin
   marketplace     String   @default("shopee")
   enabled         Boolean  @default(true)
+  conversionCount Int      @default(0)   // manual input dari AT dashboard
+  conversionValue Int      @default(0)   // estimasi komisi (Rupiah) dari AT
   lastScrapedAt   DateTime?               // timestamp terakhir scrape (production-only field)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
