@@ -1496,3 +1496,28 @@ Stage Summary:
 - User perlu generate PAT baru untuk push ke production
 - Setelah push, Vercel auto-deploy + migration run (db push)
 - User bisa input konversi manual di tab Klik → sync data AT dashboard
+
+---
+Task ID: manual-conversion-input-deployed
+Agent: main
+Task: Deploy fitur input manual konversi ke production
+
+Work Log:
+- GitHub token lama expired (ghp_vru3...) → user generate PAT baru (ghp_4JF8...)
+- Secret scanning block: worklog.md line 1483 ada token lama → redact
+- Push berhasil: commit 75aef9d
+- Vercel deploy + migration (db push) jalan otomatis
+- Test production:
+  - API /api/admin/update-conversion: POST dengan productId+conversionCount+conversionValue → success ✅
+  - Test dengan produk asli "Mainan Bayi Drum Set" → update conversionCount=3, conversionValue=15000 ✅
+  - API /api/admin/click-report: return stats.conversionCount=3, conversionValue=15000, conversionRate=2.8% ✅
+  - Total klik: 107, konversi: 3, komisi: Rp15.000
+
+Stage Summary:
+- Fitur input manual konversi LIVE di production
+- User bisa: cek AT dashboard → input konversi + komisi manual di tab Klik JB
+- StatCard Konversi tampil: count + rate% + komisi Rupiah
+- Top Products: input inline per produk (click edit → input → save)
+- GitHub token baru: ghp_4JF8... (saved di ~/.git-credentials)
+- 1 commit: 75aef9d
+- Production verified end-to-end
