@@ -1441,3 +1441,58 @@ Stage Summary:
 - Inline edit pattern (bukan modal) — cepat input & save tanpa context switch
 - Save/✕ button row muncul hanya ketika produk sedang di-edit; collapsed state compact dengan info singkat
 - 0 lint error di file target; 0 TS error di file target
+
+---
+Task ID: manual-conversion-input
+Agent: main
+Task: User request — buat input manual konversi di JB, sync data AT dashboard
+
+Work Log:
+- Found root cause: JB tab Klik hardcoded conversionRate="0" (line 198 route.ts)
+  - JB dan AT adalah 2 sistem terpisah, JB tidak sync dengan AT
+  - AT track real conversion, JB hanya track klik
+- User request: "coba bisa masukkan manual aja, lebih simple"
+- Built 4 components:
+
+1. Schema + Migration:
+   - ShopeeProduct: tambah conversionCount Int (default 0)
+   - ShopeeProduct: tambah conversionValue Int (default 0, komisi Rupiah)
+   - Migration: prisma/migrations/20260730_add_conversion_count/migration.sql
+     (ALTER TABLE ADD COLUMN IF NOT EXISTS, idempotent)
+
+2. API /api/admin/update-conversion (POST, cookie auth):
+   - Body: { productId, conversionCount, conversionValue }
+   - Update ShopeeProduct.conversionCount + conversionValue
+   - Return updated product
+
+3. API /api/admin/click-report (updated):
+   - Fetch conversionCount + conversionValue dari ShopeeProduct untuk top products
+   - Return per produk: topProducts[i].conversionCount + conversionValue
+   - Aggregate total: stats.conversionCount (sum), stats.conversionValue (sum)
+   - stats.conversionRate = conversionCount / totalClicks * 100
+
+4. UI click-report-tab.tsx (delegated to frontend-styling-expert):
+   - Update interfaces: ClickReportStats + TopProduct tambah conversion fields
+   - StatCard Konversi: color emerald, value=count, hint=rate% + komisi Rupiah
+   - Top Products: input manual inline per produk
+     - 2 fields: Konversi (count) + Komisi (Rupiah)
+     - Click 'edit' → input muncul → Save → invalidate query → refresh
+     - Emerald color untuk conversion (money semantic)
+
+BLOCKER: GitHub token expired
+- Push gagal: "Invalid username or token"
+- User perlu generate GitHub PAT baru di:
+  https://github.com/settings/tokens/new
+  - Scope: repo (full control of private repositories)
+  - Expiration: 30 days atau no expiration
+- Setelah dapat token baru, update ~/.git-credentials:
+  echo "https://handokov:<NEW_TOKEN>@github.com" > ~/.git-credentials
+- Lalu push: git push origin main
+
+Stage Summary:
+- Fitur input manual konversi sudah jadi di local sandbox
+- Semua code siap push (schema, migration, API, UI)
+- Blocked di GitHub token expired
+- User perlu generate PAT baru untuk push ke production
+- Setelah push, Vercel auto-deploy + migration run (db push)
+- User bisa input konversi manual di tab Klik → sync data AT dashboard
