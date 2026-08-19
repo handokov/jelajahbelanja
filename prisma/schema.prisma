@@ -86,9 +86,11 @@ model PromoBanner {
 model AffiliateAd {
   id            String   @id @default(cuid())
   name          String                   // nama identifikasi (cth: "AccessTrade 300x250")
-  platform      String   @default("accesstrade") // accesstrade, shopee, tokopedia, tiktok, lainnya
-  href          String                   // link affiliate (target URL)
-  imgSrc        String                   // URL gambar banner
+  platform      String   @default("accesstrade") // accesstrade, shopee, tokopedia, tiktok, adsterra, lainnya
+  adType        String   @default("image") // image, script (script = Adsterra dll)
+  href          String   @default("")   // link affiliate (target URL) — kosong kalau script
+  imgSrc        String   @default("")   // URL gambar banner — kosong kalau script
+  scriptCode    String?                  // script HTML untuk Adsterra dll (atOptions + invoke.js)
   trackingPixel String?                  // tracking pixel URL (1x1 invisible)
   width         Int      @default(300)  // lebar banner
   height        Int      @default(250)  // tinggi banner

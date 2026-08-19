@@ -1521,3 +1521,33 @@ Stage Summary:
 - GitHub token baru: ghp_4JF8... (saved di ~/.git-credentials)
 - 1 commit: 75aef9d
 - Production verified end-to-end
+
+---
+Task ID: adsterra-script-ads-ui
+Agent: frontend-styling-expert
+Task: Update affiliate-ads-tab UI + affiliate-banner component for script-based ads (Adsterra)
+
+Work Log:
+- Read both target files (affiliate-ads-tab.tsx, affiliate-banner.tsx) and verified current API contract in /api/affiliate-ads/route.ts (already expects adType + scriptCode)
+- affiliate-ads-tab.tsx: imported Textarea from @/components/ui/textarea
+- affiliate-ads-tab.tsx: added "adsterra" option to PLATFORMS array
+- affiliate-ads-tab.tsx: extended AffiliateAdForm interface with adType (string) + scriptCode (string), updated EMPTY_FORM defaults (adType: "image", scriptCode: "")
+- affiliate-ads-tab.tsx: added radio button group for adType ("image" | "script") before href/imgSrc inputs
+- affiliate-ads-tab.tsx: wrapped href + imgSrc + trackingPixel inputs in conditional render (only shown when adType === "image"); shown instead is a Textarea (rows=6, font-mono) for scriptCode when adType === "script" with placeholder showing Adsterra atOptions + invoke.js pattern
+- affiliate-ads-tab.tsx: updated saveMutation payload — sends adType + scriptCode always; for script type, nullifies href/imgSrc/trackingPixel
+- affiliate-ads-tab.tsx: updated Save button disabled logic — image requires name+href+imgSrc; script requires name+scriptCode
+- affiliate-ads-tab.tsx: updated list display — added violet "Script" badge or zinc "Image" badge; script-type rows show Megaphone icon instead of image thumbnail and display scriptCode length instead of trackingPixel URL
+- affiliate-ads-tab.tsx: updated edit-click setForm to read adType + scriptCode from existing ad
+- affiliate-banner.tsx: extended AffiliateAdData interface with adType? and scriptCode?
+- affiliate-banner.tsx: added containerRef (React.useRef<HTMLDivElement>)
+- affiliate-banner.tsx: added useEffect that re-injects <script> tags after render — clones each script node (preserves src for external invoke.js, copies textContent for inline atOptions script), replaces old node so browser actually executes them (React's dangerouslySetInnerHTML does NOT execute scripts)
+- affiliate-banner.tsx: added script-ad render branch BEFORE image rendering — wraps dangerouslySetInnerHTML div with rounded-xl border + "Iklan" label (same style as image banner), uses containerRef + className "adsterra-container", minHeight from banner.height
+- affiliate-banner.tsx: kept image banner rendering untouched (preserved referrerPolicy, crossOrigin fallback, tracking pixel logic)
+
+Stage Summary:
+- Both UI files updated; 0 ESLint errors and 0 TypeScript errors for affiliate-ads-tab.tsx + affiliate-banner.tsx (verified via `bun run lint` and `bunx tsc --noEmit` filtered to those paths)
+- Admin can now pick between Image Banner and Script (Adsterra) via radio; form fields swap conditionally (image inputs vs scriptCode textarea)
+- Public banner component renders script ads via dangerouslySetInnerHTML + manual script re-injection (so Adsterra invoke.js actually executes), wrapped in same rounded-xl border + "Iklan" label as image banners
+- Script type sends null for href/imgSrc/trackingPixel; backend API already validates (script requires name+scriptCode, image requires name+href+imgSrc)
+- Image banner functionality fully preserved — no regressions
+- Note: route.ts already references adType + scriptCode on Prisma create call, but `bunx tsc` reports TS2353 in route.ts because the Prisma schema/migration may still need updating (out of scope for this UI task — backend agent should run `prisma migrate dev` to add adType + scriptCode columns to AffiliateAd table)

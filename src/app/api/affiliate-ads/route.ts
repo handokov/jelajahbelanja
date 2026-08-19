@@ -49,20 +49,33 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const adType = body.adType || "image";
 
-    if (!body.name || !body.href || !body.imgSrc) {
-      return NextResponse.json(
-        { error: "Nama, link (href), dan gambar (imgSrc) wajib diisi" },
-        { status: 400 }
-      );
+    // Validasi: script type butuh scriptCode, image type butuh href + imgSrc
+    if (adType === "script") {
+      if (!body.name || !body.scriptCode) {
+        return NextResponse.json(
+          { error: "Nama dan scriptCode wajib diisi untuk tipe script" },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (!body.name || !body.href || !body.imgSrc) {
+        return NextResponse.json(
+          { error: "Nama, link (href), dan gambar (imgSrc) wajib diisi" },
+          { status: 400 }
+        );
+      }
     }
 
     const ad = await db.affiliateAd.create({
       data: {
         name: body.name,
-        platform: body.platform || "accesstrade",
-        href: body.href,
-        imgSrc: body.imgSrc,
+        platform: body.platform || "adsterra",
+        adType,
+        href: body.href || "",
+        imgSrc: body.imgSrc || "",
+        scriptCode: body.scriptCode || null,
         trackingPixel: body.trackingPixel || null,
         width: body.width ?? 300,
         height: body.height ?? 250,
@@ -108,7 +121,7 @@ export async function PATCH(req: NextRequest) {
 
     const data: Record<string, unknown> = {};
     const fields = [
-      "name", "platform", "href", "imgSrc", "trackingPixel",
+      "name", "platform", "adType", "href", "imgSrc", "scriptCode", "trackingPixel",
       "width", "height", "position", "order", "isActive",
       "startDate", "endDate",
     ];

@@ -10,8 +10,10 @@ export interface AffiliateAdData {
   id: string;
   name: string;
   platform: string;
+  adType?: string; // "image" atau "script"
   href: string;
   imgSrc: string;
+  scriptCode?: string | null;
   trackingPixel: string | null;
   width: number;
   height: number;
@@ -68,6 +70,40 @@ export function AffiliateBanner({
   className = "",
 }: AffiliateBannerProps) {
   const { data: ads, isLoading, isError } = useActiveAffiliateAds(position);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // Pilih banner: spesifik atau acak
+  const banner = !ads || ads.length === 0
+    ? null
+    : bannerId
+      ? ads.find((b) => b.id === bannerId) || ads[0]
+      : ads[Math.floor(Math.random() * ads.length)];
+
+  /**
+   * Script ads (Adsterra, dll) perlu manual re-inject script tags
+   * karena React tidak mengeksekusi <script> di dangerouslySetInnerHTML.
+   * Kita clone setiap <script> dan replace agar browser mengeksekusinya.
+   */
+  React.useEffect(() => {
+    if (
+      banner?.adType === "script" &&
+      banner.scriptCode &&
+      containerRef.current
+    ) {
+      const container = containerRef.current;
+      const scripts = container.querySelectorAll("script");
+      scripts.forEach((oldScript) => {
+        const newScript = document.createElement("script");
+        if (oldScript.src) {
+          newScript.src = oldScript.src;
+          newScript.async = true;
+        } else {
+          newScript.textContent = oldScript.textContent;
+        }
+        oldScript.parentNode?.replaceChild(newScript, oldScript);
+      });
+    }
+  }, [banner]);
 
   // Loading state
   if (isLoading) {
@@ -82,14 +118,28 @@ export function AffiliateBanner({
   }
 
   // Error atau tidak ada data
-  if (isError || !ads || ads.length === 0) {
+  if (isError || !banner) {
     return null; // Jangan tampilkan placeholder - lebih bersih
   }
 
-  // Pilih banner: spesifik atau acak
-  const banner = bannerId
-    ? ads.find((b) => b.id === bannerId) || ads[0]
-    : ads[Math.floor(Math.random() * ads.length)];
+  // Script ad (Adsterra) — render via dangerouslySetInnerHTML
+  if (banner.adType === "script" && banner.scriptCode) {
+    return (
+      <div className={`affiliate-banner ${className}`}>
+        {showLabel && (
+          <div className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1 px-1">
+            Iklan
+          </div>
+        )}
+        <div
+          ref={containerRef}
+          className="adsterra-container rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden"
+          style={{ minHeight: banner.height || 50 }}
+          dangerouslySetInnerHTML={{ __html: banner.scriptCode }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`affiliate-banner ${className}`}>

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -51,6 +52,7 @@ const PLATFORMS = [
   { value: "tokopedia", label: "Tokopedia Affiliate" },
   { value: "tiktok", label: "TikTok Shop" },
   { value: "lazada", label: "Lazada Affiliate" },
+  { value: "adsterra", label: "Adsterra (Script)" },
   { value: "lainnya", label: "Lainnya" },
 ];
 
@@ -64,8 +66,10 @@ const POSITIONS = [
 interface AffiliateAdForm {
   name: string;
   platform: string;
+  adType: string; // "image" atau "script"
   href: string;
   imgSrc: string;
+  scriptCode: string;
   trackingPixel: string;
   width: number;
   height: number;
@@ -79,8 +83,10 @@ interface AffiliateAdForm {
 const EMPTY_FORM: AffiliateAdForm = {
   name: "",
   platform: "accesstrade",
+  adType: "image",
   href: "",
   imgSrc: "",
+  scriptCode: "",
   trackingPixel: "",
   width: 300,
   height: 250,
@@ -128,9 +134,11 @@ export function AffiliateAdsTab() {
       const payload: Record<string, unknown> = {
         name: form.name,
         platform: form.platform,
-        href: form.href,
-        imgSrc: form.imgSrc,
-        trackingPixel: form.trackingPixel || null,
+        adType: form.adType,
+        scriptCode: form.scriptCode || null,
+        href: form.adType === "script" ? null : form.href,
+        imgSrc: form.adType === "script" ? null : form.imgSrc,
+        trackingPixel: form.adType === "script" ? null : form.trackingPixel || null,
         width: form.width,
         height: form.height,
         position: form.position,
@@ -242,50 +250,101 @@ export function AffiliateAdsTab() {
               </SelectContent>
             </Select>
           </div>
-          {/* Link Affiliate */}
-          <div className="md:col-span-2">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              <ExternalLink className="w-3 h-3" /> Link Affiliate (href) *
-            </Label>
-            <Input
-              placeholder="https://accesstrade.co.id/xxxxx (link dari dashboard)"
-              value={form.href}
-              onChange={(e) => setForm({ ...form, href: e.target.value })}
-            />
+          {/* Tipe Iklan */}
+          <div className="flex flex-col gap-1.5 md:col-span-2">
+            <Label className="text-xs">Tipe Iklan</Label>
+            <div className="flex gap-4 flex-wrap">
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                <input
+                  type="radio"
+                  name="adType"
+                  value="image"
+                  checked={form.adType === "image"}
+                  onChange={(e) => setForm({ ...form, adType: e.target.value })}
+                />
+                Image Banner (gambar + link)
+              </label>
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                <input
+                  type="radio"
+                  name="adType"
+                  value="script"
+                  checked={form.adType === "script"}
+                  onChange={(e) => setForm({ ...form, adType: e.target.value })}
+                />
+                Script (Adsterra, dll)
+              </label>
+            </div>
           </div>
-          {/* Banner Image */}
-          <div className="md:col-span-2">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              <ImageIcon className="w-3 h-3" /> URL Gambar Banner (imgSrc) *
-            </Label>
-            <Input
-              placeholder="https://accesstrade.co.id/xxxxx_300x250.jpg (URL gambar)"
-              value={form.imgSrc}
-              onChange={(e) => setForm({ ...form, imgSrc: e.target.value })}
-            />
-            {form.imgSrc && (
-              <img
-                src={form.imgSrc}
-                alt="Preview"
-                className="mt-2 max-w-[200px] rounded-lg object-contain bg-zinc-100 dark:bg-zinc-800"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
+
+          {/* Conditional fields based on adType */}
+          {form.adType === "script" ? (
+            <div className="flex flex-col gap-1.5 md:col-span-2">
+              <Label htmlFor="ad-scriptCode" className="text-xs">
+                Script Code (Adsterra)
+              </Label>
+              <Textarea
+                id="ad-scriptCode"
+                rows={6}
+                placeholder={
+                  '<script>\n  atOptions = {\n    key: "...",\n    format: "iframe",\n    ...\n  };\n</script>\n<script src="https://www.highperformanceformat.com/.../invoke.js"></script>'
+                }
+                value={form.scriptCode}
+                onChange={(e) => setForm({ ...form, scriptCode: e.target.value })}
+                className="font-mono text-xs"
               />
-            )}
-          </div>
-          {/* Tracking Pixel */}
-          <div className="md:col-span-2">
-            <Label className="text-xs">Tracking Pixel URL (opsional)</Label>
-            <Input
-              placeholder="https://imp.accesstra.de/img.php?rk=xxxxx (1x1 pixel)"
-              value={form.trackingPixel}
-              onChange={(e) => setForm({ ...form, trackingPixel: e.target.value })}
-            />
-            <p className="text-[10px] text-zinc-500 mt-1">
-              Tracking pixel 1x1 untuk impression tracking (invisible)
-            </p>
-          </div>
+              <p className="text-[10px] text-zinc-500">
+                Paste script Adsterra (atOptions + invoke.js). Paste lengkap dari dashboard Adsterra.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Link Affiliate */}
+              <div className="md:col-span-2">
+                <Label className="text-xs font-semibold flex items-center gap-1">
+                  <ExternalLink className="w-3 h-3" /> Link Affiliate (href) *
+                </Label>
+                <Input
+                  placeholder="https://accesstrade.co.id/xxxxx (link dari dashboard)"
+                  value={form.href}
+                  onChange={(e) => setForm({ ...form, href: e.target.value })}
+                />
+              </div>
+              {/* Banner Image */}
+              <div className="md:col-span-2">
+                <Label className="text-xs font-semibold flex items-center gap-1">
+                  <ImageIcon className="w-3 h-3" /> URL Gambar Banner (imgSrc) *
+                </Label>
+                <Input
+                  placeholder="https://accesstrade.co.id/xxxxx_300x250.jpg (URL gambar)"
+                  value={form.imgSrc}
+                  onChange={(e) => setForm({ ...form, imgSrc: e.target.value })}
+                />
+                {form.imgSrc && (
+                  <img
+                    src={form.imgSrc}
+                    alt="Preview"
+                    className="mt-2 max-w-[200px] rounded-lg object-contain bg-zinc-100 dark:bg-zinc-800"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                )}
+              </div>
+              {/* Tracking Pixel */}
+              <div className="md:col-span-2">
+                <Label className="text-xs">Tracking Pixel URL (opsional)</Label>
+                <Input
+                  placeholder="https://imp.accesstra.de/img.php?rk=xxxxx (1x1 pixel)"
+                  value={form.trackingPixel}
+                  onChange={(e) => setForm({ ...form, trackingPixel: e.target.value })}
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Tracking pixel 1x1 untuk impression tracking (invisible)
+                </p>
+              </div>
+            </>
+          )}
           {/* Ukuran Preset */}
           <div>
             <Label className="text-xs">Ukuran Banner</Label>
@@ -389,8 +448,9 @@ export function AffiliateAdsTab() {
             disabled={
               saveMutation.isPending ||
               !form.name ||
-              !form.href ||
-              !form.imgSrc
+              (form.adType === "image"
+                ? !form.href || !form.imgSrc
+                : !form.scriptCode)
             }
           >
             <Save className="w-3.5 h-3.5 mr-1" />
@@ -431,7 +491,12 @@ export function AffiliateAdsTab() {
                 <div
                   className="w-24 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center"
                 >
-                  {ad.imgSrc ? (
+                  {ad.adType === "script" ? (
+                    <div className="flex flex-col items-center gap-1 text-zinc-400">
+                      <Megaphone className="w-5 h-5" />
+                      <span className="text-[9px] uppercase tracking-wider">Script</span>
+                    </div>
+                  ) : ad.imgSrc ? (
                     <img
                       src={ad.imgSrc}
                       alt={ad.name}
@@ -445,10 +510,19 @@ export function AffiliateAdsTab() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold truncate">
                       {ad.name}
                     </span>
+                    {ad.adType === "script" ? (
+                      <Badge className="bg-violet-100 text-violet-700 text-[9px]">
+                        Script
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-zinc-200 text-zinc-600 text-[9px]">
+                        Image
+                      </Badge>
+                    )}
                     {!ad.isActive && (
                       <Badge className="bg-zinc-200 text-zinc-600 text-[9px]">
                         Nonaktif
@@ -463,10 +537,18 @@ export function AffiliateAdsTab() {
                   <p className="text-xs text-zinc-500">
                     {ad.platform} • {ad.width}x{ad.height} • {ad.position}
                   </p>
-                  {ad.trackingPixel && (
-                    <p className="text-[10px] text-fuchsia-600 mt-0.5 truncate">
-                      Tracking: {ad.trackingPixel}
+                  {ad.adType === "script" ? (
+                    <p className="text-[10px] text-violet-600 mt-0.5 truncate">
+                      Script Ad ({(ad.scriptCode || "").length} chars)
                     </p>
+                  ) : (
+                    <>
+                      {ad.trackingPixel && (
+                        <p className="text-[10px] text-fuchsia-600 mt-0.5 truncate">
+                          Tracking: {ad.trackingPixel}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
                 <div className="flex flex-col gap-1">
@@ -479,8 +561,10 @@ export function AffiliateAdsTab() {
                       setForm({
                         name: ad.name,
                         platform: ad.platform || "accesstrade",
-                        href: ad.href,
-                        imgSrc: ad.imgSrc,
+                        adType: ad.adType || "image",
+                        href: ad.href || "",
+                        imgSrc: ad.imgSrc || "",
+                        scriptCode: ad.scriptCode || "",
                         trackingPixel: ad.trackingPixel || "",
                         width: ad.width,
                         height: ad.height,
