@@ -1,8 +1,8 @@
-# 🔄 HANDOFF — JelajahBelanja Project (Updated 2026-07-25)
+# 🔄 HANDOFF — JelajahBelanja Project (Updated 2026-08-18)
 
 ## 📌 INFO PROYEK
 - **Website**: https://jelajahbelanja.com
-- **Repo**: https://github.com/handokov/jelajahbelanja.git
+- **Repo**: https://github.com/handokov/jelajahbelanja.git (PUBLIC)
 - **Branch**: main
 - **Framework**: Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui
 - **Database**: Neon PostgreSQL via Prisma ORM
@@ -11,31 +11,36 @@
 
 ---
 
-## 🚀 STATUS CURRENT (Juli 2026)
+## 🚀 STATUS CURRENT (Agustus 2026)
 
 ### Traffic & Conversion
-- **Traffic**: Masih kecil (~11-50 klik/hari), fase building 3-6 bulan
-- **AT Dashboard**: ~163 klik, 0 konversi (NORMAL untuk blog baru)
-- **Tab Klik JB**: 34 klik tercatat (mulai jalan setelah fix /beli/[id] tracking)
-- **Google Search Console**: Aktif, 4 artikel di-index
-- **Pinterest**: Website claimed & verified (meta tag p:domain_verify)
+- **Traffic**: ~50-100 klik/hari, fase building 3-6 bulan
+- **AT Dashboard**: ~163 klik, konversi pertama sudah masuk (test user beli via JB)
+- **Tab Klik JB**: 109 klik tercatat, 2 konversi (sync manual dari AT)
+- **Conversion rate**: 1.8% (2 konversi / 109 klik)
+- **Komisi**: Rp303 (data dari AT, input manual ke JB)
+- **Google Search Console**: Aktif, artikel di-index
+- **Pinterest**: Website claimed & verified
 
 ### Database Production
-- **760 produk** (campur anak + beberapa dewasa yang perlu dibersihkan)
-- **10 kategori anak** aktif (Sekolah Anak, Tumbler Anak, Mainan Edukatif, dll)
-- **10 blog articles** (4 AI-generated via Groq + 6 manual)
-- **5 marketplace**: Shopee, Tokopedia, Blibli, TikTok, Zalora
+- **874 produk** (campur anak + beberapa dewasa yang perlu dibersihkan)
+- **10 kategori anak** aktif
+- **10 blog articles** (AI-generated via Groq + manual)
+- **8 marketplace**: Shopee, Tokopedia, Lazada, Blibli, Bukalapak, Zalora, TikTok Shop, Other (Brand Sendiri)
+- **Scraper v3.3.7**: dengan input manual rating/sold/review/location
 
 ### Affiliate Status
 | Marketplace | Produk | Affiliate via | Status |
 |-------------|--------|---------------|--------|
-| Shopee | 25 | AT (atid.me) + tag langsung | Aktif |
-| Tokopedia | 61 | AT (atid.me) | Aktif |
-| Blibli | 35 | AT (atid.me) | Aktif |
-| TikTok Shop | 95 | AT (atid.me) | Aktif |
-| Zalora | 40 | Tidak ada | Biarkan (diversifikasi) |
+| Shopee | ~200 | AT (atid.me) + tag langsung | Aktif |
+| Tokopedia | ~200 | AT (atid.me) | Aktif |
+| Blibli | ~35 | AT (atid.me) | Aktif |
+| TikTok Shop | ~95 | AT (atid.me) | Aktif |
+| Zalora | ~40 | Tidak ada | Biarkan (diversifikasi) |
+| Other | ~5 | Tidak perlu (brand sendiri) | Baru ditambahkan |
 
-**Cookie AT**: 20+ hari (lebih panjang dari Shopee Affiliate langsung = 7 hari)
+**Cookie AT**: 20+ hari (Campaign Shopee #966)
+**Komisi**: 5% direct / 1.2% indirect
 
 ---
 
@@ -50,7 +55,6 @@
 - CLOUD_NAME: bfvtb4xp
 - API Key & Secret: lihat di Vercel env vars (CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)
 - Folder: jb-products
-- Dashboard: https://cloudinary.com/console
 
 ### Database (Neon)
 - Project ID: green-base-47386531
@@ -71,8 +75,14 @@
 
 ### GitHub
 - Token tersimpan di ~/.git-credentials (chmod 600, di luar repo)
-- Format: https://handokov:<lihat di credential file>@github.com
+- Format: https://handokov:<GITHUB_TOKEN>@github.com
+- Token: lihat di GitHub Settings -> Developer settings -> Personal access tokens
 - Backup tag: pre-cleanup-backup-20260725 (sebelum UUID cleanup)
+
+### Adsterra (NEW)
+- Dashboard: https://adsterra.com
+- Ad format: script-based (atOptions + invoke.js)
+- Masuk via tab Iklan Affiliate -> tipe "Script"
 
 ---
 
@@ -81,19 +91,23 @@
 ```
 src/
 ├── app/
-│   ├── page.tsx                    # Homepage (Daily Mix + product grid)
+│   ├── page.tsx                    # Homepage (Daily Mix + product grid + flash sale)
 │   ├── api/
-│   │   ├── shopee-products/        # CRUD produk (public + admin)
+│   │   ├── shopee-products/        # CRUD produk (auto-calc discountPercent)
 │   │   ├── admin/
 │   │   │   ├── products/           # Admin CRUD produk (cookie auth)
-│   │   │   ├── blog/               # Blog Manager API (list/create/update/delete)
+│   │   │   ├── blog/               # Blog Manager API (CRUD + coverImage)
 │   │   │   ├── blog-cover-products/# Product picker untuk cover image blog
-│   │   │   └── click-report/       # Report klik per produk/marketplace/referer
+│   │   │   ├── click-report/       # Report klik (conversionCount per produk)
+│   │   │   ├── update-conversion/  # Input manual konversi dari AT dashboard
+│   │   │   ├── backfill-discount/  # Backfill discountPercent dari originalPrice
+│   │   │   └── bulk-products/      # Bulk operations
 │   │   ├── blog-generate/          # AI generate blog via Groq
 │   │   ├── blog-trending/          # AI suggest trending topics
 │   │   ├── at-custom-link/         # Generate AT short link (atid.me)
 │   │   ├── at-sync/                # Sync produk dari AT API
-│   │   ├── beli/[id]/              # Redirect klik → log → atid.me (CLICK TRACKING)
+│   │   ├── affiliate-ads/          # CRUD affiliate ads (image + script)
+│   │   ├── beli/[id]/              # Redirect klik -> log -> atid.me (CLICK TRACKING)
 │   │   ├── cron/
 │   │   │   ├── at-sync/            # Daily sync dari AT
 │   │   │   ├── blog-generate/      # Weekly Monday blog auto
@@ -101,21 +115,22 @@ src/
 │   │   └── click-stats/            # Click fraud protection stats
 │   ├── jb-mgr-admin/               # Admin panel (10 tabs, scrollable)
 │   ├── jb-mgr-login/               # Login admin
-│   ├── artikel/                    # Blog list + detail (cover image support)
-│   ├── produk/[id]/                # Detail produk
+│   ├── artikel/                    # Blog list + detail (cover image + nbsp spacing)
+│   ├── produk/[id]/                # Detail produk (badge "Brand Sendiri" untuk other)
 │   └── kategori/[slug]/            # Kategori page
 ├── components/
-│   ├── home/                       # LogoBar, ProductsGrid, BannerSlider
-│   ├── product-card.tsx            # 3 variants, rating/sold hide if empty
+│   ├── home/                       # LogoBar, ProductsGrid, BannerSlider, FlashSaleSection
+│   ├── product-card.tsx            # 3 variants, rating/sold hide if empty, badge marketplace
+│   ├── affiliate-banner.tsx        # Render image + script ads (Adsterra)
 │   ├── admin/
-│   │   ├── products-tab.tsx
+│   │   ├── products-tab.tsx        # Produk CRUD + filter Visible/Hidden
 │   │   ├── categories-tab.tsx
 │   │   ├── at-sync-tab.tsx
 │   │   ├── banners-tab.tsx
 │   │   ├── affiliate-tab.tsx
-│   │   ├── affiliate-ads-tab.tsx
+│   │   ├── affiliate-ads-tab.tsx   # Iklan Affiliate (image + script Adsterra)
 │   │   ├── blog-tab.tsx            # Blog Manager + cover image picker
-│   │   ├── click-report-tab.tsx    # Report klik (6 sections)
+│   │   ├── click-report-tab.tsx    # Report klik (6 sections + input konversi manual)
 │   │   ├── bulk-upload-tab.tsx
 │   │   └── security-tab.tsx
 │   └── ui/                         # shadcn/ui components
@@ -128,9 +143,10 @@ src/
 │   ├── accesstrade.ts              # AT API client
 │   ├── click-guard.ts              # Click fraud protection (in-memory)
 │   ├── blog-data.ts                # BlogArticle interface
-│   └── types.ts                    # Product, Category, Marketplace types
+│   ├── admin-config.ts             # MARKETPLACE_OPTIONS (8 marketplace, no sociolla/aliexpress/amazon)
+│   └── types.ts                    # Product, Category, Marketplace (include 'other')
 └── prisma/
-    └── schema.prisma               # 9 models
+    └── schema.prisma               # 9 models + conversionCount + adType + scriptCode
 ```
 
 ---
@@ -140,28 +156,36 @@ src/
 | Model | Kegunaan |
 |-------|----------|
 | Category | Kategori produk + keyword per marketplace |
-| ShopeeProduct | Data produk semua marketplace (760 rows) |
-| BlogArticle | Artikel blog (coverImage field, slug, content HTML) |
+| ShopeeProduct | Data produk (874 rows) — include conversionCount + conversionValue |
+| BlogArticle | Artikel blog (coverImage, slug, content HTML, nbsp spacing) |
 | ProductClick | Log klik produk (productId, IP, referer, blocked, dll) |
 | AffiliateTag | Tag affiliate per marketplace (Shopee, Tokopedia enabled) |
 | PromoBanner | Banner slider homepage |
-| AffiliateAd | Banner affiliate (AT, Shopee, dll) |
+| AffiliateAd | Banner affiliate (image + script Adsterra) — adType + scriptCode |
 | ProductBadge | Badge kecil di product card (Flash Sale, dll) |
 | Setting | Key-value config (AT credentials) |
 
 ### Field Penting ShopeeProduct
-- rating Float (default 4.5)
+- rating Float (default 4.5) — real data dari scraper v3.3.7
 - soldCount Int (default 0)
 - reviewCount Int (default 0)
 - location String? (jangan default "Jakarta Barat")
+- discountPercent Int? — auto-calc dari originalPrice kalau null
+- conversionCount Int (default 0) — input manual dari AT dashboard
+- conversionValue Int (default 0) — estimasi komisi Rupiah dari AT
 - lastScrapedAt DateTime? — untuk cron refresh priority
 - isHidden Boolean — hide dari homepage tanpa hapus
 - isPinned Boolean — pin di atas
-- coverImage String? — di BlogArticle, bukan ShopeeProduct
+
+### Field Penting AffiliateAd
+- adType String (default "image") — "image" atau "script"
+- scriptCode String? — HTML script untuk Adsterra (atOptions + invoke.js)
+- href String — link affiliate (kosong kalau script)
+- imgSrc String — URL gambar (kosong kalau script)
 
 ---
 
-## 🎯 FITUR YANG SUDAH BERJALAN
+## 🎯 FITUR YANG SUDAH BERJALAN (LIVE)
 
 ### 1. Blog Manager (Admin Tab "Blog")
 - CRUD artikel (list, create, edit, delete)
@@ -169,7 +193,7 @@ src/
 - AI Generate (random topic atau custom prompt)
 - AI Trending suggestions (5 topik viral/bulan)
 - Cover image tampil di: list artikel, detail, OpenGraph, JSON-LD
-- Blog spacing: line-height 1.85, paragraf mb-8 (32px)
+- Blog spacing: line-height 1.85, paragraf mb-8 (32px), nbsp antar paragraf
 
 ### 2. Click Report (Admin Tab "Klik")
 - Total klik, unique IP, blocked, block rate
@@ -178,6 +202,8 @@ src/
 - Klik per marketplace (5 cards)
 - Klik per Sumber Trafik (Pinterest/TikTok/Threads/Google/Direct/Internal/Other)
 - Recent 20 clicks dengan masked IP, referer, status
+- **Input manual konversi per produk** (sync dari AT dashboard)
+- StatCard Konversi: count + rate% + komisi Rupiah
 
 ### 3. Click Tracking (/beli/[id] route)
 - Setiap klik Beli -> log ke ProductClick table
@@ -185,10 +211,10 @@ src/
 - Redirect ke atid.me (AT tracking) -> Shopee/Tokopedia
 - WAJIB await db.productClick.create() — Vercel kill function jika fire-and-forget
 
-### 4. Scraper Chrome Extension (v3.3.5)
-- Download: https://jelajahbelanja.com/jb-scraper-all-v335.zip
+### 4. Scraper Chrome Extension (v3.3.7)
+- Download: https://jelajahbelanja.com/jb-scraper-all-v337.zip
 - Based on v3.2.3 (user's working version)
-- 8 marketplace: Shopee, Tokopedia, TikTok, Blibli, Lazada, Bukalapak, Zalora, Sociolla
+- 8 marketplace: Shopee, Tokopedia, TikTok, Blibli, Lazada, Bukalapak, Zalora, Other
 - Fitur:
   - Auto-extract (sering gagal karena anti-bot Shopee)
   - Input manual: rating, terjual, review, lokasi seller (per produk)
@@ -212,11 +238,40 @@ src/
 - Analytics tersedia di Pinterest Business
 
 ### 7. SEO
-- robots.txt: Allow all (fix Disallow: / yang block Google index)
+- robots.txt: Allow all
 - Sitemap dynamic dari DB
 - Canonical URL pakai slug (bukan ID)
 - JSON-LD Article + Product schema
 - OpenGraph + cover image untuk share
+
+### 8. Flash Sale Section (Homepage)
+- Auto-calc discountPercent dari originalPrice
+- Filter: discountPercent >= 30%
+- 255 produk eligible flash sale
+- Countdown timer (reset tiap hari)
+
+### 9. Affiliate Ads (Admin Tab "Iklan Affiliate")
+- Image banner (AccessTrade, Shopee, dll) — seperti sebelumnya
+- **Script-based ads (Adsterra)** — BARU
+  - Radio button: Image / Script
+  - Textarea untuk paste scriptCode (atOptions + invoke.js)
+  - Render via dangerouslySetInnerHTML + useEffect re-inject scripts
+  - Platform: "adsterra" tersedia
+
+### 10. Conversion Tracking Manual
+- API /api/admin/update-conversion (POST)
+- Body: { productId, conversionCount, conversionValue }
+- User cek AT dashboard -> input manual di tab Klik -> Save
+- StatCard Konversi: count + rate% + komisi Rupiah
+- Top Products: input inline per produk (click edit -> input -> save)
+
+### 11. Marketplace "Other (Brand Sendiri)"
+- Type Marketplace: tambah 'other'
+- MARKETPLACE_OPTIONS: 8 marketplace (hapus sociolla, aliexpress, amazon)
+- Badge: "Brand Sendiri" (violet) di product-card, detail, dialog, style board
+- normalizeMarketplace: recognize 'other' (tidak fallback ke shopee)
+- Buy label: "Beli di Website Brand"
+- Untuk brand yang jual produk sendiri (tidak perlu affiliate)
 
 ---
 
@@ -243,21 +298,18 @@ git push origin main
 - Push tanpa git reset --hard origin/main dulu
 - Commit dengan UUID message (GitHub block!)
 - Hapus ~/.git-credentials
+- Tulis token/secrets di file yang di-commit (GitHub Secret Scanning block!)
 
 ### Credential Setup (kalau hilang)
 ```bash
-# Token GitHub ada di ~/.git-credentials (chmod 600)
-# Format: https://handokov:<GITHUB_TOKEN>@github.com
 # Token: lihat di GitHub Settings -> Developer settings -> Personal access tokens
-# Atau tanya user (tidak ditulis di sini untuk security)
-# Setup credential: lihat instruksi di bawah
+echo "https://handokov:<GITHUB_TOKEN>@github.com" > ~/.git-credentials
 chmod 600 ~/.git-credentials
 git config --global credential.helper store
 ```
 
 ### Backup Tag (kalau perlu rollback)
-- `pre-cleanup-backup-20260725` — state sebelum UUID cleanup (178 UUID commits)
-- Rollback: `git reset --hard pre-cleanup-backup-20260725 && git push --force origin main`
+- pre-cleanup-backup-20260725 — state sebelum UUID cleanup
 
 ---
 
@@ -288,8 +340,8 @@ PENTING: Pakai prisma db push (bukan migrate deploy) karena:
 ## 📋 TODO / NEXT STEPS
 
 ### High Priority (Conversion Optimization)
-1. Bersihkan produk dewasa — hide/hapus Sonata Dress Busui, MOSSDOOM Tas Wanita
-2. Scrape ulang produk fresh dengan scraper v3.3.5 (rating >=4.8, sold >=500)
+1. Bersihkan produk dewasa — hide/hapus Sonata Dress Busui, MOSSDOOM Tas Wanita, dll
+2. Scrape ulang produk fresh dengan scraper v3.3.7 (rating >=4.8, sold >=500)
 3. Tambah urgency di ProductCard (Flash Sale badge, Stok tinggal X)
 
 ### Medium Priority
@@ -300,7 +352,7 @@ PENTING: Pakai prisma db push (bukan migrate deploy) karena:
 ### Low Priority
 7. Auto-pin via Pinterest API
 8. A/B test tombol Beli vs Lihat Produk
-9. Conversion tracking sync dengan AT API
+9. Sync conversion otomatis dari AT API (sekarang manual)
 
 ---
 
@@ -309,7 +361,7 @@ PENTING: Pakai prisma db push (bukan migrate deploy) karena:
 ### 1. Jangan Over-Engineer Scraper
 - v3.3.2 coba fix rating auto-extract -> crash (reference reviewCount undefined)
 - v3.3.3 revert ke v3.3.1 (working)
-- v3.3.4 + v3.3.5 tambah input manual (simple, tidak break)
+- v3.3.4 + v3.3.5 + v3.3.6 + v3.3.7 tambah input manual (simple, tidak break)
 - Lesson: Scraper pakai chrome.scripting.executeScript({func}), helper tidak
   available cross-context. Inline logic saja.
 
@@ -322,65 +374,93 @@ PENTING: Pakai prisma db push (bukan migrate deploy) karena:
 - Jangan pakai condition product.id.startsWith("shopee-") untuk routing
 - Semua link Beli harus lewat /beli/[id] (cuid) supaya klik tercatat
 
-### 4. Scraper Auto-Extract Rating = Sering Gagal
+### 4. normalizeMarketplace
+- Function di /api/products/route.ts TIDAK recognize 'other' (fixed)
+- Kalau tambah marketplace baru, update VALID array di normalizeMarketplace
+- Juga update MARKETPLACE_META di 4 file (product-card, ProductDetailClient, dialog, outfit-style-board)
+
+### 5. Scraper Auto-Extract Rating = Sering Gagal
 - Shopee/Tokopedia anti-bot block, render JS dinamis
 - Auto-extract success rate ~30-50%
-- Solusi: input manual di scraper v3.3.5
+- Solusi: input manual di scraper v3.3.7 (rating/sold/review/location)
 
-### 5. Local Sandbox State
+### 6. Local Sandbox State
 - Kadang tertinggal di belakang origin/main (sandbox reset)
 - SELALU git fetch origin && git reset --hard origin/main sebelum kerja
 
-### 6. User Character
+### 7. GitHub Secret Scanning
+- Repo JB PUBLIC — semua secrets akan di-detect GitHub
+- JANGAN tulis token/password di file yang di-commit
+- Kalau perlu credentials, pakai comment "lihat di Vercel env vars"
+- Token lama yang sudah commit di history = perlu rotate
+
+### 8. User Character
 - Solo founder, modal kecil, tidak teknis
 - Butuh ZAI proaktif cek masalah (bukan cuma kerjakan yang diminta)
 - Percaya AI sebagai "tim" JB
 - Web JB tidak akan dijual — aset jangka panjang
 - Aktif social media: Threads, TikTok, Pinterest
-- Mau JB cepat pecah telor — tapi realistis butuh 3-6 bulan lagi
+- Mau JB cepat pecah telor — konversi pertama sudah masuk (test user)
 
-### 7. Conversion Status (Juli 2026)
-- 0 konversi dalam 3 bulan — NORMAL untuk blog affiliate baru
-- Jangan jual mimpi "ganti affiliate = konversi naik"
-- Root cause: traffic belum cukup + produk tidak targeted + tidak ada urgency
+### 9. Conversion Status (Agustus 2026)
+- Konversi pertama sudah masuk (test user beli via JB link)
+- Conversion rate: 1.8% (2 konversi / 109 klik)
+- Komisi: Rp303 (data dari AT, input manual ke JB)
+- JB dan AT = 2 sistem terpisah, JB tidak auto-sync konversi dari AT
+- User input manual konversi di tab Klik -> sync dengan AT dashboard
 
-### 8. Git History Cleanup (Juli 2026)
-- 178 UUID commit messages di-cleanup via git filter-branch
-- Backup tag: pre-cleanup-backup-20260725
-- Sekarang GitHub push normal lagi (tidak kena rule violation)
-- JANGAN commit dengan UUID message lagi!
+### 10. Affiliate Link TIDAK Expire
+- atid.me link tersimpan di DB TIDAK ada batas waktu
+- Yang expire: cookie per visitor (60 hari per klik)
+- Produk lama (Januari) masih bisa dapet komisi di Agustus
+- Selama: akun AT aktif + campaign "BERJALAN" + produk belum dihapus seller
 
 ---
 
-## 🧩 CHROME EXTENSION (Latest: v3.3.5)
+## 🧩 CHROME EXTENSION (Latest: v3.3.7)
 
-- Download: https://jelajahbelanja.com/jb-scraper-all-v335.zip
+- Download: https://jelajahbelanja.com/jb-scraper-all-v337.zip
 - Source: download/scraper-fix-v33/ (unpacked)
 - Version history:
   - v3.2.3: original (working, no rating extract)
-  - v3.3.0: tambah extractProductStats (bug: cross-context)
-  - v3.3.1: inline stats extraction (working, user upload)
-  - v3.3.2: fix _rating fallback (bug: reference reviewCount undefined)
+  - v3.3.0-v3.3.2: bug attempts (cross-context, reference error)
   - v3.3.3: revert ke v3.3.1 (working)
   - v3.3.4: + input manual rating/sold/review
-  - v3.3.5: + input manual lokasi seller (CURRENT)
+  - v3.3.5: + input manual lokasi seller
+  - v3.3.6: + originalPrice (harga coret) support
+  - v3.3.7: hapus sociolla dari dropdown (CURRENT)
 
-### Input Manual di v3.3.5
+### Input Manual di v3.3.7
 1. Rating (0-5, number, step 0.1)
 2. Terjual (number)
 3. Review (number)
 4. Lokasi Seller (text)
+5. OriginalPrice (harga coret, auto-calc discountPercent)
+
+### Fitur Lain (preserved dari v3.2.3)
+- Auto-generate AT link (atid.me)
+- Mirror image Tokopedia ke Cloudinary
+- Paste URL mode (batch)
+- CSV export
+- Upload ke JB via /api/shopee-products
+- Save draft collection
 
 ---
 
 ## 📊 ANALYTICS & TRACKING
 
 ### Yang Bisa User Lihat
-1. Tab Klik di Admin — klik per produk, per marketplace, per referer source
-2. AT Dashboard (accesstrade.id/dashboard) — klik + konversi + komisi
+1. Tab Klik di Admin — klik per produk, per marketplace, per referer source, konversi manual
+2. AT Dashboard (accesstrade.id/dashboard) — klik + konversi + komisi (real)
 3. Vercel Analytics — page view, visitor, traffic source
 4. Google Search Console — index status, keyword ranking
 5. Pinterest Analytics — pin performance
+6. Adsterra Dashboard — iklan impression + earning (jika dipasang)
+
+### Yang Tidak Bisa (Belum)
+- Conversion rate per produk otomatis (AT tidak push back ke JB)
+- Real-time komisi (AT delay 1-24 jam)
+- A/B test CTR
 
 ---
 
@@ -389,30 +469,50 @@ PENTING: Pakai prisma db push (bukan migrate deploy) karena:
 ### Build Gagal di Vercel
 - P3005 = pakai migrate deploy, ganti ke db push
 - module not found = local sandbox tertinggal, git reset --hard origin/main
+- Secret scanning block = hapus secrets dari file yang di-commit
 - Cek Vercel status: https://www.vercel-status.com
 
 ### Scraper "Gagal Scrape"
 - Pastikan di halaman produk tunggal (bukan search page)
 - Kalau auto-extract crash, revert ke v3.3.1 (working base)
+- Input manual tetap bisa walau auto-extract gagal
 
 ### Klik Tidak Tercatat
 - Cek /beli/[id] route: pastikan await db.productClick.create()
 - Cek ProductCard: buyUrl = /beli/${product.id} (bukan affiliateUrl langsung)
+- Cek click-guard: IP kena rate limit? Lihat tab Klik -> blocked clicks
+
+### Badge Marketplace Salah
+- Cek normalizeMarketplace di /api/products/route.ts (VALID array)
+- Cek MARKETPLACE_META di 4 file (product-card, ProductDetailClient, dialog, outfit-style-board)
+- Marketplace 'other' harus ada di kedua tempat
+
+### Konversi Tidak Masuk di JB
+- JB dan AT = sistem terpisah, JB tidak auto-sync
+- User cek AT dashboard -> input manual di tab Klik -> Save
+- StatCard Konversi auto-update
 
 ### Blog Tidak Tampil
 - Cek coverImage column ada di Neon
 - Cek build script pakai db push
 - Cek artikel isPublished = true
 
+### Iklan Adsterra Tidak Muncul
+- Cek adType = "script" di DB
+- Cek scriptCode tidak kosong
+- Cek isActive = true
+- useEffect re-inject scripts (React tidak execute script di dangerouslySetInnerHTML)
+
 ---
 
 ## 📞 KONTAK & ESKALASI
 
 - User: handokov (solo founder)
-- GitHub: github.com/handokov/jelajahbelanja
+- GitHub: github.com/handokov/jelajahbelanja (PUBLIC)
 - Vercel: project "jelajahbelanja"
 - Neon: project "green-base-47386531"
 - AT: accesstrade.id (site_id 127377)
+- Adsterra: adsterra.com
 
 ### Kalau Token Habis / Session Baru
 1. Baca worklog.md untuk lihat task terakhir
@@ -425,14 +525,16 @@ PENTING: Pakai prisma db push (bukan migrate deploy) karena:
 ## 🎯 TARGET 3 BULAN KE DEPAN
 
 1. Bulan 1: Bersihkan produk + scrape ulang + urgency badges
-2. Bulan 2: Konsisten Threads/TikTok/Pinterest + blog AI weekly
-3. Bulan 3: Pecah telor (konversi pertama) + scale traffic
+2. Bulan 2: Konsisten Threads/TikTok/Pinterest + blog AI weekly + Adsterra ads
+3. Bulan 3: Scale traffic + konversi stabil (5-20/bulan)
 
 Target traffic: 300-500 visitor/hari
-Target conversion: 1-5 konversi/bulan di bulan 6
+Target conversion: 5-20 konversi/bulan di bulan 6
 
 ---
 
-**Last updated**: 2026-07-25
+**Last updated**: 2026-08-18
 **Agent**: ZAI (Code)
 **Production status**: Live & stable
+**Total commits**: ~300+ di main branch
+**Scraper version**: v3.3.7
