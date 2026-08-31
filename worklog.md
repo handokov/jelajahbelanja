@@ -1579,3 +1579,30 @@ Stage Summary:
 - Image banner tetap jalan seperti sebelumnya (tidak berubah)
 - 1 commit: 20a1dfe
 - Production verified
+
+---
+Task ID: pivot-hybrid-positioning
+Agent: main
+Task: User request — Opsi C: pivot ke hybrid positioning (Anak + Rumah Tangga)
+
+Work Log:
+- Analisis data: 11 konversi 100% dari produk BUKAN anak (Mukena Dewasa 4x, Thermal Grease 2x, Purbasari 1x, Plastik Makanan 1x)
+- User pilih Opsi C: hybrid (60% anak, 40% rumah tangga/dewasa)
+- Tambah 4 kategori baru via API:
+  - Kebutuhan Rumah Tangga
+  - Kecantikan & Skincare
+  - Pakaian Muslim Dewasa
+  - Elektronik & Aksesoris
+- Update metadata layout.tsx:
+  - SITE_DESCRIPTION: tambah "kebutuhan rumah tangga, skincare, pakaian muslim, elektronik"
+  - Title: "Produk Anak & Rumah Tangga Terkurasi"
+  - Keywords: +9 keyword baru (rumah tangga, skincare, mukena dewasa, gamis, elektronik, dll)
+  - OpenGraph title updated
+- Commit 99420cc pushed
+
+Stage Summary:
+- Hybrid positioning LIVE di production
+- 20 kategori total (16 anak + 4 dewasa/rumah tangga)
+- SEO keywords diperluas untuk capture traffic dewasa
+- User tinggal: scrape produk rumah tangga (Mukena, skincare, elektronik) dengan scraper v3.3.7
+- Update konversi setiap minggu untuk track performa per kategori
