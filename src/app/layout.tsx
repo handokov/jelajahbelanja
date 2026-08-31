@@ -16,12 +16,12 @@ const interSans = Inter({
 const SITE_URL = "https://www.jelajahbelanja.com";
 const SITE_NAME = "JelajahBelanja";
 const SITE_DESCRIPTION =
-  "JelajahBelanja — kurasi produk anak terlengkap dari Shopee & Tokopedia. Temukan jepit rambut anak, kaos kaki sekolah, tas ransel, tumbler, dress anak, mainan edukatif, dan perlengkapan sekolah dengan rating tertinggi dan harga termurah.";
+  "JelajahBelanja — kurasi produk anak & kebutuhan rumah tangga terlengkap dari Shopee & Tokopedia. Temukan produk anak (kaos kaki sekolah, tas ransel, tumbler, dress anak, mainan edukatif) plus kebutuhan rumah tangga, skincare, pakaian muslim, dan elektronik dengan rating tertinggi dan harga termurah.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "JelajahBelanja — Produk Anak Terkurasi: Fashion, Sekolah & Perlengkapan Bayi",
+    default: "JelajahBelanja — Produk Anak & Rumah Tangga Terkurasi: Fashion, Sekolah, Kebutuhan Harian",
     template: "%s | JelajahBelanja",
   },
   description: SITE_DESCRIPTION,
@@ -46,6 +46,15 @@ export const metadata: Metadata = {
     "produk viral anak tiktok",
     "best seller produk anak",
     "kurasi produk anak",
+    "kebutuhan rumah tangga",
+    "perlengkapan rumah",
+    "skincare",
+    "kecantikan",
+    "mukena dewasa",
+    "gamis",
+    "pakaian muslim",
+    "elektronik",
+    "aksesoris komputer",
     "JelajahBelanja",
   ],
   authors: [{ name: "JelajahBelanja", url: SITE_URL }],
@@ -86,7 +95,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "JelajahBelanja — Produk Anak Terkurasi Indonesia",
+    title: "JelajahBelanja — Produk Anak & Rumah Tangga Terkurasi Indonesia",
     description: SITE_DESCRIPTION,
     images: ["/og-image.jpg"],
   },
