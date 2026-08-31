@@ -6,11 +6,11 @@ export function SEOSection() {
   return (
     <section className="mb-8 prose prose-sm dark:prose-invert max-w-none">
       <h2 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-2">
-        Produk Anak Terkurasi — Fashion, Sekolah & Perlengkapan Bayi
+        Produk Anak & Rumah Tangga Terkurasi
       </h2>
       <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-        JelajahBelanja adalah platform kurasi produk anak Indonesia yang
-        mengumpulkan best seller untuk si kecil dari marketplace seperti Shopee
+        JelajahBelanja adalah platform kurasi produk anak & rumah tangga Indonesia yang
+        mengumpulkan best seller untuk keluarga dari marketplace seperti Shopee
         dan Tokopedia. Kami memilih produk dengan rating tinggi (≥ 4.8 bintang)
         dan jumlah terjual ribuan, sehingga kamu bisa cepat menemukan{" "}
         <strong>jepit rambut anak Korea</strong>,{" "}

@@ -51,8 +51,8 @@ export default function Home() {
     return {
       "@context": "https://schema.org",
       "@type": "ItemList",
-      name: "Produk Anak Terkurasi — Fashion, Sekolah & Perlengkapan Bayi",
-      description: `Kurasi ${products.length} produk anak terbaik dari Shopee & Tokopedia. Jepit rambut anak, kaos kaki sekolah, tas ransel, tumbler, dress anak, mainan edukatif. Rating ≥ 4.8, harga termurah.`,
+      name: "Produk Anak & Rumah Tangga Terkurasi",
+      description: `Kurasi ${products.length} produk anak & rumah tangga terbaik dari Shopee & Tokopedia. Jepit rambut anak, kaos kaki sekolah, tas ransel, tumbler, dress anak, mainan edukatif. Rating ≥ 4.8, harga termurah.`,
       numberOfItems: products.length,
       itemListElement: products.slice(0, 10).map((p, i) => ({
         "@type": "ListItem",

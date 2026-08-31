@@ -22,16 +22,17 @@ export function HeroSection({
       <div className="container mx-auto px-4 py-4 md:py-6 max-w-[1400px]">
         {/* Hero tagline + stats */}
         <h2 className="text-lg md:text-2xl font-bold mb-1 leading-tight">
-          Produk Anak Terkurasi — Fashion, Sekolah & Perlengkapan Bayi
+          Produk Anak & Rumah Tangga Terkurasi — Fashion, Sekolah & Kebutuhan Harian
         </h2>
         <p className="text-xs md:text-sm text-white/80 mb-3 max-w-2xl">
-          Kurasi terbaik untuk si kecil: jepit rambut anak, kaos kaki sekolah, tas ransel,
-          tumbler, dress anak, mainan edukatif. Dari Shopee & Tokopedia, rating ≥ 4.8, harga termurah.
+          Kurasi terbaik untuk keluarga Indonesia: produk anak (kaos kaki sekolah, tas ransel,
+          tumbler, dress, mainan edukatif) plus kebutuhan rumah tangga, skincare & pakaian muslim.
+          Dari Shopee & Tokopedia, rating ≥ 4.8, harga termurah.
         </p>
         <div className="flex flex-wrap gap-1.5 md:gap-2 text-[11px] md:text-xs">
           <div className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-2.5 py-0.5">
             <Flame className="w-3 h-3" />
-            <span>{productsCount} produk anak</span>
+            <span>{productsCount} produk</span>
           </div>
           <div className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-2.5 py-0.5">
             <ShoppingBag className="w-3 h-3" />
