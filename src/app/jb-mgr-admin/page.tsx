@@ -19,6 +19,7 @@ import {
   Zap,
   Newspaper,
   BarChart3,
+  Share2,
 } from "lucide-react";
 import { BulkUploadTab } from "@/components/bulk-upload-tab";
 import { SecurityTab } from "@/components/security-tab";
@@ -30,6 +31,7 @@ import { AffiliateTab } from "@/components/admin/affiliate-tab";
 import { AffiliateAdsTab } from "@/components/admin/affiliate-ads-tab";
 import { BlogTab } from "@/components/admin/blog-tab";
 import { ClickReportTab } from "@/components/admin/click-report-tab";
+import { FlashSaleShareTab } from "@/components/admin/flash-sale-share-tab";
 
 export default function AdminPage() {
   return (
@@ -113,6 +115,10 @@ export default function AdminPage() {
               <BarChart3 className="w-4 h-4 mr-1.5" />
               Klik
             </TabsTrigger>
+            <TabsTrigger value="share" className="text-sm flex-shrink-0">
+              <Share2 className="w-4 h-4 mr-1.5" />
+              Share
+            </TabsTrigger>
             <TabsTrigger value="security" className="text-sm flex-shrink-0">
               <Shield className="w-4 h-4 mr-1.5" />
               Keamanan
@@ -154,6 +160,10 @@ export default function AdminPage() {
 
           <TabsContent value="click-report" className="space-y-4">
             <ClickReportTab />
+          </TabsContent>
+
+          <TabsContent value="share" className="space-y-4">
+            <FlashSaleShareTab />
           </TabsContent>
 
           <TabsContent value="security" className="space-y-4">
