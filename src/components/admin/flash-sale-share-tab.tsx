@@ -11,6 +11,8 @@ import {
   Loader2,
   Megaphone,
   ExternalLink,
+  Share2,
+  MessageCircle,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -81,6 +83,34 @@ export function FlashSaleShareTab() {
     }
   }
 
+  // Share ke WhatsApp via wa.me — link jadi clickable di WA status HP
+  function shareToWhatsApp(text: string) {
+    const encoded = encodeURIComponent(text);
+    window.open(`https://wa.me/?text=${encoded}`, "_blank");
+  }
+
+  // Share native (Web Share API) — di HP muncul menu share (WA, FB, TG, dll)
+  async function shareNative(text: string, title: string) {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title,
+          text: text,
+        });
+      } catch {
+        // User cancel, ignore
+      }
+    } else {
+      // Fallback: copy ke clipboard
+      try {
+        await navigator.clipboard.writeText(text);
+        toast({ title: "Tersalin!", description: "Browser tidak support share native, teks disalin" });
+      } catch {
+        toast({ title: "Gagal copy", variant: "destructive" });
+      }
+    }
+  }
+
   const items = data?.items ?? [];
 
   return (
@@ -120,9 +150,17 @@ export function FlashSaleShareTab() {
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-zinc-500">Batch Copy (semua {data.count} produk sekaligus):</span>
-              <Button size="sm" variant="outline" className="text-xs h-7" onClick={copyBatch}>
-                {copiedBatch ? <><Check className="w-3 h-3 mr-1 text-green-600" /> Tersalin!</> : <><Copy className="w-3 h-3 mr-1" /> Copy Semua</>}
-              </Button>
+              <div className="flex gap-1">
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={copyBatch}>
+                  {copiedBatch ? <><Check className="w-3 h-3 mr-1 text-green-600" /> Tersalin!</> : <><Copy className="w-3 h-3 mr-1" /> Copy</>}
+                </Button>
+                <Button size="sm" variant="outline" className="text-xs h-7 text-green-600 border-green-200 hover:border-green-300" onClick={() => shareToWhatsApp(data.batchContent)} title="Buka WhatsApp, link jadi clickable">
+                  <MessageCircle className="w-3 h-3 mr-1" /> WA
+                </Button>
+                <Button size="sm" variant="outline" className="text-xs h-7 text-fuchsia-600 border-fuchsia-200 hover:border-fuchsia-300" onClick={() => shareNative(data.batchContent, "Flash Sale JelajahBelanja")} title="Share native (HP only)">
+                  <Share2 className="w-3 h-3 mr-1" /> Share
+                </Button>
+              </div>
             </div>
             <pre className="text-xs whitespace-pre-wrap bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-3 border border-zinc-200 dark:border-zinc-800 max-h-60 overflow-y-auto font-mono leading-relaxed">
               {data.batchContent}
@@ -187,14 +225,34 @@ export function FlashSaleShareTab() {
                     <pre className="text-[11px] whitespace-pre-wrap bg-white dark:bg-zinc-900 rounded p-2 border border-zinc-200 dark:border-zinc-700 flex-1 max-h-20 overflow-y-auto font-mono leading-snug">
                       {item.content}
                     </pre>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-xs flex-shrink-0"
-                      onClick={() => copyToClipboard(item.content, p.id)}
-                    >
-                      {copiedItem === p.id ? <><Check className="w-3 h-3 mr-1 text-green-600" /> OK</> : <><Copy className="w-3 h-3 mr-1" /> Copy</>}
-                    </Button>
+                    <div className="flex flex-col gap-1 flex-shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => copyToClipboard(item.content, p.id)}
+                      >
+                        {copiedItem === p.id ? <><Check className="w-3 h-3 mr-1 text-green-600" /> OK</> : <><Copy className="w-3 h-3 mr-1" /> Copy</>}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs text-green-600 border-green-200"
+                        onClick={() => shareToWhatsApp(item.content)}
+                        title="Buka WhatsApp"
+                      >
+                        <MessageCircle className="w-3 h-3" /> WA
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs text-fuchsia-600 border-fuchsia-200"
+                        onClick={() => shareNative(item.content, p.title)}
+                        title="Share native (HP)"
+                      >
+                        <Share2 className="w-3 h-3" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -206,9 +264,11 @@ export function FlashSaleShareTab() {
       {/* Tips */}
       <div className="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 p-4">
         <p className="text-xs text-amber-800 dark:text-amber-200">
-          <strong>Tips:</strong> Copy batch content (semua produk) untuk post ke grup FB/WA.
-          Atau copy per produk untuk post individu. Format sudah disesuaikan:
-          Facebook (engaging), WhatsApp (simple bold), Telegram (markdown).
+          <strong>Tips:</strong>
+          <br />• <strong>Copy</strong> = copy text, paste manual ke grup FB (link tidak clickable di WA status HP)
+          <br />• <strong>WA</strong> = buka WhatsApp dengan text pre-filled (link jadi clickable di WA chat & status HP)
+          <br />• <strong>Share</strong> = menu share native HP (pilih WA/FB/TG, link auto-clickable)
+          <br />• Untuk WA Status HP: pakai tombol <strong>WA</strong> atau <strong>Share</strong> (bukan Copy)
         </p>
       </div>
     </div>
